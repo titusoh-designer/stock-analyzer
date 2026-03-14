@@ -13,6 +13,9 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured. Add it in Vercel → Settings → Environment Variables." });
   }
 
+  // Clean the key (remove quotes, whitespace, newlines)
+  const cleanKey = apiKey.replace(/^["'\s]+|["'\s]+$/g, '').trim();
+
   try {
     const { prompt } = req.body;
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
@@ -21,8 +24,8 @@ export default async function handler(req, res) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01"
+        "x-api-key": cleanKey,
+        "anthropic-version": "2024-10-22"
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
@@ -33,8 +36,13 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    if (data.error) {
-      return res.status(500).json({ error: data.error.message || "Anthropic API error" });
+    if (!response.ok || data.error) {
+      return res.status(500).json({ 
+        error: data.error?.message || `HTTP ${response.status}`,
+        keyInfo: `starts="${cleanKey.slice(0,12)}..." len=${cleanKey.length}`,
+        httpStatus: response.status,
+        apiError: data.error
+      });
     }
 
     // Extract text content
