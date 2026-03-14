@@ -81,9 +81,13 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   </div>
 
   <!-- Search -->
-  <div class="search-bar">
-    <input id="symbolInput" placeholder="티커 입력 (AAPL, TSLA, 005930, bitcoin)" />
-    <button id="analyzeBtn" onclick="analyze()">분석</button>
+  <div style="position:relative">
+    <div class="search-bar">
+      <input id="symbolInput" placeholder="종목명 또는 티커 입력 (삼성전자, Apple, AAPL, bitcoin)" autocomplete="off" />
+      <button id="analyzeBtn" onclick="analyze()">분석</button>
+    </div>
+    <!-- Autocomplete Dropdown -->
+    <div id="searchDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#12121a;border:1px solid #2a2a3a;border-radius:0 0 14px 14px;border-top:none;z-index:100;max-height:320px;overflow-y:auto"></div>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:24px">
     <button class="quick-btn" onclick="quickSearch('AAPL','yahoo')">AAPL</button>
@@ -148,6 +152,8 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 let currentSource = "yahoo";
 let currentTF = "1d";
 let currentData = null;
+let searchTimer = null;
+let selectedSymbol = null; // symbol chosen from autocomplete
 
 function setSource(s) {
   currentSource = s;
@@ -156,17 +162,94 @@ function setSource(s) {
 function setTF(tf) {
   currentTF = tf;
   document.querySelectorAll("#tfBar .tf-btn").forEach(b => b.classList.toggle("active", b.dataset.tf === tf));
-  if (currentData) analyze(); // re-fetch with new timeframe
+  if (currentData) analyze();
 }
 function quickSearch(sym, source) {
   document.getElementById("symbolInput").value = sym;
+  selectedSymbol = { symbol: sym, source };
   setSource(source);
+  hideDropdown();
+  analyze();
+}
+
+// ─── Autocomplete Search ───
+const input = document.getElementById("symbolInput");
+const dropdown = document.getElementById("searchDropdown");
+
+input.addEventListener("input", () => {
+  const q = input.value.trim();
+  selectedSymbol = null;
+  if (q.length < 1) { hideDropdown(); return; }
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => searchSymbols(q), 300);
+});
+
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { hideDropdown(); analyze(); }
+  if (e.key === "Escape") hideDropdown();
+});
+
+input.addEventListener("focus", () => {
+  if (dropdown.children.length > 0 && input.value.trim().length > 0) dropdown.style.display = "block";
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-bar") && !e.target.closest("#searchDropdown")) hideDropdown();
+});
+
+function hideDropdown() { dropdown.style.display = "none"; }
+
+async function searchSymbols(q) {
+  try {
+    const resp = await fetch("/api/search?q=" + encodeURIComponent(q));
+    const data = await resp.json();
+    if (data.error || !data.results?.length) { hideDropdown(); return; }
+    renderDropdown(data.results);
+  } catch (e) { hideDropdown(); }
+}
+
+function renderDropdown(items) {
+  const srcColors = { yahoo: "#85C1E9", naver: "#E8A87C", coingecko: "#7DCEA0" };
+  const srcLabels = { yahoo: "Yahoo", naver: "네이버", coingecko: "Crypto" };
+  dropdown.innerHTML = items.map((item, i) => `
+    <div onclick="selectResult(${i})" style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;cursor:pointer;border-bottom:1px solid #1a1a28;transition:background 0.15s"
+      onmouseenter="this.style.background='#1a1a28'" onmouseleave="this.style.background='transparent'">
+      <div>
+        <div style="font-size:13px;color:#F0ECE3;font-weight:500">${item.name}</div>
+        <div style="font-size:10px;color:#666;font-family:'DM Mono',monospace;margin-top:2px">${item.symbol}${item.exchange ? " · " + item.exchange : ""}</div>
+      </div>
+      <span style="font-size:9px;padding:3px 8px;border-radius:12px;font-family:'DM Mono',monospace;background:${srcColors[item.source] || "#666"}15;color:${srcColors[item.source] || "#666"};border:1px solid ${srcColors[item.source] || "#666"}30">${srcLabels[item.source] || item.source}</span>
+    </div>
+  `).join("");
+  dropdown.style.display = "block";
+  // Store items for selection
+  dropdown._items = items;
+}
+
+function selectResult(idx) {
+  const item = dropdown._items[idx];
+  if (!item) return;
+  // For naver, use the 6-digit code; for others use symbol
+  const sym = item.naverCode || item.symbol;
+  input.value = item.name + " (" + sym + ")";
+  selectedSymbol = { symbol: sym, source: item.source, name: item.name };
+  setSource(item.source);
+  hideDropdown();
   analyze();
 }
 
 // ─── Main Analyze ───
 async function analyze() {
-  const sym = document.getElementById("symbolInput").value.trim();
+  // Use selected symbol from autocomplete, or raw input
+  let sym, source;
+  if (selectedSymbol) {
+    sym = selectedSymbol.symbol;
+    source = selectedSymbol.source || currentSource;
+    setSource(source);
+  } else {
+    sym = document.getElementById("symbolInput").value.trim();
+    source = currentSource;
+  }
   if (!sym) return;
 
   const btn = document.getElementById("analyzeBtn");
@@ -186,7 +269,7 @@ async function analyze() {
   try {
     // STEP 1: Fetch real price data from our proxy API
     loadingMsg.textContent = "STEP 1/2 — 실제 가격 데이터 수신 중...";
-    const apiUrl = `/api/stock?symbol=${encodeURIComponent(sym)}&source=${currentSource}&interval=${currentTF}`;
+    const apiUrl = `/api/stock?symbol=${encodeURIComponent(sym)}&source=${source}&interval=${currentTF}`;
     const resp = await fetch(apiUrl);
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
@@ -368,7 +451,7 @@ function renderChart(data, currentPrice, currency, analysis) {
 }
 
 // Enter key
-document.getElementById("symbolInput").addEventListener("keydown", e => { if(e.key==="Enter") analyze(); });
+// Enter key handled in autocomplete section above
 </script>
 </body>
 </html>
