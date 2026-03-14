@@ -191,7 +191,7 @@ async function doAnalyze(){
 
     // AI analysis with FULL indicator context
     document.getElementById("loadMsg").textContent="AI 종합 패턴 분석 중...";
-    let ai=null;
+    let ai=null;let aiErr="";let aiDebug="";
     try{
       const cp=r.currentPrice||r.ohlcv[r.ohlcv.length-1].close;
       const closes=r.ohlcv.map(d=>d.close);
@@ -321,29 +321,30 @@ JSON으로만 응답:
 \`\`\``;
 
       const ar=await(await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})})).json();
-      if(ar.error){console.warn("AI error:",ar.error);throw new Error(ar.error);}
+      aiDebug="Response keys: "+Object.keys(ar).join(",")+"\n";
+      if(ar.error){aiDebug+="Error: "+ar.error;throw new Error(ar.error);}
+      aiDebug+="analysis: "+(ar.analysis?"YES":"NULL")+"\nraw length: "+(ar.raw?.length||0)+"\nmodel: "+(ar.model||"?")+"\nusage: "+JSON.stringify(ar.usage||{})+"\n";
       ai=ar.analysis||null;
       if(!ai){
         // Fallback: try parsing raw text
         const tx=ar.raw||"";
+        aiDebug+="raw preview: "+tx.slice(0,300)+"...\n";
         const m=tx.match(/```json\s*([\s\S]*?)\s*```/)||tx.match(/\{[\s\S]*"detectedPatterns"[\s\S]*\}/);
-        if(m)try{ai=JSON.parse(m[1]||m[0]);}catch(e){}
+        if(m)try{ai=JSON.parse(m[1]||m[0]);}catch(e){aiDebug+="JSON parse fail: "+e.message+"\n";}
       }
-    }catch(e){console.warn("AI:",e);}
+    }catch(e){console.warn("AI:",e);aiErr=e.message||String(e);}
 
     render(r,ai);
-    // Show setup hint if AI failed due to missing key
+    // Show AI error details if failed
     if(!ai){
       document.getElementById("analyzeOut").insertAdjacentHTML("beforeend",
-        `<div class="card" style="border-color:rgba(201,169,110,0.3);margin-top:16px">
-          <div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.1em;margin-bottom:8px">AI 분석 미설정</div>
-          <p class="noto" style="font-size:12px;color:#999;line-height:1.8">AI 패턴 분석을 활성화하려면 Anthropic API 키를 설정해야 합니다.</p>
-          <p class="noto" style="font-size:12px;color:#888;line-height:1.8;margin-top:8px">
-            1. <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:#C9A96E">console.anthropic.com</a> 에서 API 키 발급<br>
-            2. Vercel 대시보드 → 프로젝트 → Settings → Environment Variables<br>
-            3. <code style="background:#1a1a28;border:1px solid #333;border-radius:4px;padding:2px 6px;font-size:11px;color:#4ECCA3">ANTHROPIC_API_KEY</code> 이름으로 키 추가<br>
-            4. Deployments 탭 → 최근 배포의 ⋯ 메뉴 → Redeploy
-          </p>
+        `<div class="card" style="border-color:rgba(232,93,117,0.3);margin-top:16px">
+          <div class="mono" style="font-size:10px;color:#E85D75;letter-spacing:0.1em;margin-bottom:8px">AI 분석 오류</div>
+          <p class="noto" style="font-size:12px;color:#999;line-height:1.8">${(aiErr||"AI 응답을 파싱하지 못했습니다.").replace(/</g,"&lt;")}</p>
+          <div style="margin-top:10px;padding:10px;background:#12121a;border-radius:8px;max-height:150px;overflow:auto">
+            <div class="mono" style="font-size:9px;color:#666;margin-bottom:4px">DEBUG INFO</div>
+            <pre class="mono" style="font-size:10px;color:#888;white-space:pre-wrap;word-break:break-all;margin:0">${(aiDebug||"no debug info").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
+          </div>
         </div>`);
     }
     document.getElementById("addWlBtn").style.display="inline-block";
