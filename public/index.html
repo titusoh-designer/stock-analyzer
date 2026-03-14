@@ -320,13 +320,32 @@ JSON으로만 응답:
 }
 \`\`\``;
 
-      const ar=await(await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:prompt}]})})).json();
-      const tx=(ar.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
-      const m=tx.match(/```json\s*([\s\S]*?)\s*```/)||tx.match(/\{[\s\S]*"detectedPatterns"[\s\S]*\}/);
-      if(m)try{ai=JSON.parse(m[1]||m[0]);}catch(e){}
+      const ar=await(await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})})).json();
+      if(ar.error){console.warn("AI error:",ar.error);throw new Error(ar.error);}
+      ai=ar.analysis||null;
+      if(!ai){
+        // Fallback: try parsing raw text
+        const tx=ar.raw||"";
+        const m=tx.match(/```json\s*([\s\S]*?)\s*```/)||tx.match(/\{[\s\S]*"detectedPatterns"[\s\S]*\}/);
+        if(m)try{ai=JSON.parse(m[1]||m[0]);}catch(e){}
+      }
     }catch(e){console.warn("AI:",e);}
 
     render(r,ai);
+    // Show setup hint if AI failed due to missing key
+    if(!ai){
+      document.getElementById("analyzeOut").insertAdjacentHTML("beforeend",
+        `<div class="card" style="border-color:rgba(201,169,110,0.3);margin-top:16px">
+          <div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.1em;margin-bottom:8px">AI 분석 미설정</div>
+          <p class="noto" style="font-size:12px;color:#999;line-height:1.8">AI 패턴 분석을 활성화하려면 Anthropic API 키를 설정해야 합니다.</p>
+          <p class="noto" style="font-size:12px;color:#888;line-height:1.8;margin-top:8px">
+            1. <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:#C9A96E">console.anthropic.com</a> 에서 API 키 발급<br>
+            2. Vercel 대시보드 → 프로젝트 → Settings → Environment Variables<br>
+            3. <code style="background:#1a1a28;border:1px solid #333;border-radius:4px;padding:2px 6px;font-size:11px;color:#4ECCA3">ANTHROPIC_API_KEY</code> 이름으로 키 추가<br>
+            4. Deployments 탭 → 최근 배포의 ⋯ 메뉴 → Redeploy
+          </p>
+        </div>`);
+    }
     document.getElementById("addWlBtn").style.display="inline-block";
   }catch(e){err.style.display="block";document.getElementById("errMsg").textContent=e.message;
   }finally{btn.disabled=false;btn.textContent="분석";ld.style.display="none";}
