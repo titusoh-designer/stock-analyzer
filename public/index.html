@@ -189,14 +189,102 @@ async function doAnalyze(){
     if(r.error)throw new Error(r.error);if(!r.ohlcv?.length)throw new Error("데이터 없음. 티커 확인.");
     curData=r;
 
-    // AI analysis (background)
-    document.getElementById("loadMsg").textContent="AI 패턴 분석 중...";
+    // AI analysis with FULL indicator context
+    document.getElementById("loadMsg").textContent="AI 종합 패턴 분석 중...";
     let ai=null;
     try{
-      const cls=r.ohlcv.slice(-30).map(d=>`${d.date}:O${d.open}H${d.high}L${d.low}C${d.close}`).join("|");
       const cp=r.currentPrice||r.ohlcv[r.ohlcv.length-1].close;
+      const closes=r.ohlcv.map(d=>d.close);
       const h52=Math.max(...r.ohlcv.map(d=>d.high)),l52=Math.min(...r.ohlcv.map(d=>d.low));
-      const ar=await(await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:`"${sym}" 실제API. 현재:${cp},52H:${h52},52L:${l52}. 30봉:\n${cls}\n\nJSON만:\n\`\`\`json\n{"detectedPatterns":[{"name":"한글","nameEn":"En","type":"reversal|continuation|harmonic|candlestick","direction":"bullish|bearish|neutral","confidence":0-100,"bullProb":0-100,"bearProb":0-100,"targetUp":숫자,"targetDown":숫자,"stopLoss":숫자,"reasoning":"근거"}],"supports":[숫자],"resistances":[숫자],"summary":"분석","trend":"uptrend|downtrend|sideways"}\n\`\`\``}]})})).json();
+
+      // Pre-compute all indicators to pass to AI
+      const _rsi=calcRSI(closes);
+      const _macd=calcMACD(closes);
+      const _bb=calcBB(closes);
+      const _stoch=calcStoch(r.ohlcv);
+      const _ma5=calcMA(closes,5),_ma20=calcMA(closes,20),_ma100=calcMA(closes,100),_ma250=calcMA(closes,250);
+
+      // Volume analysis
+      const vols=r.ohlcv.map(d=>d.volume).filter(v=>v>0);
+      const avgVol=vols.length>=20?vols.slice(-20).reduce((a,b)=>a+b,0)/20:null;
+      const lastVol=vols.length?vols[vols.length-1]:null;
+      const volRatio=avgVol&&lastVol?(lastVol/avgVol).toFixed(2):null;
+
+      // Recent price action summary (50 candles with OHLCV)
+      const recent=r.ohlcv.slice(-50).map(d=>`${d.date}:${d.open},${d.high},${d.low},${d.close},${d.volume}`).join("\n");
+
+      const prompt = `당신은 전문 기술적 분석가입니다. 아래 "${sym}"의 실제 거래소 API 데이터(Alpha Vantage/Yahoo/네이버)를 기반으로 정밀 분석하세요.
+
+═══ 실시간 데이터 ═══
+현재가: ${cp}
+전일대비: ${((cp-closes[closes.length-2])/closes[closes.length-2]*100).toFixed(2)}%
+52주 고가: ${h52} / 52주 저가: ${l52}
+
+═══ 기술적 지표 (실제 데이터 기반 계산값) ═══
+RSI(14): ${_rsi ?? "N/A"}
+MACD(12,26,9): ${_macd.v ?? "N/A"} / Signal: ${_macd.s ?? "N/A"} / Histogram: ${_macd.h ?? "N/A"}
+Stochastic %K(14): ${_stoch ?? "N/A"}
+Bollinger Band: Upper ${_bb?.upper ?? "N/A"} / Middle ${_bb?.middle ?? "N/A"} / Lower ${_bb?.lower ?? "N/A"}
+MA5: ${_ma5 ?? "N/A"} / MA20: ${_ma20 ?? "N/A"} / MA100: ${_ma100 ?? "N/A"} / MA250: ${_ma250 ?? "N/A"}
+거래량 비율(최근/20일평균): ${volRatio ?? "N/A"}x
+
+═══ 최근 ${r.ohlcv.slice(-50).length}봉 OHLCV (date:open,high,low,close,volume) ═══
+${recent}
+
+═══ 분석 요구사항 ═══
+1. 차트 패턴 감지 (반전/지속/캔들스틱/하모닉)
+2. 지표 종합 판단 (RSI/MACD/BB/Stoch 크로스오버, 다이버전스 등)
+3. 핵심 지지선/저항선 도출 (이전 고점/저점, 피보나치, MA 기반)
+4. 매매 전략 (진입가, 목표가, 손절가, 리스크/리워드)
+5. 종합 시장 판단
+
+JSON으로만 응답하세요:
+\`\`\`json
+{
+  "detectedPatterns": [
+    {
+      "name": "패턴명(한글)",
+      "nameEn": "Pattern Name",
+      "type": "reversal|continuation|harmonic|candlestick",
+      "direction": "bullish|bearish|neutral",
+      "confidence": 0-100,
+      "bullProb": 0-100,
+      "bearProb": 0-100,
+      "targetUp": 상승목표가,
+      "targetDown": 하락목표가,
+      "stopLoss": 손절가,
+      "reasoning": "1-2문장 근거"
+    }
+  ],
+  "indicatorSignals": [
+    {"indicator": "RSI", "signal": "bullish|bearish|neutral", "detail": "설명"},
+    {"indicator": "MACD", "signal": "bullish|bearish|neutral", "detail": "설명"},
+    {"indicator": "BB", "signal": "bullish|bearish|neutral", "detail": "설명"},
+    {"indicator": "Stochastic", "signal": "bullish|bearish|neutral", "detail": "설명"},
+    {"indicator": "MA", "signal": "bullish|bearish|neutral", "detail": "설명"},
+    {"indicator": "Volume", "signal": "bullish|bearish|neutral", "detail": "설명"}
+  ],
+  "supports": [지지선1, 지지선2, 지지선3],
+  "resistances": [저항선1, 저항선2, 저항선3],
+  "strategy": {
+    "position": "long|short|hold",
+    "entryPrice": 진입가,
+    "targetPrice": 1차목표가,
+    "targetPrice2": 2차목표가,
+    "stopLoss": 손절가,
+    "riskReward": "1:X 비율",
+    "reasoning": "전략근거 2-3문장"
+  },
+  "riskLevel": "low|medium|high",
+  "riskFactors": ["리스크1", "리스크2"],
+  "summary": "종합분석 3-4문장 (현재 상황, 핵심 포인트, 주의사항 포함)",
+  "trend": "uptrend|downtrend|sideways",
+  "trendStrength": "strong|moderate|weak",
+  "volumeAnalysis": "거래량 분석 1문장"
+}
+\`\`\``;
+
+      const ar=await(await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:prompt}]})})).json();
       const tx=(ar.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
       const m=tx.match(/```json\s*([\s\S]*?)\s*```/)||tx.match(/\{[\s\S]*"detectedPatterns"[\s\S]*\}/);
       if(m)try{ai=JSON.parse(m[1]||m[0]);}catch(e){}
@@ -232,9 +320,59 @@ function render(data,ai){
     ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"MA20",v:ma20?fp(ma20):"-",c:"#85C1E9"},{l:"MA100",v:ma100?fp(ma100):"-",c:"#C39BD3"},{l:"MA250",v:ma250?fp(ma250):"-",c:"#7DCEA0"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
   </div>`;
 
+  // Indicator Signals
+  if(ai?.indicatorSignals?.length){
+    h+=`<div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:10px">지표 시그널</div>
+    <div class="card" style="padding:14px"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">`;
+    ai.indicatorSignals.forEach(s=>{
+      const sc=s.signal==="bullish"?"#4ECCA3":s.signal==="bearish"?"#E85D75":"#C9A96E";
+      const icon=s.signal==="bullish"?"▲":s.signal==="bearish"?"▼":"◆";
+      h+=`<div style="background:${sc}06;border:1px solid ${sc}15;border-radius:8px;padding:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span class="mono" style="font-size:10px;font-weight:600;color:#F0ECE3">${s.indicator}</span>
+          <span class="mono" style="font-size:9px;color:${sc}">${icon} ${s.signal==="bullish"?"강세":s.signal==="bearish"?"약세":"중립"}</span>
+        </div>
+        <p class="noto" style="font-size:10px;color:#999;line-height:1.5;margin:0">${s.detail}</p>
+      </div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  // Strategy
+  if(ai?.strategy){
+    const st=ai.strategy;
+    const pc=st.position==="long"?"#4ECCA3":st.position==="short"?"#E85D75":"#C9A96E";
+    const pl=st.position==="long"?"매수 (Long)":st.position==="short"?"매도 (Short)":"관망 (Hold)";
+    h+=`<div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.12em;margin:16px 0 10px">매매 전략</div>
+    <div class="card" style="border-left:3px solid ${pc}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px;font-weight:700;color:${pc}">${pl}</span>
+          ${ai.riskLevel?`<span class="badge" style="background:${ai.riskLevel==="high"?"#E85D7512":"#4ECCA312"};color:${ai.riskLevel==="high"?"#E85D75":ai.riskLevel==="low"?"#4ECCA3":"#C9A96E"};border:1px solid ${ai.riskLevel==="high"?"#E85D7525":ai.riskLevel==="low"?"#4ECCA325":"#C9A96E25"}">리스크 ${ai.riskLevel==="high"?"높음":ai.riskLevel==="low"?"낮음":"보통"}</span>`:""}
+          ${ai.trendStrength?`<span class="badge" style="background:#85C1E912;color:#85C1E9;border:1px solid #85C1E925">추세 ${ai.trendStrength==="strong"?"강함":ai.trendStrength==="weak"?"약함":"보통"}</span>`:""}
+        </div>
+        ${st.riskReward?`<span class="mono" style="font-size:12px;color:#C9A96E;font-weight:600">R:R ${st.riskReward}</span>`:""}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+        ${[{l:"진입가",v:st.entryPrice,c:"#F0ECE3"},{l:"목표 1차",v:st.targetPrice,c:"#4ECCA3"},{l:"목표 2차",v:st.targetPrice2,c:"#4ECCA3"},{l:"손절가",v:st.stopLoss,c:"#E85D75"}].map(t=>`<div style="background:${t.c}06;border:1px solid ${t.c}15;border-radius:6px;padding:10px"><div class="mono" style="font-size:8px;color:${t.c}99;margin-bottom:3px">${t.l}</div><div class="mono" style="font-size:13px;color:${t.c};font-weight:600">${t.v?cs+fp(t.v):"-"}</div></div>`).join("")}
+      </div>
+      <p class="noto" style="font-size:12px;color:#bbb;line-height:1.7">${st.reasoning||""}</p>
+    </div>`;
+  }
+
+  // Risk Factors
+  if(ai?.riskFactors?.length){
+    h+=`<div class="card" style="background:rgba(232,93,117,0.03);border-color:rgba(232,93,117,0.12)">
+      <div class="mono" style="font-size:9px;color:#E85D75;letter-spacing:0.1em;margin-bottom:8px">주의 사항</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${ai.riskFactors.map(r=>`<span style="font-size:11px;color:#E85D75;background:rgba(232,93,117,0.06);border:1px solid rgba(232,93,117,0.15);border-radius:6px;padding:4px 10px" class="noto">⚠ ${r}</span>`).join("")}
+      </div>
+    </div>`;
+  }
+
   // Patterns
   if(ai?.detectedPatterns?.length){
-    h+=`<div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:12px">감지된 패턴</div>`;
+    h+=`<div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.12em;margin:16px 0 10px">감지된 패턴</div>`;
     ai.detectedPatterns.forEach(p=>{
       const dc=p.direction==="bullish"?"#4ECCA3":p.direction==="bearish"?"#E85D75":"#C9A96E";
       h+=`<div class="card" style="border-left:3px solid ${dc}">
@@ -247,6 +385,11 @@ function render(data,ai){
       </div>`;
     });
   }
+
+  // Volume Analysis
+  if(ai?.volumeAnalysis)h+=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:9px;color:#85C1E9;letter-spacing:0.08em">VOLUME</span><span class="noto" style="font-size:12px;color:#999">${ai.volumeAnalysis}</span></div></div>`;
+
+  // Summary
   if(ai?.summary)h+=`<div class="card" style="background:linear-gradient(135deg,rgba(201,169,110,0.04),rgba(201,169,110,0.01));border-color:rgba(201,169,110,0.15)"><div class="mono" style="font-size:9px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:8px">종합 분석</div><p class="noto" style="font-size:13px;color:#ccc;line-height:1.8">${ai.summary}</p></div>`;
   h+=`</div>`;
   document.getElementById("analyzeOut").innerHTML=h;
