@@ -322,7 +322,7 @@ JSON으로만 응답:
 
       const ar=await(await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})})).json();
       aiDebug="Response keys: "+Object.keys(ar).join(",")+"\n";
-      if(ar.error){aiDebug+="Error: "+ar.error;throw new Error(ar.error);}
+      if(ar.error){aiDebug+="Error: "+ar.error+"\n";if(ar.keyInfo)aiDebug+="Key: "+ar.keyInfo+"\n";if(ar.httpStatus)aiDebug+="HTTP: "+ar.httpStatus+"\n";if(ar.apiError)aiDebug+="API: "+JSON.stringify(ar.apiError)+"\n";throw new Error(ar.error);}
       aiDebug+="analysis: "+(ar.analysis?"YES":"NULL")+"\nraw length: "+(ar.raw?.length||0)+"\nmodel: "+(ar.model||"?")+"\nusage: "+JSON.stringify(ar.usage||{})+"\n";
       ai=ar.analysis||null;
       if(!ai){
