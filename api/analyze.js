@@ -1,54 +1,52 @@
-// Vercel Serverless — AI Pattern Analysis via Anthropic Claude API
-// v3 — Enhanced key cleaning + debug
+// Vercel Serverless — AI Pattern Analysis via xAI Grok API
+// v4 — Grok (OpenAI-compatible)
+// Uses XAI_API_KEY from Vercel Environment Variables
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "POST only", version: "v3" });
+  if (req.method !== "POST") return res.status(405).json({ error: "POST only", version: "v4-grok" });
 
-  const rawKey = process.env.ANTHROPIC_API_KEY;
+  // Support both key names for flexibility
+  const rawKey = process.env.XAI_API_KEY || process.env.GROK_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!rawKey) {
-    return res.status(500).json({ 
-      error: "ANTHROPIC_API_KEY not configured",
-      version: "v3",
-      hint: "Add it in Vercel > Settings > Environment Variables"
+    return res.status(500).json({
+      error: "API key not configured",
+      version: "v4-grok",
+      hint: "Add XAI_API_KEY in Vercel → Settings → Environment Variables"
     });
   }
 
-  // Aggressively clean the key
-  const cleanKey = rawKey
-    .replace(/[\r\n\t]/g, '')
-    .replace(/^["'\s]+/, '')
-    .replace(/["'\s]+$/, '')
-    .replace(/\u200B/g, '')
-    .trim();
+  const cleanKey = rawKey.replace(/[\r\n\t]/g, '').replace(/^["'\s]+/, '').replace(/["'\s]+$/, '').trim();
 
   const keyDebug = {
-    version: "v3",
-    rawLen: rawKey.length,
+    version: "v4-grok",
     cleanLen: cleanKey.length,
-    starts: cleanKey.slice(0, 15),
-    ends: cleanKey.slice(-4),
-    hasPrefix: cleanKey.startsWith("sk-ant-api03-")
+    starts: cleanKey.slice(0, 12),
+    ends: cleanKey.slice(-4)
   };
 
   try {
     const { prompt } = req.body;
     if (!prompt) return res.status(400).json({ error: "prompt is required", ...keyDebug });
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    // Grok API (OpenAI-compatible)
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": cleanKey,
-        "anthropic-version": "2024-10-22"
+        "Authorization": "Bearer " + cleanKey
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "grok-3-mini-fast",
         max_tokens: 4000,
-        messages: [{ role: "user", content: prompt }]
+        temperature: 0.3,
+        messages: [
+          { role: "system", content: "You are a professional stock chart pattern analyst. Always respond with valid JSON only. No markdown, no explanation outside JSON." },
+          { role: "user", content: prompt }
+        ]
       })
     });
 
@@ -63,15 +61,18 @@ export default async function handler(req, res) {
       });
     }
 
-    const text = (data.content || [])
-      .filter(b => b.type === "text")
-      .map(b => b.text)
-      .join("\n");
+    // Extract text from OpenAI-format response
+    const text = data.choices?.[0]?.message?.content || "";
 
+    // Try to parse JSON
     let parsed = null;
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*"detectedPatterns"[\s\S]*\}/);
     if (jsonMatch) {
       try { parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]); } catch (e) {}
+    }
+    // If no code block, try parsing the entire response as JSON
+    if (!parsed) {
+      try { parsed = JSON.parse(text); } catch (e) {}
     }
 
     return res.status(200).json({
