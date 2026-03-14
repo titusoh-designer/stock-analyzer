@@ -213,71 +213,107 @@ async function doAnalyze(){
       // Recent price action summary (50 candles with OHLCV)
       const recent=r.ohlcv.slice(-50).map(d=>`${d.date}:${d.open},${d.high},${d.low},${d.close},${d.volume}`).join("\n");
 
-      const prompt = `당신은 전문 기술적 분석가입니다. 아래 "${sym}"의 실제 거래소 API 데이터(Alpha Vantage/Yahoo/네이버)를 기반으로 정밀 분석하세요.
+      const prompt = `당신은 전문 차트 패턴 분석가입니다. 아래 실제 거래소 API 데이터를 기반으로, 제공된 35개 패턴 레퍼런스와 대조하여 정밀 분석하세요.
 
-═══ 실시간 데이터 ═══
-현재가: ${cp}
-전일대비: ${((cp-closes[closes.length-2])/closes[closes.length-2]*100).toFixed(2)}%
-52주 고가: ${h52} / 52주 저가: ${l52}
+═══ 35개 패턴 레퍼런스 (이름|카테고리|방향|상승확률|하락확률|평균상승|평균하락) ═══
+헤드앤숄더|reversal|bearish|23%|77%|+18%|-15%
+역헤드앤숄더|reversal|bullish|79%|21%|+22%|-8%
+이중바닥(W)|reversal|bullish|74%|26%|+15%|-9%
+이중천장(M)|reversal|bearish|28%|72%|+13%|-16%
+트리플바닥|reversal|bullish|87%|13%|+20%|-8%
+트리플천장|reversal|bearish|13%|87%|+20%|-20%
+라운딩바닥|reversal|bullish|72%|28%|+25%|-10%
+라운딩탑|reversal|bearish|28%|72%|+20%|-22%
+다이아몬드탑|reversal|bearish|31%|69%|+18%|-20%
+다이아몬드바닥|reversal|bullish|69%|31%|+22%|-12%
+메가폰|reversal|bearish|41%|59%|+14%|-18%
+레인지상단(박스권)|continuation|bullish|85%|15%|+51%|-12%
+레인지하단(박스권)|reversal|bullish|85%|15%|+48%|-12%
+컵앤핸들|continuation|bullish|76%|24%|+34%|-10%
+상승삼각형|continuation|bullish|72%|28%|+20%|-10%
+하락삼각형|continuation|bearish|30%|70%|+14%|-18%
+상승깃발|continuation|bullish|68%|32%|+25%|-12%
+하락쐐기형|continuation|bullish|68%|32%|+20%|-12%
+상승페넌트|continuation|bullish|68%|32%|+22%|-10%
+해머|candlestick|bullish|65%|35%|+8%|-5%
+도지|candlestick|neutral|50%|50%|+5%|-5%
+상승잉걸핑|candlestick|bullish|70%|30%|+12%|-7%
+슈팅스타|candlestick|bearish|32%|68%|+6%|-8%
+모닝스타|candlestick|bullish|72%|28%|+12%|-6%
+이브닝스타|candlestick|bearish|28%|72%|+10%|-12%
+적삼병|candlestick|bullish|75%|25%|+13%|-7%
+흑삼병|candlestick|bearish|25%|75%|+12%|-15%
+가틀리(상승)|harmonic|bullish|70%|30%|+18%|-10%
+가틀리(하락)|harmonic|bearish|30%|70%|+18%|-18%
+버터플라이(상승)|harmonic|bullish|67%|33%|+22%|-14%
+버터플라이(하락)|harmonic|bearish|33%|67%|+22%|-22%
+박쥐(상승)|harmonic|bullish|68%|32%|+14%|-11%
+박쥐(하락)|harmonic|bearish|32%|68%|+14%|-16%
+크랩(상승)|harmonic|bullish|65%|35%|+28%|-18%
+크랩(하락)|harmonic|bearish|35%|65%|+28%|-26%
 
-═══ 기술적 지표 (실제 데이터 기반 계산값) ═══
-RSI(14): ${_rsi ?? "N/A"}
-MACD(12,26,9): ${_macd.v ?? "N/A"} / Signal: ${_macd.s ?? "N/A"} / Histogram: ${_macd.h ?? "N/A"}
-Stochastic %K(14): ${_stoch ?? "N/A"}
-Bollinger Band: Upper ${_bb?.upper ?? "N/A"} / Middle ${_bb?.middle ?? "N/A"} / Lower ${_bb?.lower ?? "N/A"}
-MA5: ${_ma5 ?? "N/A"} / MA20: ${_ma20 ?? "N/A"} / MA100: ${_ma100 ?? "N/A"} / MA250: ${_ma250 ?? "N/A"}
-거래량 비율(최근/20일평균): ${volRatio ?? "N/A"}x
+═══ "${sym}" 실시간 데이터 (${data.source} API) ═══
+현재가: ${cp} | 전일대비: ${((cp-closes[closes.length-2])/closes[closes.length-2]*100).toFixed(2)}%
+52주 고가: ${h52} | 52주 저가: ${l52}
 
-═══ 최근 ${r.ohlcv.slice(-50).length}봉 OHLCV (date:open,high,low,close,volume) ═══
+═══ 기술적 지표 (실측값) ═══
+RSI(14): ${_rsi ?? "N/A"} | MACD: ${_macd.v ?? "N/A"} / Signal: ${_macd.s ?? "N/A"} / Hist: ${_macd.h ?? "N/A"}
+Stoch %K(14): ${_stoch ?? "N/A"} | BB: ${_bb?.upper ?? "N/A"} / ${_bb?.middle ?? "N/A"} / ${_bb?.lower ?? "N/A"}
+MA5: ${_ma5 ?? "N/A"} | MA20: ${_ma20 ?? "N/A"} | MA100: ${_ma100 ?? "N/A"} | MA250: ${_ma250 ?? "N/A"}
+거래량(최근/20일평균): ${volRatio ?? "N/A"}x
+
+═══ 최근 ${r.ohlcv.slice(-50).length}봉 OHLCV ═══
 ${recent}
 
-═══ 분석 요구사항 ═══
-1. 차트 패턴 감지 (반전/지속/캔들스틱/하모닉)
-2. 지표 종합 판단 (RSI/MACD/BB/Stoch 크로스오버, 다이버전스 등)
-3. 핵심 지지선/저항선 도출 (이전 고점/저점, 피보나치, MA 기반)
-4. 매매 전략 (진입가, 목표가, 손절가, 리스크/리워드)
-5. 종합 시장 판단
+═══ 분석 규칙 ═══
+1. OHLCV 데이터를 위 35개 패턴과 비교하여 현재 형성 중이거나 완성된 패턴을 찾으세요.
+2. 패턴이 감지되면, 위 레퍼런스의 확률(bullProb/bearProb)과 평균 수익률(avgTarget/avgDrop)을 반드시 참조하여 목표가와 손절가를 현재가 기준으로 계산하세요.
+   - targetUp = 현재가 × (1 + 패턴의 평균상승률)
+   - targetDown = 현재가 × (1 - 패턴의 평균하락률)  
+   - stopLoss = 패턴 구조의 핵심 이탈 가격
+3. confidence는 패턴의 완성도, 거래량 확인, 지표 정합성을 종합하여 판단하세요.
+4. 여러 패턴이 동시에 감지될 수 있습니다. 모두 보고하세요.
 
-JSON으로만 응답하세요:
+JSON으로만 응답:
 \`\`\`json
 {
   "detectedPatterns": [
     {
-      "name": "패턴명(한글)",
-      "nameEn": "Pattern Name",
+      "name": "위 레퍼런스의 한글 패턴명",
+      "nameEn": "English Name",
       "type": "reversal|continuation|harmonic|candlestick",
       "direction": "bullish|bearish|neutral",
       "confidence": 0-100,
-      "bullProb": 0-100,
-      "bearProb": 0-100,
-      "targetUp": 상승목표가,
-      "targetDown": 하락목표가,
-      "stopLoss": 손절가,
-      "reasoning": "1-2문장 근거"
+      "bullProb": "위 레퍼런스 참조 (0-100)",
+      "bearProb": "위 레퍼런스 참조 (0-100)",
+      "targetUp": "현재가×(1+레퍼런스평균상승률) 실제 가격",
+      "targetDown": "현재가×(1-레퍼런스평균하락률) 실제 가격",
+      "stopLoss": "패턴 이탈 가격",
+      "reasoning": "이 패턴으로 판단한 구체적 근거 (어떤 봉에서 어떤 형태가 보이는지)"
     }
   ],
   "indicatorSignals": [
-    {"indicator": "RSI", "signal": "bullish|bearish|neutral", "detail": "설명"},
-    {"indicator": "MACD", "signal": "bullish|bearish|neutral", "detail": "설명"},
-    {"indicator": "BB", "signal": "bullish|bearish|neutral", "detail": "설명"},
-    {"indicator": "Stochastic", "signal": "bullish|bearish|neutral", "detail": "설명"},
-    {"indicator": "MA", "signal": "bullish|bearish|neutral", "detail": "설명"},
-    {"indicator": "Volume", "signal": "bullish|bearish|neutral", "detail": "설명"}
+    {"indicator": "RSI", "signal": "bullish|bearish|neutral", "detail": "구체적 판단 근거"},
+    {"indicator": "MACD", "signal": "bullish|bearish|neutral", "detail": "크로스오버/다이버전스 유무"},
+    {"indicator": "BB", "signal": "bullish|bearish|neutral", "detail": "밴드 위치/스퀴즈 유무"},
+    {"indicator": "Stochastic", "signal": "bullish|bearish|neutral", "detail": "과매수/과매도 판단"},
+    {"indicator": "MA", "signal": "bullish|bearish|neutral", "detail": "골든/데드크로스, 배열 상태"},
+    {"indicator": "Volume", "signal": "bullish|bearish|neutral", "detail": "거래량 추세 해석"}
   ],
   "supports": [지지선1, 지지선2, 지지선3],
   "resistances": [저항선1, 저항선2, 저항선3],
   "strategy": {
     "position": "long|short|hold",
-    "entryPrice": 진입가,
-    "targetPrice": 1차목표가,
-    "targetPrice2": 2차목표가,
+    "entryPrice": 현재가 기준 진입가,
+    "targetPrice": 1차 목표가,
+    "targetPrice2": 2차 목표가,
     "stopLoss": 손절가,
-    "riskReward": "1:X 비율",
-    "reasoning": "전략근거 2-3문장"
+    "riskReward": "1:X",
+    "reasoning": "전략 근거 2-3문장"
   },
   "riskLevel": "low|medium|high",
-  "riskFactors": ["리스크1", "리스크2"],
-  "summary": "종합분석 3-4문장 (현재 상황, 핵심 포인트, 주의사항 포함)",
+  "riskFactors": ["구체적 리스크 요인1", "리스크 요인2"],
+  "summary": "종합 분석 3-4문장",
   "trend": "uptrend|downtrend|sideways",
   "trendStrength": "strong|moderate|weak",
   "volumeAnalysis": "거래량 분석 1문장"
