@@ -309,6 +309,45 @@ async function analyze() {
   }
 }
 
+// ─── Technical Indicator Calculations (pure math, no AI) ───
+function calcRSI(closes, period=14) {
+  if (closes.length < period+1) return null;
+  let gains=0, losses=0;
+  for(let i=1;i<=period;i++){
+    const d=closes[i]-closes[i-1];
+    if(d>0)gains+=d; else losses+=Math.abs(d);
+  }
+  let avgGain=gains/period, avgLoss=losses/period;
+  for(let i=period+1;i<closes.length;i++){
+    const d=closes[i]-closes[i-1];
+    avgGain=(avgGain*(period-1)+(d>0?d:0))/period;
+    avgLoss=(avgLoss*(period-1)+(d<0?Math.abs(d):0))/period;
+  }
+  if(avgLoss===0) return 100;
+  return +(100-100/(1+avgGain/avgLoss)).toFixed(1);
+}
+
+function calcMACD(closes) {
+  if(closes.length<26) return {macd:null,signal:null,histogram:null,series:[]};
+  const ema=(data,n)=>{const k=2/(n+1);let e=[data[0]];for(let i=1;i<data.length;i++)e.push(data[i]*k+e[i-1]*(1-k));return e;};
+  const e12=ema(closes,12), e26=ema(closes,26);
+  const macdLine=e12.map((v,i)=>v-e26[i]);
+  const signalLine=ema(macdLine.slice(26),9);
+  // Pad signal to align
+  const fullSignal=Array(26+8).fill(null).concat(signalLine);
+  const histogram=macdLine.map((v,i)=>fullSignal[i]!=null?v-fullSignal[i]:null);
+  const last=macdLine.length-1;
+  const sigLast=fullSignal.length-1;
+  return {
+    macd:+macdLine[last].toFixed(2),
+    signal:fullSignal[sigLast]!=null?+fullSignal[sigLast].toFixed(2):null,
+    histogram:histogram[last]!=null?+histogram[last].toFixed(2):null,
+    series:macdLine.map((v,i)=>({macd:v,signal:fullSignal[i],hist:histogram[i]}))
+  };
+}
+
+function calcMAval(closes,n){return closes.length>=n?+(closes.slice(-n).reduce((a,b)=>a+b,0)/n).toFixed(2):null;}
+
 // ─── Render ───
 function renderResults(data, analysis) {
   const el = document.getElementById("results");
@@ -320,6 +359,18 @@ function renderResults(data, analysis) {
   const l52 = Math.min(...ohlcv.map(d=>d.low));
   const cs = data.currency === "KRW" ? "₩" : "$";
   const fmtP = v => Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
+
+  // ── Calculate indicators from REAL data ──
+  const closes = ohlcv.map(d=>d.close);
+  const rsi = calcRSI(closes, 14);
+  const macdData = calcMACD(closes);
+  const ma5 = calcMAval(closes,5);
+  const ma20 = calcMAval(closes,20);
+  const ma100 = calcMAval(closes,100);
+  const ma250 = calcMAval(closes,250);
+
+  const rsiColor = rsi>70?"#E85D75":rsi<30?"#4ECCA3":"#C9A96E";
+  const macdColor = macdData.histogram>0?"#4ECCA3":macdData.histogram<0?"#E85D75":"#C9A96E";
 
   let html = `
   <!-- Title -->
@@ -341,9 +392,28 @@ function renderResults(data, analysis) {
   <!-- Chart -->
   <div class="chart-box">${renderChart(ohlcv, cp, data.currency, analysis)}</div>
 
+  <!-- RSI + MACD Sub-Charts -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
+    <div class="chart-box" style="margin-bottom:0">${renderRSIChart(ohlcv)}</div>
+    <div class="chart-box" style="margin-bottom:0">${renderMACDChart(ohlcv)}</div>
+  </div>
+
   <!-- Stats -->
   <div class="stat-grid">
-    ${[{l:"52주 최고",v:fmtP(h52),c:"#4ECCA3"},{l:"52주 최저",v:fmtP(l52),c:"#E85D75"},{l:"RSI",v:analysis?.rsi||"—",c:"#C9A96E"},{l:"추세",v:analysis?.trend==="uptrend"?"상승":analysis?.trend==="downtrend"?"하락":"횡보",c:analysis?.trend==="uptrend"?"#4ECCA3":analysis?.trend==="downtrend"?"#E85D75":"#C9A96E"}].map(s=>`<div class="stat-item"><div class="stat-label">${s.l}</div><div class="stat-value" style="color:${s.c}">${s.v}</div></div>`).join("")}
+    ${[
+      {l:"52주 최고",v:fmtP(h52),c:"#4ECCA3"},
+      {l:"52주 최저",v:fmtP(l52),c:"#E85D75"},
+      {l:"RSI (14)",v:rsi!=null?rsi:"—",c:rsiColor},
+      {l:"MACD",v:macdData.macd!=null?macdData.macd:"—",c:macdColor},
+      {l:"Signal",v:macdData.signal!=null?macdData.signal:"—",c:"#C39BD3"},
+      {l:"Histogram",v:macdData.histogram!=null?macdData.histogram:"—",c:macdData.histogram>0?"#4ECCA3":"#E85D75"},
+      {l:"MA5",v:ma5?fmtP(ma5):"—",c:"#E8A87C"},
+      {l:"MA20",v:ma20?fmtP(ma20):"—",c:"#85C1E9"},
+      {l:"MA100",v:ma100?fmtP(ma100):"—",c:"#C39BD3"},
+      {l:"MA250",v:ma250?fmtP(ma250):"—",c:"#7DCEA0"},
+      {l:"추세",v:analysis?.trend==="uptrend"?"상승":analysis?.trend==="downtrend"?"하락":"횡보",c:analysis?.trend==="uptrend"?"#4ECCA3":analysis?.trend==="downtrend"?"#E85D75":"#C9A96E"},
+      {l:"거래량",v:analysis?.volumeTrend==="increasing"?"증가":analysis?.volumeTrend==="decreasing"?"감소":"안정",c:"#85C1E9"}
+    ].map(s=>`<div class="stat-item"><div class="stat-label">${s.l}</div><div class="stat-value" style="color:${s.c}">${s.v}</div></div>`).join("")}
   </div>`;
 
   // Patterns
@@ -413,9 +483,14 @@ function renderChart(data, currentPrice, currency, analysis) {
 
   // MA
   const calcMA=(n)=>data.map((_,i)=>i<n-1?null:data.slice(i-n+1,i+1).reduce((s,d)=>s+d.close,0)/n);
-  [{ vals:calcMA(5), col:"#E8A87C", label:"MA5" },{ vals:calcMA(20), col:"#85C1E9", label:"MA20" }].forEach(ma=>{
+  [
+    { vals:calcMA(5), col:"#E8A87C", label:"MA5", w:1 },
+    { vals:calcMA(20), col:"#85C1E9", label:"MA20", w:1.2 },
+    { vals:calcMA(100), col:"#C39BD3", label:"MA100", w:1.5 },
+    { vals:calcMA(250), col:"#7DCEA0", label:"MA250", w:1.8 }
+  ].forEach(ma=>{
     const pts=ma.vals.map((v,i)=>v!==null?`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`:null).filter(Boolean);
-    if(pts.length>1) svg+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${ma.col}" stroke-width="1.2" opacity="0.6"/>`;
+    if(pts.length>1) svg+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${ma.col}" stroke-width="${ma.w}" opacity="0.55"/>`;
   });
 
   // Candles
@@ -440,8 +515,11 @@ function renderChart(data, currentPrice, currency, analysis) {
   });
 
   // MA legend
-  svg+=`<line x1="${W-P.r-110}" y1="14" x2="${W-P.r-96}" y2="14" stroke="#E8A87C" stroke-width="1.5"/><text x="${W-P.r-92}" y="17" fill="#E8A87C" font-size="8" font-family="DM Mono,monospace">MA5</text>`;
-  svg+=`<line x1="${W-P.r-62}" y1="14" x2="${W-P.r-48}" y2="14" stroke="#85C1E9" stroke-width="1.5"/><text x="${W-P.r-44}" y="17" fill="#85C1E9" font-size="8" font-family="DM Mono,monospace">MA20</text>`;
+  const maLegend=[{c:"#E8A87C",l:"MA5"},{c:"#85C1E9",l:"MA20"},{c:"#C39BD3",l:"MA100"},{c:"#7DCEA0",l:"MA250"}];
+  maLegend.forEach((m,i)=>{
+    const lx=W-P.r-180+i*48;
+    svg+=`<line x1="${lx}" y1="14" x2="${lx+12}" y2="14" stroke="${m.c}" stroke-width="1.5"/><text x="${lx+16}" y="17" fill="${m.c}" font-size="7" font-family="DM Mono,monospace">${m.l}</text>`;
+  });
 
   // Data source badge
   svg+=`<text x="${P.l+6}" y="${H-8}" fill="#4ECCA3" font-size="8" font-family="DM Mono,monospace">● ${currentData?.source||"api"} 실데이터 ${data.length}봉</text>`;
@@ -452,6 +530,108 @@ function renderChart(data, currentPrice, currency, analysis) {
 
 // Enter key
 // Enter key handled in autocomplete section above
+
+// ─── RSI Sub-Chart ───
+function renderRSIChart(data) {
+  const closes=data.map(d=>d.close);
+  if(closes.length<15) return `<div style="text-align:center;padding:20px;color:#555;font-size:11px;font-family:'DM Mono',monospace">RSI 계산에 최소 15봉 필요</div>`;
+
+  // Calculate RSI series
+  const period=14;
+  const rsiSeries=[];
+  for(let end=period;end<=closes.length;end++){
+    const slice=closes.slice(0,end);
+    let gains=0,losses=0;
+    for(let i=1;i<=period;i++){const d=slice[slice.length-period-1+i]-slice[slice.length-period-1+i-1];if(d>0)gains+=d;else losses+=Math.abs(d);}
+    let ag=gains/period,al=losses/period;
+    // Smoothed
+    for(let i=period+1;i<slice.length;i++){const d=slice[i]-slice[i-1];ag=(ag*(period-1)+(d>0?d:0))/period;al=(al*(period-1)+(d<0?Math.abs(d):0))/period;}
+    rsiSeries.push(al===0?100:+(100-100/(1+ag/al)).toFixed(1));
+  }
+
+  const W=380,H=120,P={t:20,r:40,b:20,l:10};
+  const cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const toX=i=>P.l+(i/(rsiSeries.length-1||1))*cw;
+  const toY=v=>P.t+(1-v/100)*ch;
+  const lastRsi=rsiSeries[rsiSeries.length-1];
+  const rsiCol=lastRsi>70?"#E85D75":lastRsi<30?"#4ECCA3":"#C9A96E";
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:130px">`;
+  // Label
+  svg+=`<text x="${P.l+4}" y="14" fill="#C9A96E" font-size="9" font-weight="600" font-family="DM Mono,monospace">RSI (14)</text>`;
+  svg+=`<text x="${W-P.r-4}" y="14" fill="${rsiCol}" font-size="10" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${lastRsi}</text>`;
+  // Zones
+  svg+=`<rect x="${P.l}" y="${toY(100)}" width="${cw}" height="${toY(70)-toY(100)}" fill="rgba(78,204,163,0.04)"/>`;
+  svg+=`<rect x="${P.l}" y="${toY(30)}" width="${cw}" height="${toY(0)-toY(30)}" fill="rgba(232,93,117,0.04)"/>`;
+  // Grid lines at 30,50,70
+  [30,50,70].forEach(v=>{
+    svg+=`<line x1="${P.l}" y1="${toY(v)}" x2="${W-P.r}" y2="${toY(v)}" stroke="${v===50?"#ffffff":"#ffffff"}" stroke-opacity="${v===50?"0.06":"0.08"}" stroke-dasharray="${v===50?"2,4":"4,4"}"/>`;
+    svg+=`<text x="${W-P.r+4}" y="${toY(v)+3}" fill="${v>=70?"#E85D75":v<=30?"#4ECCA3":"#666"}" font-size="7.5" font-family="DM Mono,monospace">${v}</text>`;
+  });
+  // RSI line
+  const pts=rsiSeries.map((v,i)=>`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`);
+  svg+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${rsiCol}" stroke-width="1.5" stroke-linecap="round"/>`;
+  // Last dot
+  svg+=`<circle cx="${toX(rsiSeries.length-1)}" cy="${toY(lastRsi)}" r="3" fill="${rsiCol}"/>`;
+  svg+=`</svg>`;
+  return svg;
+}
+
+// ─── MACD Sub-Chart ───
+function renderMACDChart(data) {
+  const closes=data.map(d=>d.close);
+  if(closes.length<35) return `<div style="text-align:center;padding:20px;color:#555;font-size:11px;font-family:'DM Mono',monospace">MACD 계산에 최소 35봉 필요</div>`;
+
+  const ema=(arr,n)=>{const k=2/(n+1);let e=[arr[0]];for(let i=1;i<arr.length;i++)e.push(arr[i]*k+e[i-1]*(1-k));return e;};
+  const e12=ema(closes,12),e26=ema(closes,26);
+  const macdLine=e12.map((v,i)=>v-e26[i]);
+  const sigRaw=ema(macdLine.slice(26),9);
+  const signalLine=Array(26+8).fill(null).concat(sigRaw);
+  const histogram=macdLine.map((v,i)=>signalLine[i]!=null?v-signalLine[i]:null);
+
+  // Only render from index 26 onward (where MACD is meaningful)
+  const start=26;
+  const macd=macdLine.slice(start);
+  const signal=signalLine.slice(start);
+  const hist=histogram.slice(start);
+
+  const W=380,H=120,P={t:20,r:40,b:20,l:10};
+  const cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const allV=[...macd,...signal.filter(v=>v!==null),...hist.filter(v=>v!==null)];
+  const vMax=Math.max(...allV.map(Math.abs))*1.1||1;
+  const toX=i=>P.l+(i/(macd.length-1||1))*cw;
+  const toY=v=>P.t+ch/2-(v/vMax)*(ch/2);
+  const barW=Math.max(1,Math.min(6,cw/macd.length*0.7));
+
+  const lastMacd=macd[macd.length-1];
+  const lastSig=signal[signal.length-1];
+  const lastHist=hist[hist.length-1];
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:130px">`;
+  // Label
+  svg+=`<text x="${P.l+4}" y="14" fill="#C39BD3" font-size="9" font-weight="600" font-family="DM Mono,monospace">MACD (12,26,9)</text>`;
+  svg+=`<text x="${W-P.r-4}" y="14" fill="${lastHist>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${lastMacd?.toFixed(2)||"—"}</text>`;
+  // Zero line
+  svg+=`<line x1="${P.l}" y1="${toY(0)}" x2="${W-P.r}" y2="${toY(0)}" stroke="#ffffff" stroke-opacity="0.08"/>`;
+  // Histogram bars
+  hist.forEach((v,i)=>{
+    if(v===null)return;
+    const x=toX(i),y0=toY(0),y1=toY(v);
+    const col=v>=0?"#4ECCA3":"#E85D75";
+    svg+=`<rect x="${x-barW/2}" y="${Math.min(y0,y1)}" width="${barW}" height="${Math.abs(y1-y0)||1}" fill="${col}" opacity="0.5" rx="0.5"/>`;
+  });
+  // MACD line
+  const macdPts=macd.map((v,i)=>`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`);
+  svg+=`<polyline points="${macdPts.join(" ")}" fill="none" stroke="#85C1E9" stroke-width="1.3"/>`;
+  // Signal line
+  const sigPts=signal.map((v,i)=>v!==null?`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`:null).filter(Boolean);
+  if(sigPts.length>1) svg+=`<polyline points="${sigPts.join(" ")}" fill="none" stroke="#E8A87C" stroke-width="1.3" stroke-dasharray="3,2"/>`;
+  // Legend
+  svg+=`<line x1="${W-P.r-100}" y1="${H-8}" x2="${W-P.r-88}" y2="${H-8}" stroke="#85C1E9" stroke-width="1.5"/><text x="${W-P.r-84}" y="${H-5}" fill="#85C1E9" font-size="7" font-family="DM Mono,monospace">MACD</text>`;
+  svg+=`<line x1="${W-P.r-52}" y1="${H-8}" x2="${W-P.r-40}" y2="${H-8}" stroke="#E8A87C" stroke-width="1.5" stroke-dasharray="3,2"/><text x="${W-P.r-36}" y="${H-5}" fill="#E8A87C" font-size="7" font-family="DM Mono,monospace">Signal</text>`;
+  svg+=`</svg>`;
+  return svg;
+}
 </script>
 </body>
 </html>
