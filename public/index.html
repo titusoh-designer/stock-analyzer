@@ -177,7 +177,7 @@ function switchTab(t){
 // ═══════ CONTROLS ═══════
 function setSrc(s){src=s;document.querySelectorAll("#srcBar .src-btn").forEach(b=>b.classList.toggle("on",b.dataset.s===s));}
 function setTf(t){tf=t;document.querySelectorAll("#tfBar .tf-btn").forEach(b=>b.classList.toggle("on",b.dataset.t===t));if(curData)fetchData();}
-function setZoom(n){candleCount=n;document.querySelectorAll("#zoomBar .tf-btn").forEach(b=>b.classList.toggle("on",+b.dataset.z===n));if(curData)render(curData,window._lastAI);}
+function setZoom(n){candleCount=n;document.querySelectorAll("#zoomBar .tf-btn").forEach(b=>b.classList.toggle("on",+b.dataset.z===n));if(curData)render(curData,null);}
 function qk(s,sr){document.getElementById("symInput").value=s;selSym={symbol:s,source:sr};setSrc(sr);hideDrop();fetchData();}
 
 // ═══════ AUTOCOMPLETE ═══════
@@ -377,11 +377,7 @@ JSON으로만 응답 (모든 텍스트 한국어):
   }catch(e){console.warn("AI:",e);aiErr=e.message||String(e);}
 
   window._lastAI=ai;
-  // Re-render chart with AI overlay
-  if(ai){
-    render(curData,ai);
-  }
-  // Show AI results in dedicated area
+  // AI results go BELOW the main chart (main chart stays untouched)
   if(aiOut){
     if(ai){
       aiOut.innerHTML=renderAiResults(ai,curData);
