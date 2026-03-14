@@ -2,636 +2,393 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
 <title>Stock Pattern Analyzer</title>
+<link rel="manifest" href="data:application/json,{}">
+<meta name="theme-color" content="#0a0a10">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height:100vh}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
 .mono{font-family:'DM Mono',monospace}.noto{font-family:'Noto Sans KR',sans-serif;font-weight:300}
-.container{max-width:1200px;margin:0 auto;padding:0 32px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:1px solid #1e1e2e;margin-bottom:24px}
+.tab-btn{padding:14px 28px;border:none;cursor:pointer;background:transparent;border-bottom:2px solid transparent;color:#555;font-size:13px;font-weight:400;font-family:'DM Mono',monospace;transition:all 0.2s}
+.tab-btn.active{border-bottom-color:#C9A96E;color:#C9A96E;font-weight:600}
 
 /* Header */
-.header{padding:40px 0 20px}
-.header .tag{font-size:9px;color:#C9A96E;font-family:'DM Mono',monospace;letter-spacing:0.25em;text-transform:uppercase;display:flex;align-items:center;gap:12px;margin-bottom:6px}
-.header .tag .diamond{width:10px;height:10px;border:1.5px solid #C9A96E;transform:rotate(45deg);animation:pulse 2.4s ease infinite}
-.header h1{font-size:clamp(28px,4vw,42px);font-weight:800;background:linear-gradient(135deg,#F0ECE3 30%,#C9A96E 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.03em;line-height:1.2;margin-bottom:8px}
-.header p{font-size:14px;color:#666;font-family:'Noto Sans KR',sans-serif;font-weight:300;line-height:1.8}
+.hdr{padding:32px 0 12px}.hdr .tag{font-size:9px;color:#C9A96E;font-family:'DM Mono',monospace;letter-spacing:0.25em;display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.hdr .diamond{width:9px;height:9px;border:1.5px solid #C9A96E;transform:rotate(45deg);animation:pulse 2.4s ease infinite}
+.hdr h1{font-size:clamp(26px,3.5vw,38px);font-weight:800;background:linear-gradient(135deg,#F0ECE3 30%,#C9A96E 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.03em}
 
 /* Search */
-.search-bar{display:flex;gap:10px;background:#0e0e16;border:1px solid #2a2a3a;border-radius:14px;padding:6px;margin-bottom:12px}
-.search-bar input{flex:1;background:transparent;border:none;outline:none;padding:14px 18px;color:#F0ECE3;font-size:15px;font-family:'DM Mono',monospace}
-.search-bar button{padding:12px 28px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#C9A96E,#A88B5A);color:#0a0a10;font-size:13px;font-weight:600;font-family:'DM Mono',monospace}
+.search-wrap{position:relative;margin-bottom:12px}
+.search-bar{display:flex;gap:8px;background:#0e0e16;border:1px solid #2a2a3a;border-radius:12px;padding:5px}
+.search-bar input{flex:1;background:transparent;border:none;outline:none;padding:12px 16px;color:#F0ECE3;font-size:14px;font-family:'DM Mono',monospace}
+.search-bar button{padding:10px 24px;border-radius:8px;border:none;cursor:pointer;background:linear-gradient(135deg,#C9A96E,#A88B5A);color:#0a0a10;font-size:12px;font-weight:600;font-family:'DM Mono',monospace}
 .search-bar button:disabled{background:#2a2a3a;cursor:wait}
+#searchDrop{display:none;position:absolute;top:100%;left:0;right:0;background:#12121a;border:1px solid #2a2a3a;border-radius:0 0 12px 12px;border-top:none;z-index:100;max-height:280px;overflow-y:auto}
+.drop-item{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;cursor:pointer;border-bottom:1px solid #1a1a28;transition:background 0.1s}
+.drop-item:hover{background:#1a1a28}
 
-.quick-btn{padding:5px 12px;border-radius:20px;border:1px solid #1e1e2e;background:transparent;color:#666;font-size:11px;cursor:pointer;font-family:'DM Mono',monospace;transition:all 0.2s}
-.quick-btn:hover{border-color:#C9A96E;color:#C9A96E}
+.pill{padding:4px 10px;border-radius:20px;border:1px solid #1e1e2e;background:transparent;color:#666;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace;transition:all 0.15s}
+.pill:hover,.pill.on{border-color:#C9A96E;color:#C9A96E}
+.tf-bar{display:flex;gap:2px;background:#12121a;border-radius:7px;padding:2px}
+.tf-btn{padding:4px 10px;border-radius:5px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;background:transparent;color:#555;transition:all 0.1s}
+.tf-btn.on{background:rgba(201,169,110,0.2);color:#C9A96E;font-weight:600}
+.src-btn{padding:4px 9px;border-radius:5px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:9px;background:transparent;color:#555}
+.src-btn.on{background:rgba(78,204,163,0.12);color:#4ECCA3}
 
-/* Timeframe */
-.tf-bar{display:flex;gap:2px;background:#12121a;border-radius:8px;padding:2px}
-.tf-btn{padding:5px 12px;border-radius:6px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;background:transparent;color:#555;transition:all 0.15s}
-.tf-btn.active{background:rgba(201,169,110,0.2);color:#C9A96E;font-weight:600}
+/* Cards / Grids */
+.card{background:#0e0e16;border:1px solid #1e1e2e;border-radius:12px;padding:16px;margin-bottom:10px}
+.badge{font-size:9px;padding:3px 8px;border-radius:16px;font-family:'DM Mono',monospace}
+.sg{display:grid;gap:8px;margin-bottom:20px}
+.si{background:#0e0e16;border:1px solid #1e1e2e;border-radius:8px;padding:10px}
+.si .l{font-size:8px;color:#555;font-family:'DM Mono',monospace;letter-spacing:0.06em;margin-bottom:3px}
+.si .v{font-size:13px;font-weight:600;font-family:'DM Mono',monospace}
+.chart-box{background:#0a0a12;border-radius:12px;border:1px solid #1e1e2e;padding:12px 8px 4px;margin-bottom:16px}
 
-/* Source selector */
-.src-bar{display:flex;gap:2px;background:#12121a;border-radius:8px;padding:2px}
-.src-btn{padding:5px 10px;border-radius:6px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:9px;background:transparent;color:#555;transition:all 0.15s}
-.src-btn.active{background:rgba(78,204,163,0.15);color:#4ECCA3}
+/* Watchlist */
+.wl-item{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #1a1a28;cursor:pointer;transition:background 0.15s}
+.wl-item:hover{background:#12121a}
+.wl-signal{font-size:9px;padding:2px 8px;border-radius:12px;font-family:'DM Mono',monospace}
 
-/* Cards */
-.card{background:#0e0e16;border:1px solid #1e1e2e;border-radius:14px;padding:20px;margin-bottom:12px}
-.badge{font-size:9px;padding:3px 8px;border-radius:20px;font-family:'DM Mono',monospace}
-.badge-bull{background:rgba(78,204,163,0.12);color:#4ECCA3;border:1px solid rgba(78,204,163,0.3)}
-.badge-bear{background:rgba(232,93,117,0.12);color:#E85D75;border:1px solid rgba(232,93,117,0.3)}
-.badge-gold{background:rgba(201,169,110,0.12);color:#C9A96E;border:1px solid rgba(201,169,110,0.3)}
-.badge-green{background:rgba(78,204,163,0.08);color:#4ECCA3;border:1px solid rgba(78,204,163,0.15)}
-
-/* Grid */
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:24px}
-.stat-item{background:#0e0e16;border:1px solid #1e1e2e;border-radius:10px;padding:12px}
-.stat-label{font-size:9px;color:#555;font-family:'DM Mono',monospace;letter-spacing:0.08em;margin-bottom:5px}
-.stat-value{font-size:14px;font-weight:600;font-family:'DM Mono',monospace}
-
-/* Chart container */
-.chart-box{background:#0a0a12;border-radius:14px;border:1px solid #1e1e2e;padding:14px 10px 6px;margin-bottom:20px;position:relative}
-
-/* Pattern cards */
-.pattern-card{border-left:3px solid;padding:20px}
-.pattern-card .targets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px}
-.target-box{border-radius:8px;padding:12px}
-
-/* Loading */
-.loading{text-align:center;padding:60px 0}
-.dot{width:10px;height:10px;border-radius:50%;background:#C9A96E;display:inline-block;animation:pulse 1.2s ease infinite}
+/* Loading & misc */
+.loading{text-align:center;padding:50px 0}
+.dot{width:8px;height:8px;border-radius:50%;background:#C9A96E;display:inline-block;animation:pulse 1.2s ease infinite}
 .dot:nth-child(2){animation-delay:0.2s}.dot:nth-child(3){animation-delay:0.4s}
-
-/* Summary box */
-.summary-box{background:linear-gradient(135deg,rgba(201,169,110,0.06),rgba(201,169,110,0.02));border:1px solid rgba(201,169,110,0.2);border-radius:14px;padding:24px}
-
 @keyframes pulse{0%,100%{opacity:0.4}50%{opacity:1}}
-@keyframes fadeSlide{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.fade{animation:fadeIn 0.3s ease}
 </style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <div class="tag"><div class="diamond"></div>STOCK PATTERN ANALYZER</div>
-    <h1>종목 패턴 분석</h1>
-    <p id="subtitle" class="noto">실시간 가격 데이터 + AI 패턴 분석 — API 직접 호출, 제한 없음</p>
-  </div>
+<div class="wrap">
+<div class="hdr">
+  <div class="tag"><div class="diamond"></div>STOCK PATTERN ANALYZER v2</div>
+  <h1>종목 패턴 분석</h1>
+</div>
 
-  <!-- Search -->
-  <div style="position:relative">
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('analyze')">◈ 종목 분석</button>
+  <button class="tab-btn" onclick="switchTab('watchlist')">◇ 워치리스트</button>
+</div>
+
+<!-- ═══════ TAB: Analyze ═══════ -->
+<div id="tabAnalyze">
+  <div class="search-wrap">
     <div class="search-bar">
-      <input id="symbolInput" placeholder="종목명 또는 티커 입력 (삼성전자, Apple, AAPL, bitcoin)" autocomplete="off" />
-      <button id="analyzeBtn" onclick="analyze()">분석</button>
+      <input id="symInput" placeholder="종목명 또는 티커 (삼성전자, Apple, AAPL, bitcoin)" autocomplete="off"/>
+      <button id="goBtn" onclick="doAnalyze()">분석</button>
     </div>
-    <!-- Autocomplete Dropdown -->
-    <div id="searchDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#12121a;border:1px solid #2a2a3a;border-radius:0 0 14px 14px;border-top:none;z-index:100;max-height:320px;overflow-y:auto"></div>
+    <div id="searchDrop"></div>
   </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:24px">
-    <button class="quick-btn" onclick="quickSearch('AAPL','yahoo')">AAPL</button>
-    <button class="quick-btn" onclick="quickSearch('TSLA','yahoo')">TSLA</button>
-    <button class="quick-btn" onclick="quickSearch('NVDA','yahoo')">NVDA</button>
-    <button class="quick-btn" onclick="quickSearch('MSFT','yahoo')">MSFT</button>
-    <button class="quick-btn" onclick="quickSearch('005930','naver')">삼성전자</button>
-    <button class="quick-btn" onclick="quickSearch('035720','naver')">카카오</button>
-    <button class="quick-btn" onclick="quickSearch('bitcoin','coingecko')">BTC</button>
-    <button class="quick-btn" onclick="quickSearch('ethereum','coingecko')">ETH</button>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:20px">
+    <button class="pill" onclick="qk('AAPL','yahoo')">AAPL</button>
+    <button class="pill" onclick="qk('TSLA','yahoo')">TSLA</button>
+    <button class="pill" onclick="qk('NVDA','yahoo')">NVDA</button>
+    <button class="pill" onclick="qk('005930','naver')">삼성전자</button>
+    <button class="pill" onclick="qk('035720','naver')">카카오</button>
+    <button class="pill" onclick="qk('bitcoin','coingecko')">BTC</button>
+    <button class="pill" onclick="qk('ethereum','coingecko')">ETH</button>
     <div style="flex:1"></div>
-    <!-- Source -->
-    <div class="src-bar" id="sourceBar">
-      <button class="src-btn active" data-src="yahoo" onclick="setSource('yahoo')">Yahoo</button>
-      <button class="src-btn" data-src="naver" onclick="setSource('naver')">네이버</button>
-      <button class="src-btn" data-src="coingecko" onclick="setSource('coingecko')">Crypto</button>
+    <div class="tf-bar" id="srcBar">
+      <button class="src-btn on" data-s="yahoo" onclick="setSrc('yahoo')">Yahoo</button>
+      <button class="src-btn" data-s="naver" onclick="setSrc('naver')">네이버</button>
+      <button class="src-btn" data-s="coingecko" onclick="setSrc('coingecko')">Crypto</button>
     </div>
-    <!-- Timeframe -->
     <div class="tf-bar" id="tfBar">
-      <button class="tf-btn" data-tf="60m" onclick="setTF('60m')">1시간</button>
-      <button class="tf-btn active" data-tf="1d" onclick="setTF('1d')">일봉</button>
-      <button class="tf-btn" data-tf="1wk" onclick="setTF('1wk')">주봉</button>
-      <button class="tf-btn" data-tf="1mo" onclick="setTF('1mo')">월봉</button>
+      <button class="tf-btn" data-t="60m" onclick="setTf('60m')">1H</button>
+      <button class="tf-btn on" data-t="1d" onclick="setTf('1d')">1D</button>
+      <button class="tf-btn" data-t="1wk" onclick="setTf('1wk')">1W</button>
+      <button class="tf-btn" data-t="1mo" onclick="setTf('1mo')">1M</button>
+    </div>
+    <button class="pill" id="addWlBtn" onclick="addToWatchlist()" style="display:none;border-color:#C9A96E40;color:#C9A96E">+ 워치리스트</button>
+  </div>
+  <div id="analyzeOut"></div>
+  <div id="loadEl" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p id="loadMsg" class="noto" style="color:#666;font-size:12px;margin-top:14px"></p></div>
+  <div id="errEl" style="display:none;background:rgba(232,93,117,0.06);border:1px solid rgba(232,93,117,0.2);border-radius:10px;padding:16px;margin-bottom:16px"><p id="errMsg" style="color:#E85D75;font-size:12px" class="noto"></p></div>
+  <div id="emptyEl" style="text-align:center;padding:60px 0"><div style="font-size:40px;opacity:0.1;margin-bottom:12px">◇</div><p class="noto" style="color:#555;font-size:13px;line-height:1.8">종목명 또는 티커를 입력하면<br>실시간 가격 + AI 패턴 분석이 시작됩니다</p></div>
+</div>
+
+<!-- ═══════ TAB: Watchlist ═══════ -->
+<div id="tabWatchlist" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="mono" style="font-size:11px;color:#C9A96E;letter-spacing:0.1em">관심종목</span>
+      <span id="wlCount" class="mono" style="font-size:10px;color:#555"></span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="pill" onclick="scanWatchlist()">전체 스캔</button>
+      <button class="pill" onclick="clearWatchlist()" style="border-color:#E85D7540;color:#E85D75">전체 삭제</button>
     </div>
   </div>
+  <div id="wlScanMsg" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p class="noto" style="color:#666;font-size:12px;margin-top:12px">워치리스트 스캔 중...</p></div>
+  <div id="wlList"></div>
+  <div id="wlEmpty" style="text-align:center;padding:60px 0"><div style="font-size:40px;opacity:0.1;margin-bottom:12px">◇</div><p class="noto" style="color:#555;font-size:13px;line-height:1.8">종목 분석 후 "워치리스트 추가" 버튼을 눌러<br>관심종목을 등록하세요</p></div>
+</div>
 
-  <!-- Results -->
-  <div id="results" style="display:none;animation:fadeSlide 0.4s ease"></div>
-
-  <!-- Loading -->
-  <div id="loadingEl" style="display:none" class="loading">
-    <div><span class="dot"></span> <span class="dot"></span> <span class="dot"></span></div>
-    <p id="loadingMsg" class="noto" style="color:#666;font-size:13px;margin-top:16px"></p>
-  </div>
-
-  <!-- Error -->
-  <div id="errorEl" style="display:none;background:rgba(232,93,117,0.08);border:1px solid rgba(232,93,117,0.25);border-radius:12px;padding:20px;margin-bottom:24px">
-    <p id="errorMsg" style="color:#E85D75;font-size:13px;font-family:'Noto Sans KR',sans-serif"></p>
-  </div>
-
-  <!-- Empty state -->
-  <div id="emptyState" style="text-align:center;padding:80px 0">
-    <div style="font-size:48px;margin-bottom:16px;opacity:0.15">◇</div>
-    <p class="noto" style="color:#555;font-size:14px;line-height:1.8">
-      티커를 입력하면 API에서 실제 가격 데이터를 직접 수신하여<br>차트 렌더링 + AI 패턴 분석을 수행합니다
-    </p>
-    <p class="mono" style="color:#444;font-size:11px;margin-top:12px">
-      Yahoo Finance · 네이버 금융 · CoinGecko — API 직접 호출, 제한 없음
-    </p>
-  </div>
-
-  <!-- Disclaimer -->
-  <div style="border-top:1px solid #1a1a28;padding:20px 0 40px;margin-top:40px">
-    <p class="mono" style="font-size:10px;color:#444;line-height:1.8;text-align:center">
-      ※ 본 자료는 교육·학습 목적의 참고 자료이며, 투자 판단의 근거로 사용할 수 없습니다.
-    </p>
-  </div>
+<div style="border-top:1px solid #1a1a28;padding:16px 0 32px;margin-top:32px"><p class="mono" style="font-size:9px;color:#444;text-align:center">※ 교육·학습 목적 참고 자료이며, 투자 판단의 근거로 사용할 수 없습니다.</p></div>
 </div>
 
 <script>
-// ─── State ───
-let currentSource = "yahoo";
-let currentTF = "1d";
-let currentData = null;
-let searchTimer = null;
-let selectedSymbol = null; // symbol chosen from autocomplete
+// ═══════ STATE ═══════
+let src="yahoo",tf="1d",curData=null,curSym=null,selSym=null;
+let watchlist=JSON.parse(localStorage.getItem("wl")||"[]");
 
-function setSource(s) {
-  currentSource = s;
-  document.querySelectorAll("#sourceBar .src-btn").forEach(b => b.classList.toggle("active", b.dataset.src === s));
-}
-function setTF(tf) {
-  currentTF = tf;
-  document.querySelectorAll("#tfBar .tf-btn").forEach(b => b.classList.toggle("active", b.dataset.tf === tf));
-  if (currentData) analyze();
-}
-function quickSearch(sym, source) {
-  document.getElementById("symbolInput").value = sym;
-  selectedSymbol = { symbol: sym, source };
-  setSource(source);
-  hideDropdown();
-  analyze();
+// ═══════ TABS ═══════
+function switchTab(t){
+  document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",i===(t==="analyze"?0:1)));
+  document.getElementById("tabAnalyze").style.display=t==="analyze"?"block":"none";
+  document.getElementById("tabWatchlist").style.display=t==="watchlist"?"block":"none";
+  if(t==="watchlist")renderWatchlist();
 }
 
-// ─── Autocomplete Search ───
-const input = document.getElementById("symbolInput");
-const dropdown = document.getElementById("searchDropdown");
+// ═══════ CONTROLS ═══════
+function setSrc(s){src=s;document.querySelectorAll("#srcBar .src-btn").forEach(b=>b.classList.toggle("on",b.dataset.s===s));}
+function setTf(t){tf=t;document.querySelectorAll("#tfBar .tf-btn").forEach(b=>b.classList.toggle("on",b.dataset.t===t));if(curData)doAnalyze();}
+function qk(s,sr){document.getElementById("symInput").value=s;selSym={symbol:s,source:sr};setSrc(sr);hideDrop();doAnalyze();}
 
-input.addEventListener("input", () => {
-  const q = input.value.trim();
-  selectedSymbol = null;
-  if (q.length < 1) { hideDropdown(); return; }
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => searchSymbols(q), 300);
-});
+// ═══════ AUTOCOMPLETE ═══════
+let sTimer=null;const inp=document.getElementById("symInput"),drop=document.getElementById("searchDrop");
+inp.addEventListener("input",()=>{selSym=null;const q=inp.value.trim();if(q.length<1){hideDrop();return;}clearTimeout(sTimer);sTimer=setTimeout(()=>searchSym(q),300);});
+inp.addEventListener("keydown",e=>{if(e.key==="Enter"){hideDrop();doAnalyze();}if(e.key==="Escape")hideDrop();});
+document.addEventListener("click",e=>{if(!e.target.closest(".search-wrap"))hideDrop();});
+function hideDrop(){drop.style.display="none";}
+async function searchSym(q){
+  try{const r=await(await fetch("/api/search?q="+encodeURIComponent(q))).json();
+  if(!r.results?.length){hideDrop();return;}
+  const sc={yahoo:"#85C1E9",naver:"#E8A87C",coingecko:"#7DCEA0"};
+  drop.innerHTML=r.results.map((it,i)=>`<div class="drop-item" onclick="pickSym(${i})"><div><div style="font-size:12px;color:#F0ECE3;font-weight:500">${it.name}</div><div style="font-size:10px;color:#666;font-family:'DM Mono',monospace;margin-top:1px">${it.symbol}${it.exchange?" · "+it.exchange:""}</div></div><span style="font-size:8px;padding:2px 7px;border-radius:10px;font-family:'DM Mono',monospace;color:${sc[it.source]||"#666"};background:${sc[it.source]||"#666"}12;border:1px solid ${sc[it.source]||"#666"}25">${it.source}</span></div>`).join("");
+  drop.style.display="block";drop._items=r.results;
+  }catch(e){hideDrop();}
+}
+function pickSym(i){const it=drop._items[i];if(!it)return;const s=it.naverCode||it.symbol;inp.value=it.name+" ("+s+")";selSym={symbol:s,source:it.source,name:it.name};setSrc(it.source);hideDrop();doAnalyze();}
 
-input.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { hideDropdown(); analyze(); }
-  if (e.key === "Escape") hideDropdown();
-});
+// ═══════ INDICATORS (pure math) ═══════
+function calcRSI(c,n=14){if(c.length<n+1)return null;let g=0,l=0;for(let i=1;i<=n;i++){const d=c[i]-c[i-1];d>0?g+=d:l+=Math.abs(d);}let ag=g/n,al=l/n;for(let i=n+1;i<c.length;i++){const d=c[i]-c[i-1];ag=(ag*(n-1)+(d>0?d:0))/n;al=(al*(n-1)+(d<0?Math.abs(d):0))/n;}return al===0?100:+(100-100/(1+ag/al)).toFixed(1);}
+function calcMACD(c){if(c.length<26)return{v:null,s:null,h:null,series:[]};const ema=(d,n)=>{const k=2/(n+1);let e=[d[0]];for(let i=1;i<d.length;i++)e.push(d[i]*k+e[i-1]*(1-k));return e;};const e12=ema(c,12),e26=ema(c,26);const ml=e12.map((v,i)=>v-e26[i]);const sl=Array(34).fill(null).concat(ema(ml.slice(26),9));const hl=ml.map((v,i)=>sl[i]!=null?v-sl[i]:null);return{v:+ml[ml.length-1].toFixed(2),s:sl[sl.length-1]!=null?+sl[sl.length-1].toFixed(2):null,h:hl[hl.length-1]!=null?+hl[hl.length-1].toFixed(2):null,ml,sl,hl};}
+function calcMA(c,n){return c.length>=n?+(c.slice(-n).reduce((a,b)=>a+b,0)/n).toFixed(2):null;}
+function calcBB(c,n=20,k=2){if(c.length<n)return null;const ma=c.slice(-n).reduce((a,b)=>a+b,0)/n;const std=Math.sqrt(c.slice(-n).reduce((s,v)=>s+Math.pow(v-ma,2),0)/n);return{upper:+(ma+k*std).toFixed(2),middle:+ma.toFixed(2),lower:+(ma-k*std).toFixed(2)};}
+function calcStoch(ohlcv,n=14){if(ohlcv.length<n)return null;const s=ohlcv.slice(-n);const hi=Math.max(...s.map(d=>d.high)),lo=Math.min(...s.map(d=>d.low));const c=s[s.length-1].close;return hi===lo?50:+((c-lo)/(hi-lo)*100).toFixed(1);}
 
-input.addEventListener("focus", () => {
-  if (dropdown.children.length > 0 && input.value.trim().length > 0) dropdown.style.display = "block";
-});
+// ═══════ MAIN ANALYZE ═══════
+async function doAnalyze(){
+  let sym,sr;if(selSym){sym=selSym.symbol;sr=selSym.source||src;setSrc(sr);}else{sym=inp.value.trim();sr=src;}
+  if(!sym)return;curSym={symbol:sym,source:sr,name:selSym?.name||sym};
+  const btn=document.getElementById("goBtn"),ld=document.getElementById("loadEl"),out=document.getElementById("analyzeOut"),err=document.getElementById("errEl"),emp=document.getElementById("emptyEl");
+  btn.disabled=true;btn.textContent="...";ld.style.display="block";out.innerHTML="";err.style.display="none";emp.style.display="none";
+  document.getElementById("addWlBtn").style.display="none";
+  try{
+    document.getElementById("loadMsg").textContent="실제 가격 데이터 수신 중...";
+    const r=await(await fetch(`/api/stock?symbol=${encodeURIComponent(sym)}&source=${sr}&interval=${tf}`)).json();
+    if(r.error)throw new Error(r.error);if(!r.ohlcv?.length)throw new Error("데이터 없음. 티커 확인.");
+    curData=r;
 
-document.addEventListener("click", (e) => {
-  if (!e.target.closest(".search-bar") && !e.target.closest("#searchDropdown")) hideDropdown();
-});
+    // AI analysis (background)
+    document.getElementById("loadMsg").textContent="AI 패턴 분석 중...";
+    let ai=null;
+    try{
+      const cls=r.ohlcv.slice(-30).map(d=>`${d.date}:O${d.open}H${d.high}L${d.low}C${d.close}`).join("|");
+      const cp=r.currentPrice||r.ohlcv[r.ohlcv.length-1].close;
+      const h52=Math.max(...r.ohlcv.map(d=>d.high)),l52=Math.min(...r.ohlcv.map(d=>d.low));
+      const ar=await(await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:`"${sym}" 실제API. 현재:${cp},52H:${h52},52L:${l52}. 30봉:\n${cls}\n\nJSON만:\n\`\`\`json\n{"detectedPatterns":[{"name":"한글","nameEn":"En","type":"reversal|continuation|harmonic|candlestick","direction":"bullish|bearish|neutral","confidence":0-100,"bullProb":0-100,"bearProb":0-100,"targetUp":숫자,"targetDown":숫자,"stopLoss":숫자,"reasoning":"근거"}],"supports":[숫자],"resistances":[숫자],"summary":"분석","trend":"uptrend|downtrend|sideways"}\n\`\`\``}]})})).json();
+      const tx=(ar.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+      const m=tx.match(/```json\s*([\s\S]*?)\s*```/)||tx.match(/\{[\s\S]*"detectedPatterns"[\s\S]*\}/);
+      if(m)try{ai=JSON.parse(m[1]||m[0]);}catch(e){}
+    }catch(e){console.warn("AI:",e);}
 
-function hideDropdown() { dropdown.style.display = "none"; }
-
-async function searchSymbols(q) {
-  try {
-    const resp = await fetch("/api/search?q=" + encodeURIComponent(q));
-    const data = await resp.json();
-    if (data.error || !data.results?.length) { hideDropdown(); return; }
-    renderDropdown(data.results);
-  } catch (e) { hideDropdown(); }
+    render(r,ai);
+    document.getElementById("addWlBtn").style.display="inline-block";
+  }catch(e){err.style.display="block";document.getElementById("errMsg").textContent=e.message;
+  }finally{btn.disabled=false;btn.textContent="분석";ld.style.display="none";}
 }
 
-function renderDropdown(items) {
-  const srcColors = { yahoo: "#85C1E9", naver: "#E8A87C", coingecko: "#7DCEA0" };
-  const srcLabels = { yahoo: "Yahoo", naver: "네이버", coingecko: "Crypto" };
-  dropdown.innerHTML = items.map((item, i) => `
-    <div onclick="selectResult(${i})" style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;cursor:pointer;border-bottom:1px solid #1a1a28;transition:background 0.15s"
-      onmouseenter="this.style.background='#1a1a28'" onmouseleave="this.style.background='transparent'">
-      <div>
-        <div style="font-size:13px;color:#F0ECE3;font-weight:500">${item.name}</div>
-        <div style="font-size:10px;color:#666;font-family:'DM Mono',monospace;margin-top:2px">${item.symbol}${item.exchange ? " · " + item.exchange : ""}</div>
-      </div>
-      <span style="font-size:9px;padding:3px 8px;border-radius:12px;font-family:'DM Mono',monospace;background:${srcColors[item.source] || "#666"}15;color:${srcColors[item.source] || "#666"};border:1px solid ${srcColors[item.source] || "#666"}30">${srcLabels[item.source] || item.source}</span>
-    </div>
-  `).join("");
-  dropdown.style.display = "block";
-  // Store items for selection
-  dropdown._items = items;
-}
+// ═══════ RENDER ═══════
+function render(data,ai){
+  const o=data.ohlcv,cp=data.currentPrice||o[o.length-1].close,pv=o.length>1?o[o.length-2].close:cp;
+  const ch=((cp-pv)/pv*100).toFixed(2),cs=data.currency==="KRW"?"₩":"$",fp=v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
+  const cls=o.map(d=>d.close),h52=Math.max(...o.map(d=>d.high)),l52=Math.min(...o.map(d=>d.low));
+  const rsi=calcRSI(cls),macd=calcMACD(cls),bb=calcBB(cls),stoch=calcStoch(o);
+  const ma5=calcMA(cls,5),ma20=calcMA(cls,20),ma100=calcMA(cls,100),ma250=calcMA(cls,250);
+  const rc=rsi>70?"#E85D75":rsi<30?"#4ECCA3":"#C9A96E",mc=macd.h>0?"#4ECCA3":macd.h<0?"#E85D75":"#C9A96E";
 
-function selectResult(idx) {
-  const item = dropdown._items[idx];
-  if (!item) return;
-  // For naver, use the 6-digit code; for others use symbol
-  const sym = item.naverCode || item.symbol;
-  input.value = item.name + " (" + sym + ")";
-  selectedSymbol = { symbol: sym, source: item.source, name: item.name };
-  setSource(item.source);
-  hideDropdown();
-  analyze();
-}
-
-// ─── Main Analyze ───
-async function analyze() {
-  // Use selected symbol from autocomplete, or raw input
-  let sym, source;
-  if (selectedSymbol) {
-    sym = selectedSymbol.symbol;
-    source = selectedSymbol.source || currentSource;
-    setSource(source);
-  } else {
-    sym = document.getElementById("symbolInput").value.trim();
-    source = currentSource;
-  }
-  if (!sym) return;
-
-  const btn = document.getElementById("analyzeBtn");
-  const loadingEl = document.getElementById("loadingEl");
-  const loadingMsg = document.getElementById("loadingMsg");
-  const errorEl = document.getElementById("errorEl");
-  const resultsEl = document.getElementById("results");
-  const emptyState = document.getElementById("emptyState");
-
-  btn.disabled = true;
-  btn.textContent = "분석중...";
-  loadingEl.style.display = "block";
-  errorEl.style.display = "none";
-  resultsEl.style.display = "none";
-  emptyState.style.display = "none";
-
-  try {
-    // STEP 1: Fetch real price data from our proxy API
-    loadingMsg.textContent = "STEP 1/2 — 실제 가격 데이터 수신 중...";
-    const apiUrl = `/api/stock?symbol=${encodeURIComponent(sym)}&source=${source}&interval=${currentTF}`;
-    const resp = await fetch(apiUrl);
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    if (!data.ohlcv || data.ohlcv.length === 0) throw new Error("데이터가 없습니다. 티커를 확인해주세요.");
-    currentData = data;
-
-    // STEP 2: AI Pattern Analysis
-    loadingMsg.textContent = "STEP 2/2 — AI 패턴 분석 중...";
-    let analysis = null;
-    try {
-      const last30 = data.ohlcv.slice(-30).map(d => `${d.date}:O${d.open}H${d.high}L${d.low}C${d.close}`).join("|");
-      const cp = data.currentPrice || data.ohlcv[data.ohlcv.length-1].close;
-      const h52 = Math.max(...data.ohlcv.map(d=>d.high));
-      const l52 = Math.min(...data.ohlcv.map(d=>d.low));
-
-      const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 2000,
-          messages: [{role:"user",content:`"${sym}" 실제 API 가격 (${data.source}). 현재:${cp}, 52H:${h52}, 52L:${l52}. 최근30봉:\n${last30}\n\n기술적분석 JSON만:\n\`\`\`json\n{"detectedPatterns":[{"name":"한글","nameEn":"En","type":"reversal|continuation|harmonic|candlestick","direction":"bullish|bearish|neutral","confidence":0-100,"bullProb":0-100,"bearProb":0-100,"targetUp":숫자,"targetDown":숫자,"stopLoss":숫자,"reasoning":"근거"}],"supports":[숫자],"resistances":[숫자],"summary":"분석","trend":"uptrend|downtrend|sideways","rsi":숫자}\n\`\`\``}]
-        })
-      });
-      const aiData = await aiResp.json();
-      const aiText = (aiData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
-      const m = aiText.match(/```json\s*([\s\S]*?)\s*```/) || aiText.match(/\{[\s\S]*"detectedPatterns"[\s\S]*\}/);
-      if(m) try{analysis=JSON.parse(m[1]||m[0])}catch(e){}
-    } catch(e) { console.warn("AI analysis failed:",e); }
-
-    renderResults(data, analysis);
-  } catch(e) {
-    errorEl.style.display = "block";
-    document.getElementById("errorMsg").textContent = e.message;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "분석";
-    loadingEl.style.display = "none";
-  }
-}
-
-// ─── Technical Indicator Calculations (pure math, no AI) ───
-function calcRSI(closes, period=14) {
-  if (closes.length < period+1) return null;
-  let gains=0, losses=0;
-  for(let i=1;i<=period;i++){
-    const d=closes[i]-closes[i-1];
-    if(d>0)gains+=d; else losses+=Math.abs(d);
-  }
-  let avgGain=gains/period, avgLoss=losses/period;
-  for(let i=period+1;i<closes.length;i++){
-    const d=closes[i]-closes[i-1];
-    avgGain=(avgGain*(period-1)+(d>0?d:0))/period;
-    avgLoss=(avgLoss*(period-1)+(d<0?Math.abs(d):0))/period;
-  }
-  if(avgLoss===0) return 100;
-  return +(100-100/(1+avgGain/avgLoss)).toFixed(1);
-}
-
-function calcMACD(closes) {
-  if(closes.length<26) return {macd:null,signal:null,histogram:null,series:[]};
-  const ema=(data,n)=>{const k=2/(n+1);let e=[data[0]];for(let i=1;i<data.length;i++)e.push(data[i]*k+e[i-1]*(1-k));return e;};
-  const e12=ema(closes,12), e26=ema(closes,26);
-  const macdLine=e12.map((v,i)=>v-e26[i]);
-  const signalLine=ema(macdLine.slice(26),9);
-  // Pad signal to align
-  const fullSignal=Array(26+8).fill(null).concat(signalLine);
-  const histogram=macdLine.map((v,i)=>fullSignal[i]!=null?v-fullSignal[i]:null);
-  const last=macdLine.length-1;
-  const sigLast=fullSignal.length-1;
-  return {
-    macd:+macdLine[last].toFixed(2),
-    signal:fullSignal[sigLast]!=null?+fullSignal[sigLast].toFixed(2):null,
-    histogram:histogram[last]!=null?+histogram[last].toFixed(2):null,
-    series:macdLine.map((v,i)=>({macd:v,signal:fullSignal[i],hist:histogram[i]}))
-  };
-}
-
-function calcMAval(closes,n){return closes.length>=n?+(closes.slice(-n).reduce((a,b)=>a+b,0)/n).toFixed(2):null;}
-
-// ─── Render ───
-function renderResults(data, analysis) {
-  const el = document.getElementById("results");
-  const ohlcv = data.ohlcv;
-  const cp = data.currentPrice || ohlcv[ohlcv.length-1].close;
-  const prev = ohlcv.length > 1 ? ohlcv[ohlcv.length-2].close : cp;
-  const change = ((cp-prev)/prev*100).toFixed(2);
-  const h52 = Math.max(...ohlcv.map(d=>d.high));
-  const l52 = Math.min(...ohlcv.map(d=>d.low));
-  const cs = data.currency === "KRW" ? "₩" : "$";
-  const fmtP = v => Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
-
-  // ── Calculate indicators from REAL data ──
-  const closes = ohlcv.map(d=>d.close);
-  const rsi = calcRSI(closes, 14);
-  const macdData = calcMACD(closes);
-  const ma5 = calcMAval(closes,5);
-  const ma20 = calcMAval(closes,20);
-  const ma100 = calcMAval(closes,100);
-  const ma250 = calcMAval(closes,250);
-
-  const rsiColor = rsi>70?"#E85D75":rsi<30?"#4ECCA3":"#C9A96E";
-  const macdColor = macdData.histogram>0?"#4ECCA3":macdData.histogram<0?"#E85D75":"#C9A96E";
-
-  let html = `
-  <!-- Title -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #1e1e2e">
-    <div>
-      <h2 style="font-size:28px;font-weight:800;color:#F0ECE3">${data.name || data.symbol}</h2>
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <span class="badge badge-green">● ${data.source} 실데이터</span>
-        <span class="badge badge-gold">${ohlcv.length}봉 · ${currentTF}</span>
-        <span class="mono" style="font-size:9px;color:#555">수신: ${new Date(data.fetchedAt).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})}</span>
-      </div>
-    </div>
-    <div style="text-align:right">
-      <div class="mono" style="font-size:32px;font-weight:700;color:#F0ECE3">${cs}${fmtP(cp)}</div>
-      <div class="mono" style="font-size:14px;margin-top:4px;color:${change>=0?"#4ECCA3":"#E85D75"}">${change>=0?"▲":"▼"} ${Math.abs(change)}%</div>
-    </div>
+  let h=`<div class="fade">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #1e1e2e">
+    <div><h2 style="font-size:24px;font-weight:800;color:#F0ECE3">${data.name||data.symbol}</h2>
+    <div style="display:flex;gap:6px;margin-top:3px"><span class="badge" style="background:rgba(78,204,163,0.08);color:#4ECCA3;border:1px solid rgba(78,204,163,0.15)">● ${data.source}</span><span class="badge" style="background:rgba(201,169,110,0.08);color:#C9A96E;border:1px solid rgba(201,169,110,0.15)">${o.length}봉·${tf}</span><span class="mono" style="font-size:8px;color:#555">${new Date(data.fetchedAt).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})}</span></div></div>
+    <div style="text-align:right"><div class="mono" style="font-size:28px;font-weight:700">${cs}${fp(cp)}</div><div class="mono" style="font-size:13px;margin-top:2px;color:${ch>=0?"#4ECCA3":"#E85D75"}">${ch>=0?"▲":"▼"} ${Math.abs(ch)}%</div></div>
   </div>
-
-  <!-- Chart -->
-  <div class="chart-box">${renderChart(ohlcv, cp, data.currency, analysis)}</div>
-
-  <!-- RSI + MACD Sub-Charts -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
-    <div class="chart-box" style="margin-bottom:0">${renderRSIChart(ohlcv)}</div>
-    <div class="chart-box" style="margin-bottom:0">${renderMACDChart(ohlcv)}</div>
+  <div class="chart-box">${svgChart(o,cp,data.currency,ai)}</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+    <div class="chart-box" style="margin-bottom:0">${svgRSI(o)}</div>
+    <div class="chart-box" style="margin-bottom:0">${svgMACD(o)}</div>
   </div>
-
-  <!-- Stats -->
-  <div class="stat-grid">
-    ${[
-      {l:"52주 최고",v:fmtP(h52),c:"#4ECCA3"},
-      {l:"52주 최저",v:fmtP(l52),c:"#E85D75"},
-      {l:"RSI (14)",v:rsi!=null?rsi:"—",c:rsiColor},
-      {l:"MACD",v:macdData.macd!=null?macdData.macd:"—",c:macdColor},
-      {l:"Signal",v:macdData.signal!=null?macdData.signal:"—",c:"#C39BD3"},
-      {l:"Histogram",v:macdData.histogram!=null?macdData.histogram:"—",c:macdData.histogram>0?"#4ECCA3":"#E85D75"},
-      {l:"MA5",v:ma5?fmtP(ma5):"—",c:"#E8A87C"},
-      {l:"MA20",v:ma20?fmtP(ma20):"—",c:"#85C1E9"},
-      {l:"MA100",v:ma100?fmtP(ma100):"—",c:"#C39BD3"},
-      {l:"MA250",v:ma250?fmtP(ma250):"—",c:"#7DCEA0"},
-      {l:"추세",v:analysis?.trend==="uptrend"?"상승":analysis?.trend==="downtrend"?"하락":"횡보",c:analysis?.trend==="uptrend"?"#4ECCA3":analysis?.trend==="downtrend"?"#E85D75":"#C9A96E"},
-      {l:"거래량",v:analysis?.volumeTrend==="increasing"?"증가":analysis?.volumeTrend==="decreasing"?"감소":"안정",c:"#85C1E9"}
-    ].map(s=>`<div class="stat-item"><div class="stat-label">${s.l}</div><div class="stat-value" style="color:${s.c}">${s.v}</div></div>`).join("")}
+  <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(95px,1fr))">
+    ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"MA20",v:ma20?fp(ma20):"-",c:"#85C1E9"},{l:"MA100",v:ma100?fp(ma100):"-",c:"#C39BD3"},{l:"MA250",v:ma250?fp(ma250):"-",c:"#7DCEA0"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
   </div>`;
 
   // Patterns
-  if (analysis?.detectedPatterns?.length) {
-    html += `<div style="font-size:10px;color:#C9A96E;font-family:'DM Mono',monospace;letter-spacing:0.15em;margin-bottom:16px">감지된 패턴</div>`;
-    analysis.detectedPatterns.forEach(pat => {
-      const dc = pat.direction==="bullish"?"#4ECCA3":pat.direction==="bearish"?"#E85D75":"#C9A96E";
-      html += `<div class="card pattern-card" style="border-left-color:${dc}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-          <div><div style="font-size:16px;font-weight:700;color:#F0ECE3">${pat.name}</div><div class="mono" style="font-size:11px;color:#666;margin-top:2px">${pat.nameEn}</div></div>
-          <div style="display:flex;gap:6px"><span class="badge" style="background:${dc}15;color:${dc}">${pat.direction==="bullish"?"강세":pat.direction==="bearish"?"약세":"중립"}</span><span class="badge badge-gold">${pat.confidence}%</span></div>
+  if(ai?.detectedPatterns?.length){
+    h+=`<div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:12px">감지된 패턴</div>`;
+    ai.detectedPatterns.forEach(p=>{
+      const dc=p.direction==="bullish"?"#4ECCA3":p.direction==="bearish"?"#E85D75":"#C9A96E";
+      h+=`<div class="card" style="border-left:3px solid ${dc}">
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px"><div><div style="font-size:14px;font-weight:700;color:#F0ECE3">${p.name}</div><div class="mono" style="font-size:10px;color:#666;margin-top:1px">${p.nameEn}</div></div><div style="display:flex;gap:5px"><span class="badge" style="background:${dc}12;color:${dc}">${p.direction==="bullish"?"강세":"약세"}</span><span class="badge" style="background:#C9A96E12;color:#C9A96E">${p.confidence}%</span></div></div>
+        <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:#1a1a24;margin-bottom:12px"><div style="width:${p.bullProb}%;background:linear-gradient(90deg,#2D7A5F,#4ECCA3)"></div><div style="width:${p.bearProb}%;background:linear-gradient(90deg,#E85D75,#9B3A4A)"></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          ${[{l:"▲ 목표",v:p.targetUp,c:"#4ECCA3"},{l:"▼ 예상",v:p.targetDown,c:"#E85D75"},{l:"◈ 손절",v:p.stopLoss,c:"#C9A96E"}].map(t=>`<div style="background:${t.c}06;border:1px solid ${t.c}18;border-radius:6px;padding:10px"><div class="mono" style="font-size:8px;color:${t.c};margin-bottom:3px">${t.l}</div><div class="mono" style="font-size:13px;color:${t.c};font-weight:700">${cs}${fp(t.v)}</div></div>`).join("")}
         </div>
-        <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:#1a1a24;margin-bottom:14px">
-          <div style="width:${pat.bullProb}%;background:linear-gradient(90deg,#2D7A5F,#4ECCA3);border-radius:4px 0 0 4px"></div>
-          <div style="width:${pat.bearProb}%;background:linear-gradient(90deg,#E85D75,#9B3A4A);border-radius:0 4px 4px 0"></div>
-        </div>
-        <div class="targets">
-          ${[{l:"▲ 목표가",v:pat.targetUp,c:"#4ECCA3"},{l:"▼ 예상가",v:pat.targetDown,c:"#E85D75"},{l:"◈ 손절가",v:pat.stopLoss,c:"#C9A96E"}].map(t=>`<div class="target-box" style="background:${t.c}08;border:1px solid ${t.c}20"><div class="mono" style="font-size:9px;color:${t.c};margin-bottom:4px">${t.l}</div><div class="mono" style="font-size:15px;color:${t.c};font-weight:700">${cs}${fmtP(t.v)}</div></div>`).join("")}
-        </div>
-        <p class="noto" style="font-size:12px;color:#999;line-height:1.7;margin-top:12px">${pat.reasoning}</p>
+        <p class="noto" style="font-size:11px;color:#999;line-height:1.6;margin-top:10px">${p.reasoning}</p>
       </div>`;
     });
   }
+  if(ai?.summary)h+=`<div class="card" style="background:linear-gradient(135deg,rgba(201,169,110,0.04),rgba(201,169,110,0.01));border-color:rgba(201,169,110,0.15)"><div class="mono" style="font-size:9px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:8px">종합 분석</div><p class="noto" style="font-size:13px;color:#ccc;line-height:1.8">${ai.summary}</p></div>`;
+  h+=`</div>`;
+  document.getElementById("analyzeOut").innerHTML=h;
+}
 
-  // Summary
-  if (analysis?.summary) {
-    html += `<div class="summary-box"><div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.15em;margin-bottom:12px">종합 분석</div><p class="noto" style="font-size:14px;color:#ccc;line-height:1.9">${analysis.summary}</p></div>`;
+// ═══════ CHART SVG ═══════
+function svgChart(data,cp,cur,ai){
+  const W=780,H=380,P={t:24,r:88,b:40,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const aP=data.flatMap(d=>[d.high,d.low]);if(cp)aP.push(cp);
+  (ai?.supports||[]).forEach(s=>aP.push(s));(ai?.resistances||[]).forEach(r=>aP.push(r));
+  const mn=Math.min(...aP)*.995,mx=Math.max(...aP)*1.005;
+  const tx=i=>P.l+(i/(data.length-1||1))*cw,ty=p=>P.t+(1-(p-mn)/(mx-mn||1))*ch;
+  const bw=Math.max(2,Math.min(10,cw/data.length*.6)),cs=cur==="KRW"?"₩":"$";
+  const fm=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?(v/1000).toFixed(1)+"K":v.toFixed(v<10?4:2);
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:400px">`;
+  for(let i=0;i<=5;i++){const p=mn+(mx-mn)*(i/5);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".04"/><text x="${W-P.r+6}" y="${ty(p)+3.5}" fill="#555" font-size="8" font-family="DM Mono,monospace">${fm(p)}</text>`;}
+  (ai?.supports||[]).forEach((v,i)=>{s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#E85D75" stroke-dasharray="5,4" opacity=".45"/><text x="${W-P.r+6}" y="${ty(v)+3}" fill="#E85D75" font-size="7.5" font-family="DM Mono,monospace">S${i+1}</text>`;});
+  (ai?.resistances||[]).forEach((v,i)=>{s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#4ECCA3" stroke-dasharray="5,4" opacity=".45"/><text x="${W-P.r+6}" y="${ty(v)+3}" fill="#4ECCA3" font-size="7.5" font-family="DM Mono,monospace">R${i+1}</text>`;});
+  (ai?.detectedPatterns||[]).forEach((p,i)=>{const c=p.direction==="bullish"?"#4ECCA3":"#E85D75",rx=W-P.r;
+    if(p.targetUp&&p.targetUp>mn&&p.targetUp<mx)s+=`<line x1="${rx-130}" y1="${ty(p.targetUp)}" x2="${rx}" y2="${ty(p.targetUp)}" stroke="#4ECCA3" stroke-width="1.5" stroke-dasharray="2,3" opacity=".65"/><text x="${rx-134}" y="${ty(p.targetUp)+3}" fill="#4ECCA3" font-size="7" font-family="DM Mono,monospace" text-anchor="end">▲${fm(p.targetUp)}</text>`;
+    if(p.targetDown&&p.targetDown>mn&&p.targetDown<mx)s+=`<line x1="${rx-130}" y1="${ty(p.targetDown)}" x2="${rx}" y2="${ty(p.targetDown)}" stroke="#E85D75" stroke-width="1.5" stroke-dasharray="2,3" opacity=".65"/><text x="${rx-134}" y="${ty(p.targetDown)+3}" fill="#E85D75" font-size="7" font-family="DM Mono,monospace" text-anchor="end">▼${fm(p.targetDown)}</text>`;
+    s+=`<rect x="${P.l+4}" y="${P.t+6+i*18}" width="${Math.min(p.name.length*7+50,190)}" height="14" rx="3" fill="${c}12" stroke="${c}25" stroke-width=".5"/><text x="${P.l+18}" y="${P.t+16+i*18}" fill="${c}" font-size="8" font-family="DM Mono,monospace">${p.name} (${p.confidence}%)</text>`;
+  });
+  const cma=(n)=>data.map((_,i)=>i<n-1?null:data.slice(i-n+1,i+1).reduce((s,d)=>s+d.close,0)/n);
+  [{v:cma(5),c:"#E8A87C",w:1},{v:cma(20),c:"#85C1E9",w:1.2},{v:cma(100),c:"#C39BD3",w:1.5},{v:cma(250),c:"#7DCEA0",w:1.8}].forEach(m=>{const pts=m.v.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);if(pts.length>1)s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${m.c}" stroke-width="${m.w}" opacity=".5"/>`;});
+  // Bollinger Bands
+  const bbS=[];for(let i=19;i<data.length;i++){const sl=data.slice(i-19,i+1).map(d=>d.close);const ma=sl.reduce((a,b)=>a+b,0)/20;const std=Math.sqrt(sl.reduce((s,v)=>s+Math.pow(v-ma,2),0)/20);bbS.push({u:ma+2*std,m:ma,l:ma-2*std});}
+  if(bbS.length>1){const off=data.length-bbS.length;
+    const uPts=bbS.map((b,i)=>`${tx(i+off).toFixed(1)},${ty(b.u).toFixed(1)}`);
+    const lPts=bbS.map((b,i)=>`${tx(i+off).toFixed(1)},${ty(b.l).toFixed(1)}`).reverse();
+    s+=`<polygon points="${uPts.join(" ")} ${lPts.join(" ")}" fill="#C39BD3" opacity=".04"/>`;
+    s+=`<polyline points="${uPts.join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".3" stroke-dasharray="3,3"/>`;
+    s+=`<polyline points="${lPts.reverse().join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".3" stroke-dasharray="3,3"/>`;
   }
-
-  el.innerHTML = html;
-  el.style.display = "block";
+  data.forEach((d,i)=>{const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75",bt=ty(Math.max(d.open,d.close)),bb=ty(Math.min(d.open,d.close));s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width="1" opacity=".7"/><rect x="${x-bw/2}" y="${bt}" width="${bw}" height="${Math.max(bb-bt,1)}" fill="${cl}" rx="1" opacity=".85"/>`;});
+  if(cp){s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1.5" opacity=".6" stroke-dasharray="4,2"/><rect x="${W-P.r}" y="${ty(cp)-9}" width="82" height="18" rx="4" fill="rgba(201,169,110,.25)" stroke="#C9A96E" stroke-width=".5"/><text x="${W-P.r+6}" y="${ty(cp)+4}" fill="#C9A96E" font-size="9" font-weight="700" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;}
+  data.filter((_,i)=>i%Math.max(1,Math.floor(data.length/7))===0).forEach(d=>{const i=data.indexOf(d);s+=`<text x="${tx(i)}" y="${H-P.b+16}" fill="#444" font-size="7.5" font-family="DM Mono,monospace" text-anchor="middle">${(d.date||"").slice(5)}</text>`;});
+  [{c:"#E8A87C",l:"5"},{c:"#85C1E9",l:"20"},{c:"#C39BD3",l:"100"},{c:"#7DCEA0",l:"250"}].forEach((m,i)=>{const x=W-P.r-180+i*46;s+=`<line x1="${x}" y1="12" x2="${x+10}" y2="12" stroke="${m.c}" stroke-width="1.5"/><text x="${x+14}" y="15" fill="${m.c}" font-size="7" font-family="DM Mono,monospace">MA${m.l}</text>`;});
+  s+=`<text x="${P.l+4}" y="${H-6}" fill="#4ECCA3" font-size="7.5" font-family="DM Mono,monospace">● ${curData?.source||"api"} ${data.length}봉</text></svg>`;
+  return s;
 }
 
-// ─── SVG Chart Renderer ───
-function renderChart(data, currentPrice, currency, analysis) {
-  const W=780,H=400,P={t:28,r:90,b:44,l:10};
-  const cw=W-P.l-P.r, ch=H-P.t-P.b;
-  const allP=data.flatMap(d=>[d.high,d.low]);
-  if(currentPrice)allP.push(currentPrice);
-  (analysis?.supports||[]).forEach(s=>allP.push(s));
-  (analysis?.resistances||[]).forEach(r=>allP.push(r));
-  const pMin=Math.min(...allP)*0.995, pMax=Math.max(...allP)*1.005;
-  const toX=i=>P.l+(i/(data.length-1||1))*cw;
-  const toY=p=>P.t+(1-(p-pMin)/(pMax-pMin||1))*ch;
-  const candleW=Math.max(2,Math.min(10,cw/data.length*0.6));
-  const cs=currency==="KRW"?"₩":"$";
-  const fmt=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?(v/1000).toFixed(1)+"K":v.toFixed(v<10?4:2);
-
-  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:420px">`;
-
-  // Grid
-  for(let i=0;i<=5;i++){const p=pMin+(pMax-pMin)*(i/5);svg+=`<line x1="${P.l}" y1="${toY(p)}" x2="${W-P.r}" y2="${toY(p)}" stroke="#fff" stroke-opacity="0.04"/><text x="${W-P.r+8}" y="${toY(p)+3.5}" fill="#555" font-size="8.5" font-family="DM Mono,monospace">${fmt(p)}</text>`;}
-
-  // Support/Resistance
-  (analysis?.supports||[]).forEach((s,i)=>{svg+=`<line x1="${P.l}" y1="${toY(s)}" x2="${W-P.r}" y2="${toY(s)}" stroke="#E85D75" stroke-width="1" stroke-dasharray="6,4" opacity="0.5"/><text x="${W-P.r+8}" y="${toY(s)+3.5}" fill="#E85D75" font-size="8" font-family="DM Mono,monospace">S${i+1} ${fmt(s)}</text>`;});
-  (analysis?.resistances||[]).forEach((r,i)=>{svg+=`<line x1="${P.l}" y1="${toY(r)}" x2="${W-P.r}" y2="${toY(r)}" stroke="#4ECCA3" stroke-width="1" stroke-dasharray="6,4" opacity="0.5"/><text x="${W-P.r+8}" y="${toY(r)+3.5}" fill="#4ECCA3" font-size="8" font-family="DM Mono,monospace">R${i+1} ${fmt(r)}</text>`;});
-
-  // Pattern targets
-  (analysis?.detectedPatterns||[]).forEach((pat,i)=>{
-    const rx=W-P.r;
-    if(pat.targetUp&&pat.targetUp>pMin&&pat.targetUp<pMax)svg+=`<line x1="${rx-140}" y1="${toY(pat.targetUp)}" x2="${rx}" y2="${toY(pat.targetUp)}" stroke="#4ECCA3" stroke-width="1.5" stroke-dasharray="2,3" opacity="0.7"/><text x="${rx-144}" y="${toY(pat.targetUp)+3}" fill="#4ECCA3" font-size="7.5" font-family="DM Mono,monospace" text-anchor="end">▲${fmt(pat.targetUp)}</text>`;
-    if(pat.targetDown&&pat.targetDown>pMin&&pat.targetDown<pMax)svg+=`<line x1="${rx-140}" y1="${toY(pat.targetDown)}" x2="${rx}" y2="${toY(pat.targetDown)}" stroke="#E85D75" stroke-width="1.5" stroke-dasharray="2,3" opacity="0.7"/><text x="${rx-144}" y="${toY(pat.targetDown)+3}" fill="#E85D75" font-size="7.5" font-family="DM Mono,monospace" text-anchor="end">▼${fmt(pat.targetDown)}</text>`;
-    // Pattern label
-    const c=pat.direction==="bullish"?"#4ECCA3":pat.direction==="bearish"?"#E85D75":"#C9A96E";
-    svg+=`<rect x="${P.l+6}" y="${P.t+8+i*20}" width="${Math.min(pat.name.length*7.5+55,200)}" height="16" rx="4" fill="${c}15" stroke="${c}30" stroke-width="0.5"/><text x="${P.l+22}" y="${P.t+19.5+i*20}" fill="${c}" font-size="8.5" font-weight="500" font-family="DM Mono,monospace">${pat.name} (${pat.confidence}%)</text>`;
-  });
-
-  // MA
-  const calcMA=(n)=>data.map((_,i)=>i<n-1?null:data.slice(i-n+1,i+1).reduce((s,d)=>s+d.close,0)/n);
-  [
-    { vals:calcMA(5), col:"#E8A87C", label:"MA5", w:1 },
-    { vals:calcMA(20), col:"#85C1E9", label:"MA20", w:1.2 },
-    { vals:calcMA(100), col:"#C39BD3", label:"MA100", w:1.5 },
-    { vals:calcMA(250), col:"#7DCEA0", label:"MA250", w:1.8 }
-  ].forEach(ma=>{
-    const pts=ma.vals.map((v,i)=>v!==null?`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`:null).filter(Boolean);
-    if(pts.length>1) svg+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${ma.col}" stroke-width="${ma.w}" opacity="0.55"/>`;
-  });
-
-  // Candles
-  data.forEach((d,i)=>{
-    const x=toX(i), bull=d.close>=d.open, col=bull?"#4ECCA3":"#E85D75";
-    const bT=toY(Math.max(d.open,d.close)), bB=toY(Math.min(d.open,d.close));
-    svg+=`<line x1="${x}" y1="${toY(d.high)}" x2="${x}" y2="${toY(d.low)}" stroke="${col}" stroke-width="1" opacity="0.7"/>`;
-    svg+=`<rect x="${x-candleW/2}" y="${bT}" width="${candleW}" height="${Math.max(bB-bT,1)}" fill="${col}" rx="1" opacity="0.85"/>`;
-  });
-
-  // Current price
-  if(currentPrice){
-    svg+=`<line x1="${P.l}" y1="${toY(currentPrice)}" x2="${W-P.r}" y2="${toY(currentPrice)}" stroke="#C9A96E" stroke-width="1.5" opacity="0.7" stroke-dasharray="4,2"/>`;
-    svg+=`<rect x="${W-P.r+2}" y="${toY(currentPrice)-10}" width="84" height="20" rx="5" fill="rgba(201,169,110,0.3)" stroke="#C9A96E" stroke-width="0.5"/>`;
-    svg+=`<text x="${W-P.r+8}" y="${toY(currentPrice)+4}" fill="#C9A96E" font-size="9.5" font-weight="700" font-family="DM Mono,monospace">${cs}${fmt(currentPrice)}</text>`;
-  }
-
-  // Date labels
-  data.filter((_,i)=>i%Math.max(1,Math.floor(data.length/7))===0).forEach(d=>{
-    const idx=data.indexOf(d);
-    svg+=`<text x="${toX(idx)}" y="${H-P.b+18}" fill="#444" font-size="8" font-family="DM Mono,monospace" text-anchor="middle">${(d.date||"").slice(5)}</text>`;
-  });
-
-  // MA legend
-  const maLegend=[{c:"#E8A87C",l:"MA5"},{c:"#85C1E9",l:"MA20"},{c:"#C39BD3",l:"MA100"},{c:"#7DCEA0",l:"MA250"}];
-  maLegend.forEach((m,i)=>{
-    const lx=W-P.r-180+i*48;
-    svg+=`<line x1="${lx}" y1="14" x2="${lx+12}" y2="14" stroke="${m.c}" stroke-width="1.5"/><text x="${lx+16}" y="17" fill="${m.c}" font-size="7" font-family="DM Mono,monospace">${m.l}</text>`;
-  });
-
-  // Data source badge
-  svg+=`<text x="${P.l+6}" y="${H-8}" fill="#4ECCA3" font-size="8" font-family="DM Mono,monospace">● ${currentData?.source||"api"} 실데이터 ${data.length}봉</text>`;
-
-  svg += `</svg>`;
-  return svg;
+// ═══════ RSI CHART ═══════
+function svgRSI(data){
+  const cls=data.map(d=>d.close);if(cls.length<15)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI: 15봉 이상 필요</div>`;
+  const n=14,rs=[];for(let e=n;e<=cls.length;e++){let g=0,l=0;for(let i=1;i<=n;i++){const d=cls[e-n+i]-cls[e-n+i-1];d>0?g+=d:l+=Math.abs(d);}let ag=g/n,al=l/n;for(let i=n+1;i<e;i++){const d=cls[i]-cls[i-1];ag=(ag*(n-1)+(d>0?d:0))/n;al=(al*(n-1)+(d<0?Math.abs(d):0))/n;}rs.push(al===0?100:+(100-100/(1+ag/al)).toFixed(1));}
+  const W=380,H=110,P={t:18,r:36,b:16,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const tx=i=>P.l+(i/(rs.length-1||1))*cw,ty=v=>P.t+(1-v/100)*ch;
+  const lv=rs[rs.length-1],rc=lv>70?"#E85D75":lv<30?"#4ECCA3":"#C9A96E";
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:120px">`;
+  s+=`<text x="${P.l+2}" y="12" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">RSI(14)</text><text x="${W-P.r}" y="12" fill="${rc}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${lv}</text>`;
+  s+=`<rect x="${P.l}" y="${ty(100)}" width="${cw}" height="${ty(70)-ty(100)}" fill="rgba(78,204,163,.03)"/><rect x="${P.l}" y="${ty(30)}" width="${cw}" height="${ty(0)-ty(30)}" fill="rgba(232,93,117,.03)"/>`;
+  [30,50,70].forEach(v=>{s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#fff" stroke-opacity="${v===50?".05":".07"}" stroke-dasharray="3,4"/><text x="${W-P.r+3}" y="${ty(v)+3}" fill="${v>=70?"#E85D75":v<=30?"#4ECCA3":"#555"}" font-size="7" font-family="DM Mono,monospace">${v}</text>`;});
+  s+=`<polyline points="${rs.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" fill="none" stroke="${rc}" stroke-width="1.3" stroke-linecap="round"/><circle cx="${tx(rs.length-1)}" cy="${ty(lv)}" r="2.5" fill="${rc}"/></svg>`;
+  return s;
 }
 
-// Enter key
-// Enter key handled in autocomplete section above
-
-// ─── RSI Sub-Chart ───
-function renderRSIChart(data) {
-  const closes=data.map(d=>d.close);
-  if(closes.length<15) return `<div style="text-align:center;padding:20px;color:#555;font-size:11px;font-family:'DM Mono',monospace">RSI 계산에 최소 15봉 필요</div>`;
-
-  // Calculate RSI series
-  const period=14;
-  const rsiSeries=[];
-  for(let end=period;end<=closes.length;end++){
-    const slice=closes.slice(0,end);
-    let gains=0,losses=0;
-    for(let i=1;i<=period;i++){const d=slice[slice.length-period-1+i]-slice[slice.length-period-1+i-1];if(d>0)gains+=d;else losses+=Math.abs(d);}
-    let ag=gains/period,al=losses/period;
-    // Smoothed
-    for(let i=period+1;i<slice.length;i++){const d=slice[i]-slice[i-1];ag=(ag*(period-1)+(d>0?d:0))/period;al=(al*(period-1)+(d<0?Math.abs(d):0))/period;}
-    rsiSeries.push(al===0?100:+(100-100/(1+ag/al)).toFixed(1));
-  }
-
-  const W=380,H=120,P={t:20,r:40,b:20,l:10};
-  const cw=W-P.l-P.r,ch=H-P.t-P.b;
-  const toX=i=>P.l+(i/(rsiSeries.length-1||1))*cw;
-  const toY=v=>P.t+(1-v/100)*ch;
-  const lastRsi=rsiSeries[rsiSeries.length-1];
-  const rsiCol=lastRsi>70?"#E85D75":lastRsi<30?"#4ECCA3":"#C9A96E";
-
-  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:130px">`;
-  // Label
-  svg+=`<text x="${P.l+4}" y="14" fill="#C9A96E" font-size="9" font-weight="600" font-family="DM Mono,monospace">RSI (14)</text>`;
-  svg+=`<text x="${W-P.r-4}" y="14" fill="${rsiCol}" font-size="10" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${lastRsi}</text>`;
-  // Zones
-  svg+=`<rect x="${P.l}" y="${toY(100)}" width="${cw}" height="${toY(70)-toY(100)}" fill="rgba(78,204,163,0.04)"/>`;
-  svg+=`<rect x="${P.l}" y="${toY(30)}" width="${cw}" height="${toY(0)-toY(30)}" fill="rgba(232,93,117,0.04)"/>`;
-  // Grid lines at 30,50,70
-  [30,50,70].forEach(v=>{
-    svg+=`<line x1="${P.l}" y1="${toY(v)}" x2="${W-P.r}" y2="${toY(v)}" stroke="${v===50?"#ffffff":"#ffffff"}" stroke-opacity="${v===50?"0.06":"0.08"}" stroke-dasharray="${v===50?"2,4":"4,4"}"/>`;
-    svg+=`<text x="${W-P.r+4}" y="${toY(v)+3}" fill="${v>=70?"#E85D75":v<=30?"#4ECCA3":"#666"}" font-size="7.5" font-family="DM Mono,monospace">${v}</text>`;
-  });
-  // RSI line
-  const pts=rsiSeries.map((v,i)=>`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`);
-  svg+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${rsiCol}" stroke-width="1.5" stroke-linecap="round"/>`;
-  // Last dot
-  svg+=`<circle cx="${toX(rsiSeries.length-1)}" cy="${toY(lastRsi)}" r="3" fill="${rsiCol}"/>`;
-  svg+=`</svg>`;
-  return svg;
+// ═══════ MACD CHART ═══════
+function svgMACD(data){
+  const cls=data.map(d=>d.close);if(cls.length<35)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">MACD: 35봉 이상 필요</div>`;
+  const ema=(d,n)=>{const k=2/(n+1);let e=[d[0]];for(let i=1;i<d.length;i++)e.push(d[i]*k+e[i-1]*(1-k));return e;};
+  const e12=ema(cls,12),e26=ema(cls,26),ml=e12.map((v,i)=>v-e26[i]);
+  const slR=ema(ml.slice(26),9),sl=Array(34).fill(null).concat(slR);
+  const hl=ml.map((v,i)=>sl[i]!=null?v-sl[i]:null);
+  const st=26,m=ml.slice(st),sg=sl.slice(st),hi=hl.slice(st);
+  const W=380,H=110,P={t:18,r:36,b:16,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const aV=[...m,...sg.filter(v=>v!=null),...hi.filter(v=>v!=null)];
+  const vM=Math.max(...aV.map(Math.abs))*1.1||1;
+  const tx=i=>P.l+(i/(m.length-1||1))*cw,ty=v=>P.t+ch/2-(v/vM)*(ch/2);
+  const bw=Math.max(1,Math.min(5,cw/m.length*.65));
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:120px">`;
+  s+=`<text x="${P.l+2}" y="12" fill="#C39BD3" font-size="8" font-weight="600" font-family="DM Mono,monospace">MACD(12,26,9)</text><text x="${W-P.r}" y="12" fill="${hi[hi.length-1]>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${m[m.length-1]?.toFixed(2)||"-"}</text>`;
+  s+=`<line x1="${P.l}" y1="${ty(0)}" x2="${W-P.r}" y2="${ty(0)}" stroke="#fff" stroke-opacity=".06"/>`;
+  hi.forEach((v,i)=>{if(v==null)return;const x=tx(i),y0=ty(0),y1=ty(v);s+=`<rect x="${x-bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.abs(y1-y0)||1}" fill="${v>=0?"#4ECCA3":"#E85D75"}" opacity=".45" rx=".5"/>`;});
+  s+=`<polyline points="${m.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" fill="none" stroke="#85C1E9" stroke-width="1.2"/>`;
+  const sP=sg.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);
+  if(sP.length>1)s+=`<polyline points="${sP.join(" ")}" fill="none" stroke="#E8A87C" stroke-width="1.2" stroke-dasharray="3,2"/>`;
+  s+=`</svg>`;
+  return s;
 }
 
-// ─── MACD Sub-Chart ───
-function renderMACDChart(data) {
-  const closes=data.map(d=>d.close);
-  if(closes.length<35) return `<div style="text-align:center;padding:20px;color:#555;font-size:11px;font-family:'DM Mono',monospace">MACD 계산에 최소 35봉 필요</div>`;
-
-  const ema=(arr,n)=>{const k=2/(n+1);let e=[arr[0]];for(let i=1;i<arr.length;i++)e.push(arr[i]*k+e[i-1]*(1-k));return e;};
-  const e12=ema(closes,12),e26=ema(closes,26);
-  const macdLine=e12.map((v,i)=>v-e26[i]);
-  const sigRaw=ema(macdLine.slice(26),9);
-  const signalLine=Array(26+8).fill(null).concat(sigRaw);
-  const histogram=macdLine.map((v,i)=>signalLine[i]!=null?v-signalLine[i]:null);
-
-  // Only render from index 26 onward (where MACD is meaningful)
-  const start=26;
-  const macd=macdLine.slice(start);
-  const signal=signalLine.slice(start);
-  const hist=histogram.slice(start);
-
-  const W=380,H=120,P={t:20,r:40,b:20,l:10};
-  const cw=W-P.l-P.r,ch=H-P.t-P.b;
-  const allV=[...macd,...signal.filter(v=>v!==null),...hist.filter(v=>v!==null)];
-  const vMax=Math.max(...allV.map(Math.abs))*1.1||1;
-  const toX=i=>P.l+(i/(macd.length-1||1))*cw;
-  const toY=v=>P.t+ch/2-(v/vMax)*(ch/2);
-  const barW=Math.max(1,Math.min(6,cw/macd.length*0.7));
-
-  const lastMacd=macd[macd.length-1];
-  const lastSig=signal[signal.length-1];
-  const lastHist=hist[hist.length-1];
-
-  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:130px">`;
-  // Label
-  svg+=`<text x="${P.l+4}" y="14" fill="#C39BD3" font-size="9" font-weight="600" font-family="DM Mono,monospace">MACD (12,26,9)</text>`;
-  svg+=`<text x="${W-P.r-4}" y="14" fill="${lastHist>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${lastMacd?.toFixed(2)||"—"}</text>`;
-  // Zero line
-  svg+=`<line x1="${P.l}" y1="${toY(0)}" x2="${W-P.r}" y2="${toY(0)}" stroke="#ffffff" stroke-opacity="0.08"/>`;
-  // Histogram bars
-  hist.forEach((v,i)=>{
-    if(v===null)return;
-    const x=toX(i),y0=toY(0),y1=toY(v);
-    const col=v>=0?"#4ECCA3":"#E85D75";
-    svg+=`<rect x="${x-barW/2}" y="${Math.min(y0,y1)}" width="${barW}" height="${Math.abs(y1-y0)||1}" fill="${col}" opacity="0.5" rx="0.5"/>`;
-  });
-  // MACD line
-  const macdPts=macd.map((v,i)=>`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`);
-  svg+=`<polyline points="${macdPts.join(" ")}" fill="none" stroke="#85C1E9" stroke-width="1.3"/>`;
-  // Signal line
-  const sigPts=signal.map((v,i)=>v!==null?`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`:null).filter(Boolean);
-  if(sigPts.length>1) svg+=`<polyline points="${sigPts.join(" ")}" fill="none" stroke="#E8A87C" stroke-width="1.3" stroke-dasharray="3,2"/>`;
-  // Legend
-  svg+=`<line x1="${W-P.r-100}" y1="${H-8}" x2="${W-P.r-88}" y2="${H-8}" stroke="#85C1E9" stroke-width="1.5"/><text x="${W-P.r-84}" y="${H-5}" fill="#85C1E9" font-size="7" font-family="DM Mono,monospace">MACD</text>`;
-  svg+=`<line x1="${W-P.r-52}" y1="${H-8}" x2="${W-P.r-40}" y2="${H-8}" stroke="#E8A87C" stroke-width="1.5" stroke-dasharray="3,2"/><text x="${W-P.r-36}" y="${H-5}" fill="#E8A87C" font-size="7" font-family="DM Mono,monospace">Signal</text>`;
-  svg+=`</svg>`;
-  return svg;
+// ═══════ WATCHLIST ═══════
+function addToWatchlist(){
+  if(!curSym)return;
+  if(watchlist.find(w=>w.symbol===curSym.symbol))return;
+  watchlist.push({symbol:curSym.symbol,source:curSym.source,name:curSym.name||curSym.symbol,addedAt:new Date().toISOString()});
+  localStorage.setItem("wl",JSON.stringify(watchlist));
+  document.getElementById("addWlBtn").textContent="✓ 추가됨";
+  setTimeout(()=>{document.getElementById("addWlBtn").textContent="+ 워치리스트";},1500);
 }
+function removeFromWatchlist(sym){
+  watchlist=watchlist.filter(w=>w.symbol!==sym);
+  localStorage.setItem("wl",JSON.stringify(watchlist));
+  renderWatchlist();
+}
+function clearWatchlist(){if(!confirm("워치리스트를 모두 삭제하시겠습니까?"))return;watchlist=[];localStorage.setItem("wl","[]");renderWatchlist();}
+
+function renderWatchlist(){
+  document.getElementById("wlCount").textContent=watchlist.length+"종목";
+  const el=document.getElementById("wlList"),emp=document.getElementById("wlEmpty");
+  if(!watchlist.length){el.innerHTML="";emp.style.display="block";return;}
+  emp.style.display="none";
+  el.innerHTML=watchlist.map(w=>`
+    <div class="card wl-item" onclick="qkFromWl('${w.symbol}','${w.source}')">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:#F0ECE3">${w.name}</div>
+        <div class="mono" style="font-size:10px;color:#666;margin-top:1px">${w.symbol} · ${w.source}</div>
+      </div>
+      <div id="wl_${w.symbol.replace(/[^a-zA-Z0-9]/g,"_")}" class="mono" style="font-size:12px;color:#888">—</div>
+      <button onclick="event.stopPropagation();removeFromWatchlist('${w.symbol}')" style="background:none;border:none;color:#E85D7560;cursor:pointer;font-size:14px;padding:4px 8px">✕</button>
+    </div>
+  `).join("");
+}
+
+function qkFromWl(sym,sr){switchTab("analyze");inp.value=sym;selSym={symbol:sym,source:sr};setSrc(sr);hideDrop();doAnalyze();}
+
+async function scanWatchlist(){
+  if(!watchlist.length)return;
+  const msg=document.getElementById("wlScanMsg");msg.style.display="block";
+  const syms=watchlist.map(w=>w.symbol).join(",");
+  const srcs=watchlist.map(w=>w.source).join(",");
+  try{
+    const r=await(await fetch(`/api/watchlist?symbols=${encodeURIComponent(syms)}&sources=${encodeURIComponent(srcs)}`)).json();
+    (r.results||[]).forEach(res=>{
+      const id="wl_"+res.symbol.replace(/[^a-zA-Z0-9]/g,"_");
+      const el=document.getElementById(id);if(!el)return;
+      const cs=res.currency==="KRW"?"₩":"$";
+      let html=`<span style="color:${res.change>=0?"#4ECCA3":"#E85D75"};font-weight:600">${cs}${Number(res.currentPrice).toLocaleString()} ${res.change>=0?"▲":"▼"}${Math.abs(res.change)}%</span>`;
+      if(res.signals?.length){
+        res.signals.forEach(s=>{
+          const sc=s.type==="bullish"||s.type==="opportunity"?"#4ECCA3":s.type==="bearish"||s.type==="warning"?"#E85D75":"#C9A96E";
+          html+=` <span class="wl-signal" style="background:${sc}10;color:${sc};border:1px solid ${sc}25">${s.msg}</span>`;
+        });
+      }
+      el.innerHTML=html;
+    });
+  }catch(e){console.warn("Scan error:",e);}
+  finally{msg.style.display="none";}
+}
+
+// Init
+renderWatchlist();
 </script>
 </body>
 </html>
