@@ -407,13 +407,17 @@ function render(data,ai){
   const ma5=calcMA(cls,5),ma20=calcMA(cls,20),ma100=calcMA(cls,100),ma250=calcMA(cls,250);
   const rc=rsi>70?"#E85D75":rsi<30?"#4ECCA3":"#C9A96E",mc=macd.h>0?"#4ECCA3":macd.h<0?"#E85D75":"#C9A96E";
 
+  const stockFullName = data.name || curSym?.name || data.symbol;
+  const stockCode = data.symbol || curSym?.symbol || "";
+  const stockLabel = stockFullName !== stockCode ? `${stockFullName} (${stockCode})` : stockFullName;
+
   let h=`<div class="fade">
   <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #1e1e2e">
-    <div><h2 style="font-size:24px;font-weight:800;color:#F0ECE3">${data.name||data.symbol}</h2>
-    <div style="display:flex;gap:6px;margin-top:3px"><span class="badge" style="background:rgba(78,204,163,0.08);color:#4ECCA3;border:1px solid rgba(78,204,163,0.15)">● ${data.source}</span><span class="badge" style="background:rgba(201,169,110,0.08);color:#C9A96E;border:1px solid rgba(201,169,110,0.15)">${o.length}봉·${tf}</span><span class="mono" style="font-size:8px;color:#555">${new Date(data.fetchedAt).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})}</span></div></div>
+    <div><h2 style="font-size:24px;font-weight:800;color:#F0ECE3">${stockFullName}</h2>
+    <div style="display:flex;gap:6px;margin-top:3px"><span class="mono" style="font-size:11px;color:#888">${stockCode}</span><span class="badge" style="background:rgba(78,204,163,0.08);color:#4ECCA3;border:1px solid rgba(78,204,163,0.15)">● ${data.source}</span><span class="badge" style="background:rgba(201,169,110,0.08);color:#C9A96E;border:1px solid rgba(201,169,110,0.15)">${o.length}봉·${tf}</span><span class="mono" style="font-size:8px;color:#555">${new Date(data.fetchedAt).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})}</span></div></div>
     <div style="text-align:right"><div class="mono" style="font-size:28px;font-weight:700">${cs}${fp(cp)}</div><div class="mono" style="font-size:13px;margin-top:2px;color:${ch>=0?"#4ECCA3":"#E85D75"}">${ch>=0?"▲":"▼"} ${Math.abs(ch)}%</div></div>
   </div>
-  <div class="chart-box">${svgChart(o,cp,data.currency,ai,data.name||data.symbol)}</div>
+  <div class="chart-box">${svgChart(o,cp,data.currency,ai,stockLabel)}</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
     <div class="chart-box" style="margin-bottom:0">${svgRSI(o)}</div>
     <div class="chart-box" style="margin-bottom:0">${svgMACD(o)}</div>
