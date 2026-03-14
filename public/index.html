@@ -76,6 +76,7 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('analyze')">◈ 종목 분석</button>
   <button class="tab-btn" onclick="switchTab('watchlist')">◇ 워치리스트</button>
+  <button class="tab-btn" onclick="switchTab('patterns')">◆ 패턴 학습</button>
 </div>
 
 <!-- ═══════ TAB: Analyze ═══════ -->
@@ -108,6 +109,12 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
       <button class="tf-btn" data-t="1mo" onclick="setTf('1mo')">1M</button>
     </div>
     <button class="pill" id="addWlBtn" onclick="addToWatchlist()" style="display:none;border-color:#C9A96E40;color:#C9A96E">+ 워치리스트</button>
+    <div class="tf-bar" id="zoomBar">
+      <button class="tf-btn" data-z="60" onclick="setZoom(60)">60봉</button>
+      <button class="tf-btn" data-z="120" onclick="setZoom(120)">120</button>
+      <button class="tf-btn on" data-z="260" onclick="setZoom(260)">260</button>
+      <button class="tf-btn" data-z="9999" onclick="setZoom(9999)">전체</button>
+    </div>
   </div>
   <div id="analyzeOut"></div>
   <div id="loadEl" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p id="loadMsg" class="noto" style="color:#666;font-size:12px;margin-top:14px"></p></div>
@@ -132,25 +139,44 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   <div id="wlEmpty" style="text-align:center;padding:60px 0"><div style="font-size:40px;opacity:0.1;margin-bottom:12px">◇</div><p class="noto" style="color:#555;font-size:13px;line-height:1.8">종목 분석 후 "워치리스트 추가" 버튼을 눌러<br>관심종목을 등록하세요</p></div>
 </div>
 
+<!-- ═══════ TAB: Patterns Learning ═══════ -->
+<div id="tabPatterns" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <span class="mono" style="font-size:11px;color:#C9A96E;letter-spacing:0.1em">35개 차트 패턴 레퍼런스</span>
+    <div class="tf-bar" id="patCatBar">
+      <button class="tf-btn on" data-c="all" onclick="filterPat('all')">전체</button>
+      <button class="tf-btn" data-c="reversal" onclick="filterPat('reversal')">반전</button>
+      <button class="tf-btn" data-c="continuation" onclick="filterPat('continuation')">지속</button>
+      <button class="tf-btn" data-c="candlestick" onclick="filterPat('candlestick')">캔들</button>
+      <button class="tf-btn" data-c="harmonic" onclick="filterPat('harmonic')">하모닉</button>
+    </div>
+  </div>
+  <div id="patList"></div>
+</div>
+
 <div style="border-top:1px solid #1a1a28;padding:16px 0 32px;margin-top:32px"><p class="mono" style="font-size:9px;color:#444;text-align:center">※ 교육·학습 목적 참고 자료이며, 투자 판단의 근거로 사용할 수 없습니다.</p></div>
 </div>
 
 <script>
 // ═══════ STATE ═══════
 let src="yahoo",tf="1d",curData=null,curSym=null,selSym=null;
+let candleCount=260; // default visible candles
 let watchlist=JSON.parse(localStorage.getItem("wl")||"[]");
 
 // ═══════ TABS ═══════
 function switchTab(t){
-  document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",i===(t==="analyze"?0:1)));
+  document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",i===(t==="analyze"?0:t==="watchlist"?1:2)));
   document.getElementById("tabAnalyze").style.display=t==="analyze"?"block":"none";
   document.getElementById("tabWatchlist").style.display=t==="watchlist"?"block":"none";
+  document.getElementById("tabPatterns").style.display=t==="patterns"?"block":"none";
   if(t==="watchlist")renderWatchlist();
+  if(t==="patterns")renderPatterns();
 }
 
 // ═══════ CONTROLS ═══════
 function setSrc(s){src=s;document.querySelectorAll("#srcBar .src-btn").forEach(b=>b.classList.toggle("on",b.dataset.s===s));}
 function setTf(t){tf=t;document.querySelectorAll("#tfBar .tf-btn").forEach(b=>b.classList.toggle("on",b.dataset.t===t));if(curData)doAnalyze();}
+function setZoom(n){candleCount=n;document.querySelectorAll("#zoomBar .tf-btn").forEach(b=>b.classList.toggle("on",+b.dataset.z===n));if(curData)render(curData,window._lastAI);}
 function qk(s,sr){document.getElementById("symInput").value=s;selSym={symbol:s,source:sr};setSrc(sr);hideDrop();doAnalyze();}
 
 // ═══════ AUTOCOMPLETE ═══════
@@ -266,6 +292,7 @@ MA5: ${_ma5 ?? "N/A"} | MA20: ${_ma20 ?? "N/A"} | MA100: ${_ma100 ?? "N/A"} | MA
 ${recent}
 
 ═══ 분석 규칙 ═══
+⚠ 모든 텍스트 필드는 반드시 한국어로 작성하세요.
 1. OHLCV 데이터를 위 35개 패턴과 비교하여 현재 형성 중이거나 완성된 패턴을 찾으세요.
 2. 패턴이 감지되면, 위 레퍼런스의 확률(bullProb/bearProb)과 평균 수익률(avgTarget/avgDrop)을 반드시 참조하여 목표가와 손절가를 현재가 기준으로 계산하세요.
    - targetUp = 현재가 × (1 + 패턴의 평균상승률)
@@ -273,13 +300,14 @@ ${recent}
    - stopLoss = 패턴 구조의 핵심 이탈 가격
 3. confidence는 패턴의 완성도, 거래량 확인, 지표 정합성을 종합하여 판단하세요.
 4. 여러 패턴이 동시에 감지될 수 있습니다. 모두 보고하세요.
+5. patternOverlay: 차트에 패턴을 시각적으로 표시하기 위해 패턴이 시작/종료되는 봉의 인덱스(최근 데이터 기준, 0=가장 오래된봉)와 핵심 가격 포인트를 제공하세요.
 
-JSON으로만 응답:
+JSON으로만 응답 (모든 텍스트 한국어):
 \`\`\`json
 {
   "detectedPatterns": [
     {
-      "name": "위 레퍼런스의 한글 패턴명",
+      "name": "한글 패턴명",
       "nameEn": "English Name",
       "type": "reversal|continuation|harmonic|candlestick",
       "direction": "bullish|bearish|neutral",
@@ -289,34 +317,39 @@ JSON으로만 응답:
       "targetUp": "현재가×(1+레퍼런스평균상승률) 실제 가격",
       "targetDown": "현재가×(1-레퍼런스평균하락률) 실제 가격",
       "stopLoss": "패턴 이탈 가격",
-      "reasoning": "이 패턴으로 판단한 구체적 근거 (어떤 봉에서 어떤 형태가 보이는지)"
+      "reasoning": "한국어로: 어떤 봉에서 어떤 형태가 보이는지 구체적 근거",
+      "pctFromLow": "저점 대비 현재 몇% 상승/하락 위치인지",
+      "pctToTarget": "현재가 대비 목표가까지 몇% 남았는지",
+      "startIdx": "패턴 시작 봉 인덱스(전체 데이터 기준)",
+      "endIdx": "패턴 종료 봉 인덱스",
+      "keyPrices": [패턴핵심가격1, 가격2, 가격3]
     }
   ],
   "indicatorSignals": [
-    {"indicator": "RSI", "signal": "bullish|bearish|neutral", "detail": "구체적 판단 근거"},
-    {"indicator": "MACD", "signal": "bullish|bearish|neutral", "detail": "크로스오버/다이버전스 유무"},
-    {"indicator": "BB", "signal": "bullish|bearish|neutral", "detail": "밴드 위치/스퀴즈 유무"},
-    {"indicator": "Stochastic", "signal": "bullish|bearish|neutral", "detail": "과매수/과매도 판단"},
-    {"indicator": "MA", "signal": "bullish|bearish|neutral", "detail": "골든/데드크로스, 배열 상태"},
-    {"indicator": "Volume", "signal": "bullish|bearish|neutral", "detail": "거래량 추세 해석"}
+    {"indicator": "RSI", "signal": "bullish|bearish|neutral", "detail": "한국어 판단 근거"},
+    {"indicator": "MACD", "signal": "bullish|bearish|neutral", "detail": "한국어 크로스오버/다이버전스"},
+    {"indicator": "BB", "signal": "bullish|bearish|neutral", "detail": "한국어 밴드 위치/스퀴즈"},
+    {"indicator": "Stochastic", "signal": "bullish|bearish|neutral", "detail": "한국어 과매수/과매도"},
+    {"indicator": "MA", "signal": "bullish|bearish|neutral", "detail": "한국어 골든/데드크로스, 배열"},
+    {"indicator": "Volume", "signal": "bullish|bearish|neutral", "detail": "한국어 거래량 추세"}
   ],
   "supports": [지지선1, 지지선2, 지지선3],
   "resistances": [저항선1, 저항선2, 저항선3],
   "strategy": {
     "position": "long|short|hold",
-    "entryPrice": 현재가 기준 진입가,
-    "targetPrice": 1차 목표가,
-    "targetPrice2": 2차 목표가,
+    "entryPrice": 진입가,
+    "targetPrice": 1차목표가,
+    "targetPrice2": 2차목표가,
     "stopLoss": 손절가,
     "riskReward": "1:X",
-    "reasoning": "전략 근거 2-3문장"
+    "reasoning": "한국어 전략 근거 2-3문장"
   },
   "riskLevel": "low|medium|high",
-  "riskFactors": ["구체적 리스크 요인1", "리스크 요인2"],
-  "summary": "종합 분석 3-4문장",
+  "riskFactors": ["한국어 리스크 요인1", "한국어 리스크 요인2"],
+  "summary": "한국어 종합 분석 3-4문장",
   "trend": "uptrend|downtrend|sideways",
   "trendStrength": "strong|moderate|weak",
-  "volumeAnalysis": "거래량 분석 1문장"
+  "volumeAnalysis": "한국어 거래량 분석 1문장"
 }
 \`\`\``;
 
@@ -340,6 +373,7 @@ JSON으로만 응답:
     }catch(e){console.warn("AI:",e);aiErr=e.message||String(e);}
 
     render(r,ai);
+    window._lastAI=ai;
     // Show AI error details if failed
     if(!ai){
       document.getElementById("analyzeOut").insertAdjacentHTML("beforeend",
@@ -359,7 +393,9 @@ JSON으로만 응답:
 
 // ═══════ RENDER ═══════
 function render(data,ai){
-  const o=data.ohlcv,cp=data.currentPrice||o[o.length-1].close,pv=o.length>1?o[o.length-2].close:cp;
+  const allData=data.ohlcv;
+  const o=allData.slice(-candleCount); // zoom: only show selected range
+  const cp=data.currentPrice||o[o.length-1].close,pv=o.length>1?o[o.length-2].close:cp;
   const ch=((cp-pv)/pv*100).toFixed(2),cs=data.currency==="KRW"?"₩":"$",fp=v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
   const cls=o.map(d=>d.close),h52=Math.max(...o.map(d=>d.high)),l52=Math.min(...o.map(d=>d.low));
   const rsi=calcRSI(cls),macd=calcMACD(cls),bb=calcBB(cls),stoch=calcStoch(o);
@@ -458,38 +494,112 @@ function render(data,ai){
 
 // ═══════ CHART SVG ═══════
 function svgChart(data,cp,cur,ai){
-  const W=780,H=380,P={t:24,r:88,b:40,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const W=900,H=520,P={t:28,r:92,b:44,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const aP=data.flatMap(d=>[d.high,d.low]);if(cp)aP.push(cp);
   (ai?.supports||[]).forEach(s=>aP.push(s));(ai?.resistances||[]).forEach(r=>aP.push(r));
-  const mn=Math.min(...aP)*.995,mx=Math.max(...aP)*1.005;
+  (ai?.detectedPatterns||[]).forEach(p=>{if(p.targetUp)aP.push(p.targetUp);if(p.targetDown)aP.push(p.targetDown);});
+  const mn=Math.min(...aP)*.994,mx=Math.max(...aP)*1.006;
   const tx=i=>P.l+(i/(data.length-1||1))*cw,ty=p=>P.t+(1-(p-mn)/(mx-mn||1))*ch;
-  const bw=Math.max(2,Math.min(10,cw/data.length*.6)),cs=cur==="KRW"?"₩":"$";
+  const bw=Math.max(1.5,Math.min(8,cw/data.length*.55)),cs=cur==="KRW"?"₩":"$";
   const fm=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?(v/1000).toFixed(1)+"K":v.toFixed(v<10?4:2);
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:400px">`;
-  for(let i=0;i<=5;i++){const p=mn+(mx-mn)*(i/5);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".04"/><text x="${W-P.r+6}" y="${ty(p)+3.5}" fill="#555" font-size="8" font-family="DM Mono,monospace">${fm(p)}</text>`;}
-  (ai?.supports||[]).forEach((v,i)=>{s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#E85D75" stroke-dasharray="5,4" opacity=".45"/><text x="${W-P.r+6}" y="${ty(v)+3}" fill="#E85D75" font-size="7.5" font-family="DM Mono,monospace">S${i+1}</text>`;});
-  (ai?.resistances||[]).forEach((v,i)=>{s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#4ECCA3" stroke-dasharray="5,4" opacity=".45"/><text x="${W-P.r+6}" y="${ty(v)+3}" fill="#4ECCA3" font-size="7.5" font-family="DM Mono,monospace">R${i+1}</text>`;});
-  (ai?.detectedPatterns||[]).forEach((p,i)=>{const c=p.direction==="bullish"?"#4ECCA3":"#E85D75",rx=W-P.r;
-    if(p.targetUp&&p.targetUp>mn&&p.targetUp<mx)s+=`<line x1="${rx-130}" y1="${ty(p.targetUp)}" x2="${rx}" y2="${ty(p.targetUp)}" stroke="#4ECCA3" stroke-width="1.5" stroke-dasharray="2,3" opacity=".65"/><text x="${rx-134}" y="${ty(p.targetUp)+3}" fill="#4ECCA3" font-size="7" font-family="DM Mono,monospace" text-anchor="end">▲${fm(p.targetUp)}</text>`;
-    if(p.targetDown&&p.targetDown>mn&&p.targetDown<mx)s+=`<line x1="${rx-130}" y1="${ty(p.targetDown)}" x2="${rx}" y2="${ty(p.targetDown)}" stroke="#E85D75" stroke-width="1.5" stroke-dasharray="2,3" opacity=".65"/><text x="${rx-134}" y="${ty(p.targetDown)+3}" fill="#E85D75" font-size="7" font-family="DM Mono,monospace" text-anchor="end">▼${fm(p.targetDown)}</text>`;
-    s+=`<rect x="${P.l+4}" y="${P.t+6+i*18}" width="${Math.min(p.name.length*7+50,190)}" height="14" rx="3" fill="${c}12" stroke="${c}25" stroke-width=".5"/><text x="${P.l+18}" y="${P.t+16+i*18}" fill="${c}" font-size="8" font-family="DM Mono,monospace">${p.name} (${p.confidence}%)</text>`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:540px">`;
+
+  // Grid
+  for(let i=0;i<=6;i++){const p=mn+(mx-mn)*(i/6);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".035"/><text x="${W-P.r+6}" y="${ty(p)+3.5}" fill="#555" font-size="8" font-family="DM Mono,monospace">${fm(p)}</text>`;}
+
+  // Support/Resistance with labels and zones
+  (ai?.supports||[]).forEach((v,i)=>{
+    s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#E85D75" stroke-dasharray="6,4" opacity=".4"/>`;
+    s+=`<rect x="${W-P.r+2}" y="${ty(v)-8}" width="86" height="16" rx="3" fill="rgba(232,93,117,.1)" stroke="#E85D7530"/>`;
+    s+=`<text x="${W-P.r+6}" y="${ty(v)+3}" fill="#E85D75" font-size="8" font-family="DM Mono,monospace">S${i+1} ${fm(v)}</text>`;
   });
+  (ai?.resistances||[]).forEach((v,i)=>{
+    s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#4ECCA3" stroke-dasharray="6,4" opacity=".4"/>`;
+    s+=`<rect x="${W-P.r+2}" y="${ty(v)-8}" width="86" height="16" rx="3" fill="rgba(78,204,163,.1)" stroke="#4ECCA330"/>`;
+    s+=`<text x="${W-P.r+6}" y="${ty(v)+3}" fill="#4ECCA3" font-size="8" font-family="DM Mono,monospace">R${i+1} ${fm(v)}</text>`;
+  });
+
+  // ★ Pattern Overlay — shapes, guide lines, percentages
+  (ai?.detectedPatterns||[]).forEach((p,i)=>{
+    const c=p.direction==="bullish"?"#4ECCA3":p.direction==="bearish"?"#E85D75":"#C9A96E";
+    const rx=W-P.r;
+
+    // Target/Stop guide lines with percentage labels
+    if(p.targetUp&&p.targetUp>mn&&p.targetUp<mx){
+      const pct=cp?((p.targetUp/cp-1)*100).toFixed(1):"?";
+      s+=`<line x1="${P.l}" y1="${ty(p.targetUp)}" x2="${rx}" y2="${ty(p.targetUp)}" stroke="#4ECCA3" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
+      s+=`<rect x="${P.l+2}" y="${ty(p.targetUp)-10}" width="${60+pct.length*6}" height="18" rx="3" fill="rgba(78,204,163,.15)"/>`;
+      s+=`<text x="${P.l+8}" y="${ty(p.targetUp)+2}" fill="#4ECCA3" font-size="9" font-weight="600" font-family="DM Mono,monospace">▲ +${pct}%</text>`;
+    }
+    if(p.targetDown&&p.targetDown>mn&&p.targetDown<mx){
+      const pct=cp?((1-p.targetDown/cp)*100).toFixed(1):"?";
+      s+=`<line x1="${P.l}" y1="${ty(p.targetDown)}" x2="${rx}" y2="${ty(p.targetDown)}" stroke="#E85D75" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
+      s+=`<rect x="${P.l+2}" y="${ty(p.targetDown)-10}" width="${60+pct.length*6}" height="18" rx="3" fill="rgba(232,93,117,.15)"/>`;
+      s+=`<text x="${P.l+8}" y="${ty(p.targetDown)+2}" fill="#E85D75" font-size="9" font-weight="600" font-family="DM Mono,monospace">▼ -${pct}%</text>`;
+    }
+    if(p.stopLoss&&p.stopLoss>mn&&p.stopLoss<mx){
+      s+=`<line x1="${rx-200}" y1="${ty(p.stopLoss)}" x2="${rx}" y2="${ty(p.stopLoss)}" stroke="#C9A96E" stroke-width="1" stroke-dasharray="2,3" opacity=".4"/>`;
+      s+=`<text x="${rx-204}" y="${ty(p.stopLoss)+3}" fill="#C9A96E" font-size="7.5" font-family="DM Mono,monospace" text-anchor="end">SL ${fm(p.stopLoss)}</text>`;
+    }
+
+    // Pattern zone highlight (shaded area between start-end indices)
+    if(p.startIdx!=null&&p.endIdx!=null&&p.keyPrices?.length>=2){
+      const si=Math.max(0,p.startIdx-(data.length>candleCount?data.length-candleCount:0));
+      const ei=Math.min(data.length-1,p.endIdx-(data.length>candleCount?data.length-candleCount:0));
+      if(si>=0&&ei>=si&&ei<data.length){
+        const x1=tx(si),x2=tx(ei);
+        const yTop=ty(Math.max(...p.keyPrices)),yBot=ty(Math.min(...p.keyPrices));
+        // Shaded zone
+        s+=`<rect x="${x1}" y="${yTop}" width="${x2-x1}" height="${yBot-yTop}" rx="4" fill="${c}" opacity=".06" stroke="${c}" stroke-opacity=".2" stroke-width=".5" stroke-dasharray="4,2"/>`;
+        // Key price dots and connecting lines
+        const kPts=p.keyPrices.map((kp,ki)=>{
+          const kx=tx(si+Math.round((ei-si)*ki/(p.keyPrices.length-1||1)));
+          return [kx,ty(kp)];
+        });
+        if(kPts.length>1){
+          s+=`<polyline points="${kPts.map(pt=>pt[0].toFixed(1)+","+pt[1].toFixed(1)).join(" ")}" fill="none" stroke="${c}" stroke-width="2" opacity=".6" stroke-linejoin="round"/>`;
+          kPts.forEach(pt=>{s+=`<circle cx="${pt[0]}" cy="${pt[1]}" r="3.5" fill="${c}" opacity=".7"/>`;});
+        }
+      }
+    }
+
+    // Pattern label badge
+    const pctLabel=p.pctToTarget?` → ${p.pctToTarget}`:"";
+    const labelText=`${p.name} (${p.confidence}%)${pctLabel}`;
+    s+=`<rect x="${P.l+4}" y="${P.t+6+i*22}" width="${Math.min(labelText.length*6.5+30,280)}" height="18" rx="4" fill="${c}15" stroke="${c}30" stroke-width=".5"/>`;
+    s+=`<circle cx="${P.l+14}" cy="${P.t+15+i*22}" r="3" fill="${c}"/>`;
+    s+=`<text x="${P.l+22}" y="${P.t+19+i*22}" fill="${c}" font-size="9" font-weight="500" font-family="DM Mono,monospace">${labelText}</text>`;
+  });
+
+  // MAs
   const cma=(n)=>data.map((_,i)=>i<n-1?null:data.slice(i-n+1,i+1).reduce((s,d)=>s+d.close,0)/n);
   [{v:cma(5),c:"#E8A87C",w:1},{v:cma(20),c:"#85C1E9",w:1.2},{v:cma(100),c:"#C39BD3",w:1.5},{v:cma(250),c:"#7DCEA0",w:1.8}].forEach(m=>{const pts=m.v.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);if(pts.length>1)s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${m.c}" stroke-width="${m.w}" opacity=".5"/>`;});
+
   // Bollinger Bands
   const bbS=[];for(let i=19;i<data.length;i++){const sl=data.slice(i-19,i+1).map(d=>d.close);const ma=sl.reduce((a,b)=>a+b,0)/20;const std=Math.sqrt(sl.reduce((s,v)=>s+Math.pow(v-ma,2),0)/20);bbS.push({u:ma+2*std,m:ma,l:ma-2*std});}
   if(bbS.length>1){const off=data.length-bbS.length;
     const uPts=bbS.map((b,i)=>`${tx(i+off).toFixed(1)},${ty(b.u).toFixed(1)}`);
     const lPts=bbS.map((b,i)=>`${tx(i+off).toFixed(1)},${ty(b.l).toFixed(1)}`).reverse();
     s+=`<polygon points="${uPts.join(" ")} ${lPts.join(" ")}" fill="#C39BD3" opacity=".04"/>`;
-    s+=`<polyline points="${uPts.join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".3" stroke-dasharray="3,3"/>`;
-    s+=`<polyline points="${lPts.reverse().join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".3" stroke-dasharray="3,3"/>`;
+    s+=`<polyline points="${uPts.join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
+    s+=`<polyline points="${lPts.reverse().join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
   }
-  data.forEach((d,i)=>{const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75",bt=ty(Math.max(d.open,d.close)),bb=ty(Math.min(d.open,d.close));s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width="1" opacity=".7"/><rect x="${x-bw/2}" y="${bt}" width="${bw}" height="${Math.max(bb-bt,1)}" fill="${cl}" rx="1" opacity=".85"/>`;});
-  if(cp){s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1.5" opacity=".6" stroke-dasharray="4,2"/><rect x="${W-P.r}" y="${ty(cp)-9}" width="82" height="18" rx="4" fill="rgba(201,169,110,.25)" stroke="#C9A96E" stroke-width=".5"/><text x="${W-P.r+6}" y="${ty(cp)+4}" fill="#C9A96E" font-size="9" font-weight="700" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;}
-  data.filter((_,i)=>i%Math.max(1,Math.floor(data.length/7))===0).forEach(d=>{const i=data.indexOf(d);s+=`<text x="${tx(i)}" y="${H-P.b+16}" fill="#444" font-size="7.5" font-family="DM Mono,monospace" text-anchor="middle">${(d.date||"").slice(5)}</text>`;});
+
+  // Candles
+  data.forEach((d,i)=>{const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75",bt=ty(Math.max(d.open,d.close)),bb=ty(Math.min(d.open,d.close));s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width="1" opacity=".7"/><rect x="${x-bw/2}" y="${bt}" width="${bw}" height="${Math.max(bb-bt,1)}" fill="${cl}" rx=".5" opacity=".85"/>`;});
+
+  // Current price
+  if(cp){s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1.5" opacity=".6" stroke-dasharray="4,2"/><rect x="${W-P.r}" y="${ty(cp)-9}" width="86" height="18" rx="4" fill="rgba(201,169,110,.25)" stroke="#C9A96E" stroke-width=".5"/><text x="${W-P.r+6}" y="${ty(cp)+4}" fill="#C9A96E" font-size="9" font-weight="700" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;}
+
+  // Date labels
+  data.filter((_,i)=>i%Math.max(1,Math.floor(data.length/8))===0).forEach(d=>{const i=data.indexOf(d);s+=`<text x="${tx(i)}" y="${H-P.b+16}" fill="#444" font-size="7.5" font-family="DM Mono,monospace" text-anchor="middle">${(d.date||"").slice(5)}</text>`;});
+
+  // MA Legend
   [{c:"#E8A87C",l:"5"},{c:"#85C1E9",l:"20"},{c:"#C39BD3",l:"100"},{c:"#7DCEA0",l:"250"}].forEach((m,i)=>{const x=W-P.r-180+i*46;s+=`<line x1="${x}" y1="12" x2="${x+10}" y2="12" stroke="${m.c}" stroke-width="1.5"/><text x="${x+14}" y="15" fill="${m.c}" font-size="7" font-family="DM Mono,monospace">MA${m.l}</text>`;});
-  s+=`<text x="${P.l+4}" y="${H-6}" fill="#4ECCA3" font-size="7.5" font-family="DM Mono,monospace">● ${curData?.source||"api"} ${data.length}봉</text></svg>`;
+
+  // Data badge
+  s+=`<text x="${P.l+4}" y="${H-6}" fill="#4ECCA3" font-size="7.5" font-family="DM Mono,monospace">● ${curData?.source||"api"} ${data.length}봉</text>`;
+  s+=`</svg>`;
   return s;
 }
 
@@ -589,6 +699,101 @@ async function scanWatchlist(){
     });
   }catch(e){console.warn("Scan error:",e);}
   finally{msg.style.display="none";}
+}
+
+// ═══════ PATTERN LEARNING ═══════
+const PAT_DB=[
+{n:"헤드앤숄더",en:"Head & Shoulders",cat:"reversal",dir:"bearish",bull:23,bear:77,up:18,dn:15,desc:"좌측 어깨→머리(고점)→우측 어깨 형성 후 넥라인 이탈 시 하락 전환",tip:["넥라인 이탈 확인 필수","거래량 감소 동반 시 신뢰도↑","되돌림(Pull-back) 주의"]},
+{n:"역헤드앤숄더",en:"Inverse H&S",cat:"reversal",dir:"bullish",bull:79,bear:21,up:22,dn:8,desc:"하락 추세에서 역으로 형성 — 넥라인 돌파 시 강한 상승 전환",tip:["넥라인 상방 돌파+거래량 급증이 핵심","우측어깨가 좌측보다 높으면 더 강세"]},
+{n:"이중바닥 (W패턴)",en:"Double Bottom",cat:"reversal",dir:"bullish",bull:74,bear:26,up:15,dn:9,desc:"두 번의 저점 터치 후 반등 — 지지선 확인 및 넥라인 돌파 시 상승",tip:["두 저점 간격 1-3개월이 이상적","두 번째 저점의 거래량이 적으면 좋음"]},
+{n:"이중천장 (M패턴)",en:"Double Top",cat:"reversal",dir:"bearish",bull:28,bear:72,up:13,dn:16,desc:"두 번의 고점 터치 후 하락 — 저항선 확인 및 넥라인 하방 이탈",tip:["두 고점이 비슷한 레벨이어야 유효","넥라인 이탈 후 되돌림에서 매도 진입"]},
+{n:"트리플 바닥",en:"Triple Bottom",cat:"reversal",dir:"bullish",bull:87,bear:13,up:20,dn:8,desc:"세 번의 저점 터치 — 이중바닥보다 강력한 지지, 상승 확률 87%",tip:["가장 높은 상승 확률 패턴 중 하나","세 번째 터치 시 거래량 관찰"]},
+{n:"트리플 천장",en:"Triple Top",cat:"reversal",dir:"bearish",bull:13,bear:87,up:20,dn:20,desc:"세 번의 고점 터치 — 강력한 저항 확인, 넥라인 이탈 시 급격한 하락",tip:["세 번 저항 실패 = 매수세 완전 소진","이탈 후 목표가 = 넥라인~고점 높이만큼"]},
+{n:"라운딩 바닥",en:"Rounding Bottom",cat:"reversal",dir:"bullish",bull:72,bear:28,up:25,dn:10,desc:"점진적 U자형 바닥 — 매도세 소진 후 매수세가 서서히 유입",tip:["완성까지 수개월 소요","거래량도 U자형으로 감소 후 증가"]},
+{n:"라운딩 탑",en:"Rounding Top",cat:"reversal",dir:"bearish",bull:28,bear:72,up:20,dn:22,desc:"점진적 역U자형 천장 — 매수세 소진 후 하락 전환",tip:["장기 패턴으로 서서히 진행","지지선 이탈 시 급락 가능"]},
+{n:"다이아몬드 탑",en:"Diamond Top",cat:"reversal",dir:"bearish",bull:31,bear:69,up:18,dn:20,desc:"확대→수렴 형태 — 메가폰 후 삼각수렴으로 전환, 하방 돌파 시 급락",tip:["드문 패턴이지만 신뢰도 높음","거래량 감소 확인 필수"]},
+{n:"다이아몬드 바닥",en:"Diamond Bottom",cat:"reversal",dir:"bullish",bull:69,bear:31,up:22,dn:12,desc:"하락 후 다이아몬드 형성 — 상방 돌파 시 강한 반등",tip:["상방 돌파+거래량 증가 확인","목표가 = 다이아몬드 높이만큼"]},
+{n:"메가폰",en:"Megaphone",cat:"reversal",dir:"bearish",bull:41,bear:59,up:14,dn:18,desc:"점점 넓어지는 가격 진폭 — 변동성 극대화 후 하방 이탈 가능성",tip:["고변동성 구간에서 발생","손절 설정이 어려운 패턴"]},
+{n:"레인지 상단 (박스권)",en:"Rectangle Top",cat:"continuation",dir:"bullish",bull:85,bear:15,up:51,dn:12,desc:"수평 지지·저항 사이 횡보 후 상방 돌파 — 수익률 1위 패턴 (평균 +51%)",tip:["최고 수익률 패턴","횡보 기간이 길수록 돌파 후 상승폭 큼"]},
+{n:"레인지 하단 (박스권)",en:"Rectangle Bottom",cat:"reversal",dir:"bullish",bull:85,bear:15,up:48,dn:12,desc:"하락 후 수평 박스권 형성, 상방 돌파 시 반전 — 평균 +48%",tip:["박스 하단에서 매수, 상단 돌파 시 추가매수","거래량 증가 동반 확인"]},
+{n:"컵앤핸들",en:"Cup & Handle",cat:"continuation",dir:"bullish",bull:76,bear:24,up:34,dn:10,desc:"U자형 바닥(컵) 후 소폭 조정(핸들) — 강한 상승 지속 패턴",tip:["핸들은 컵 높이의 1/3 이하가 이상적","돌파 시 거래량 폭증 확인"]},
+{n:"상승 삼각형",en:"Ascending Triangle",cat:"continuation",dir:"bullish",bull:72,bear:28,up:20,dn:10,desc:"수평 저항선 + 상승 추세선 수렴 — 상방 돌파 확률 높은 강세 패턴",tip:["저항선 3회 이상 터치가 이상적","수렴 끝에서 거래량 증가+돌파"]},
+{n:"하락 삼각형",en:"Descending Triangle",cat:"continuation",dir:"bearish",bull:30,bear:70,up:14,dn:18,desc:"수평 지지선 + 하락 추세선 수렴 — 하방 이탈 확률 높은 약세 패턴",tip:["지지선 반복 터치로 약화","이탈 시 거래량 급증 확인"]},
+{n:"상승 깃발",en:"Bull Flag",cat:"continuation",dir:"bullish",bull:68,bear:32,up:25,dn:12,desc:"급등(깃대) 후 소폭 하락 채널(깃발) — 상단 돌파 시 추가 상승",tip:["깃발 기간은 1-4주가 이상적","목표가 = 깃대 높이만큼 추가"]},
+{n:"하락 쐐기형",en:"Falling Wedge",cat:"continuation",dir:"bullish",bull:68,bear:32,up:20,dn:12,desc:"하락 수렴하는 두 추세선 — 상방 돌파 시 강한 반등",tip:["하락추세 내 조정이면 지속 패턴","상방 돌파 시 이전 고점이 목표"]},
+{n:"상승 페넌트",en:"Bull Pennant",cat:"continuation",dir:"bullish",bull:68,bear:32,up:22,dn:10,desc:"급등 후 삼각 수렴 — 깃발과 유사하나 삼각형 조정",tip:["수렴 기간이 짧을수록 돌파력 강함","돌파 후 목표 = 깃대 길이"]},
+{n:"해머",en:"Hammer",cat:"candlestick",dir:"bullish",bull:65,bear:35,up:8,dn:5,desc:"하락 추세 끝 긴 아래꼬리 + 작은 몸통 — 매도세 소진 후 반전",tip:["아래꼬리가 몸통의 2배 이상","다음 봉 양봉 확인 후 진입"]},
+{n:"도지",en:"Doji",cat:"candlestick",dir:"neutral",bull:50,bear:50,up:5,dn:5,desc:"시가 ≈ 종가 — 매수·매도 균형, 추세 전환 가능성 시사",tip:["단독보다 전후 패턴과 함께 해석","추세 끝에서 나타나면 전환 신호"]},
+{n:"상승 잉걸핑",en:"Bullish Engulfing",cat:"candlestick",dir:"bullish",bull:70,bear:30,up:12,dn:7,desc:"음봉 뒤 더 큰 양봉이 감싸는 형태 — 강력한 매수 전환",tip:["양봉의 크기가 클수록 강력","지지선 부근에서 발생 시 신뢰도↑"]},
+{n:"슈팅스타",en:"Shooting Star",cat:"candlestick",dir:"bearish",bull:32,bear:68,up:6,dn:8,desc:"상승 끝 긴 윗꼬리 + 작은 몸통 — 매수세 소진, 하락 전환",tip:["윗꼬리가 몸통의 2배 이상","다음 봉 음봉 확인 필수"]},
+{n:"모닝스타",en:"Morning Star",cat:"candlestick",dir:"bullish",bull:72,bear:28,up:12,dn:6,desc:"3봉 반전: 큰 음봉→작은 몸통→큰 양봉 = 하락 추세 반전",tip:["가운데 봉의 갭하락이 핵심","세 번째 봉이 첫 봉의 50% 이상 회복"]},
+{n:"이브닝스타",en:"Evening Star",cat:"candlestick",dir:"bearish",bull:28,bear:72,up:10,dn:12,desc:"3봉 반전: 큰 양봉→작은 몸통→큰 음봉 = 상승 추세 반전",tip:["가운데 봉의 갭상승이 핵심","저항선 부근에서 발생 시 강력"]},
+{n:"적삼병",en:"Three White Soldiers",cat:"candlestick",dir:"bullish",bull:75,bear:25,up:13,dn:7,desc:"연속 3개 양봉 — 각 봉이 점진 상승, 강력한 상승 신호",tip:["각 봉의 몸통이 비슷한 크기","윗꼬리가 없거나 짧을수록 강력"]},
+{n:"흑삼병",en:"Three Black Crows",cat:"candlestick",dir:"bearish",bull:25,bear:75,up:12,dn:15,desc:"연속 3개 음봉 — 각 봉이 점진 하락, 강력한 하락 신호",tip:["아래꼬리가 없거나 짧을수록 강력","과매수 구간에서 나타나면 위험"]},
+{n:"가틀리 (상승)",en:"Gartley Bull",cat:"harmonic",dir:"bullish",bull:70,bear:30,up:18,dn:10,desc:"피보나치 0.618 되돌림 기반 — D포인트에서 강한 반등 기대",tip:["AB=CD 비율 확인","D에서 RSI 과매도 동반 시 신뢰도↑"]},
+{n:"가틀리 (하락)",en:"Gartley Bear",cat:"harmonic",dir:"bearish",bull:30,bear:70,up:18,dn:18,desc:"상승 가틀리의 반전형 — D포인트 고점에서 하락 전환",tip:["D에서 RSI 과매수 확인","손절은 D 위 약간"]},
+{n:"버터플라이 (상승)",en:"Butterfly Bull",cat:"harmonic",dir:"bullish",bull:67,bear:33,up:22,dn:14,desc:"D가 X를 넘어 확장 — 깊은 되돌림 후 강한 반등",tip:["가틀리보다 공격적 진입","1.272 또는 1.618 확장 확인"]},
+{n:"버터플라이 (하락)",en:"Butterfly Bear",cat:"harmonic",dir:"bearish",bull:33,bear:67,up:22,dn:22,desc:"D가 X 위로 확장 후 급락 — 과매수 구간에서 반전",tip:["확장비율 1.272~1.618 확인","급락 가능성 높아 신속 대응"]},
+{n:"박쥐 (상승)",en:"Bat Bull",cat:"harmonic",dir:"bullish",bull:68,bear:32,up:14,dn:11,desc:"D가 0.886 되돌림 — 가틀리보다 정밀한 진입점",tip:["0.886 레벨 정확도 중요","타이트한 손절 가능"]},
+{n:"박쥐 (하락)",en:"Bat Bear",cat:"harmonic",dir:"bearish",bull:32,bear:68,up:14,dn:16,desc:"하락 전환 박쥐 — D가 0.886까지 되돌린 후 하락",tip:["0.886 정확도 확인","피보나치 레벨 복합 확인"]},
+{n:"크랩 (상승)",en:"Crab Bull",cat:"harmonic",dir:"bullish",bull:65,bear:35,up:28,dn:18,desc:"가장 극단적 하모닉 — D가 1.618 확장, 최고 수익률 +28%",tip:["하모닉 중 최고 리턴","1.618 정확도가 핵심"]},
+{n:"크랩 (하락)",en:"Crab Bear",cat:"harmonic",dir:"bearish",bull:35,bear:65,up:28,dn:26,desc:"극단적 상승 후 D에서 급락 — 1.618 확장 고점 형성",tip:["급락 가능성 매우 높음","빠른 손절 필수"]}
+];
+let patFilter="all";
+function filterPat(c){patFilter=c;document.querySelectorAll("#patCatBar .tf-btn").forEach(b=>b.classList.toggle("on",b.dataset.c===c));renderPatterns();}
+
+function renderPatterns(){
+  const list=patFilter==="all"?PAT_DB:PAT_DB.filter(p=>p.cat===patFilter);
+  const catCol={reversal:"#E8A87C",continuation:"#85C1E9",candlestick:"#C39BD3",harmonic:"#7DCEA0"};
+  const el=document.getElementById("patList");
+  el.innerHTML=list.map(p=>{
+    const dc=p.dir==="bullish"?"#4ECCA3":p.dir==="bearish"?"#E85D75":"#C9A96E";
+    const cc=catCol[p.cat]||"#888";
+    const maxProb=Math.max(p.bull,p.bear);
+    return `<div class="card" style="border-left:3px solid ${dc};margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#F0ECE3">${p.n}</div>
+          <div class="mono" style="font-size:10px;color:#666;margin-top:2px">${p.en}</div>
+        </div>
+        <div style="display:flex;gap:5px">
+          <span class="badge" style="background:${cc}12;color:${cc};border:1px solid ${cc}25">${p.cat==="reversal"?"반전":p.cat==="continuation"?"지속":p.cat==="candlestick"?"캔들":"하모닉"}</span>
+          <span class="badge" style="background:${dc}12;color:${dc};border:1px solid ${dc}25">${p.dir==="bullish"?"강세":p.dir==="bearish"?"약세":"중립"}</span>
+        </div>
+      </div>
+      <p class="noto" style="font-size:12px;color:#999;line-height:1.6;margin-bottom:12px">${p.desc}</p>
+      <!-- Probability bar -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="mono" style="font-size:9px;color:#4ECCA3;width:42px">상승 ${p.bull}%</span>
+        <div style="flex:1;height:8px;border-radius:4px;overflow:hidden;background:#1a1a24;display:flex">
+          <div style="width:${p.bull}%;background:linear-gradient(90deg,#2D7A5F,#4ECCA3);border-radius:4px 0 0 4px"></div>
+          <div style="width:${p.bear}%;background:linear-gradient(90deg,#E85D75,#9B3A4A);border-radius:0 4px 4px 0"></div>
+        </div>
+        <span class="mono" style="font-size:9px;color:#E85D75;width:42px;text-align:right">하락 ${p.bear}%</span>
+      </div>
+      <!-- Key metrics -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:rgba(78,204,163,.06);border:1px solid rgba(78,204,163,.15);border-radius:6px;padding:8px;text-align:center">
+          <div class="mono" style="font-size:8px;color:#4ECCA3;margin-bottom:2px">평균 상승폭</div>
+          <div class="mono" style="font-size:16px;font-weight:700;color:#4ECCA3">+${p.up}%</div>
+        </div>
+        <div style="background:rgba(232,93,117,.06);border:1px solid rgba(232,93,117,.15);border-radius:6px;padding:8px;text-align:center">
+          <div class="mono" style="font-size:8px;color:#E85D75;margin-bottom:2px">평균 하락폭</div>
+          <div class="mono" style="font-size:16px;font-weight:700;color:#E85D75">-${p.dn}%</div>
+        </div>
+        <div style="background:rgba(201,169,110,.06);border:1px solid rgba(201,169,110,.15);border-radius:6px;padding:8px;text-align:center">
+          <div class="mono" style="font-size:8px;color:#C9A96E;margin-bottom:2px">성공 확률</div>
+          <div class="mono" style="font-size:16px;font-weight:700;color:#C9A96E">${maxProb}%</div>
+        </div>
+        <div style="background:rgba(133,193,233,.06);border:1px solid rgba(133,193,233,.15);border-radius:6px;padding:8px;text-align:center">
+          <div class="mono" style="font-size:8px;color:#85C1E9;margin-bottom:2px">리스크/리워드</div>
+          <div class="mono" style="font-size:16px;font-weight:700;color:#85C1E9">1:${(p.up/Math.max(p.dn,1)).toFixed(1)}</div>
+        </div>
+      </div>
+      <!-- Tips -->
+      ${p.tip?`<div style="display:flex;flex-wrap:wrap;gap:5px">${p.tip.map(t=>`<span class="noto" style="font-size:10px;color:#888;background:#12121a;border:1px solid #1e1e2e;border-radius:6px;padding:3px 8px">💡 ${t}</span>`).join("")}</div>`:""}
+    </div>`;
+  }).join("");
 }
 
 // Init

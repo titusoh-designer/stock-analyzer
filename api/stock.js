@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
     // ── Yahoo Finance (default, no key needed) ──
     if (!source || source === "yahoo") {
-      const range = interval === "60m" ? "5d" : interval === "1wk" ? "2y" : interval === "1mo" ? "10y" : "1y";
+      const range = interval === "60m" ? "5d" : interval === "1wk" ? "5y" : interval === "1mo" ? "10y" : "2y";
       const int = interval || "1d";
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${int}&includePrePost=false`;
       const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
@@ -93,7 +93,7 @@ export default async function handler(req, res) {
 
     // ── CoinGecko (crypto, no key needed) ──
     else if (source === "coingecko") {
-      const days = interval === "1wk" ? 365 : interval === "1mo" ? 1825 : 90;
+      const days = interval === "1wk" ? 730 : interval === "1mo" ? 1825 : 365;
       const url = `https://api.coingecko.com/api/v3/coins/${symbol.toLowerCase()}/ohlc?vs_currency=usd&days=${days}`;
       const resp = await fetch(url);
       const json = await resp.json();
@@ -128,7 +128,7 @@ export default async function handler(req, res) {
       const code = symbol.replace(/[^0-9]/g, "");
       const tf = interval === "1wk" ? "week" : interval === "1mo" ? "month" : "day";
       const end = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      const startDate = new Date(Date.now() - (tf === "week" ? 730 : tf === "month" ? 3650 : 200) * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
+      const startDate = new Date(Date.now() - (tf === "week" ? 1460 : tf === "month" ? 3650 : 600) * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
       const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${end}&timeframe=${tf}`;
       const resp = await fetch(url);
       const text = await resp.text();

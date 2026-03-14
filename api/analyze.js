@@ -44,7 +44,7 @@ export default async function handler(req, res) {
         max_tokens: 4000,
         temperature: 0.3,
         messages: [
-          { role: "system", content: "You are a professional stock chart pattern analyst. Always respond with valid JSON only. No markdown, no explanation outside JSON." },
+          { role: "system", content: "You are a professional stock chart pattern analyst. Always respond in Korean (한국어). Always respond with valid JSON only inside ```json``` code blocks. No text outside the JSON block." },
           { role: "user", content: prompt }
         ]
       })
