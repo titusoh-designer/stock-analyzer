@@ -8,8 +8,9 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-  const { symbols } = req.body;
+  const { symbols, days } = req.body;
   if (!symbols || !symbols.length) return res.status(400).json({ error: "symbols required" });
+  const scanDays = Math.min(Math.max(parseInt(days) || 10, 5), 365);
 
   const results = [];
 
@@ -94,9 +95,9 @@ export default async function handler(req, res) {
       // Vol avg
       const volAvgAt = (idx) => idx >= 19 ? vols.slice(idx - 19, idx + 1).reduce((a, b) => a + b, 0) / 20 : null;
 
-      // Scan last 10 trading days for ★ signals
+      // Scan last N trading days for ★ signals
       let starSignals = [];
-      const scanStart = Math.max(25, ohlcv.length - 10);
+      const scanStart = Math.max(25, ohlcv.length - scanDays);
 
       for (let i = scanStart; i < ohlcv.length; i++) {
         const buys = [];
