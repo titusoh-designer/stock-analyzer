@@ -1,5 +1,5 @@
 // Vercel Serverless — Star Signal Scanner
-// Scans a batch of stocks for ★ buy signals (3+ confluence within last 5 days)
+// Scans a batch of stocks for ★ buy signals (3+ confluence within last 10 days)
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -94,9 +94,9 @@ export default async function handler(req, res) {
       // Vol avg
       const volAvgAt = (idx) => idx >= 19 ? vols.slice(idx - 19, idx + 1).reduce((a, b) => a + b, 0) / 20 : null;
 
-      // Scan last 5 trading days for ★ signals
+      // Scan last 10 trading days for ★ signals
       let starSignals = [];
-      const scanStart = Math.max(25, ohlcv.length - 5);
+      const scanStart = Math.max(25, ohlcv.length - 10);
 
       for (let i = scanStart; i < ohlcv.length; i++) {
         const buys = [];
