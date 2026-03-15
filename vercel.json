@@ -5,6 +5,9 @@
     },
     "api/scan.js": {
       "maxDuration": 60
+    },
+    "api/universe.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
