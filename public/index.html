@@ -305,9 +305,12 @@ ${recent}
 ⚠ 모든 텍스트 필드는 반드시 한국어로 작성하세요.
 1. OHLCV 데이터를 위 35개 패턴과 비교하여 현재 형성 중이거나 완성된 패턴을 찾으세요.
 2. 패턴이 감지되면, 위 레퍼런스의 확률(bullProb/bearProb)과 평균 수익률(avgTarget/avgDrop)을 반드시 참조하여 목표가와 손절가를 현재가 기준으로 계산하세요.
-   - targetUp = 현재가 × (1 + 패턴의 평균상승률)
-   - targetDown = 현재가 × (1 - 패턴의 평균하락률)  
-   - stopLoss = 패턴 구조의 핵심 이탈 가격
+   - targetUp = 현재가 × (1 + 패턴의 평균상승률/100)
+     예시: 현재가 69100, 이중바닥 평균상승 +15% → targetUp = 69100 × 1.15 = 79465
+   - targetDown = 현재가 × (1 - 패턴의 평균하락률/100)
+     예시: 현재가 69100, 이중바닥 평균하락 -9% → targetDown = 69100 × 0.91 = 62881
+   - ⚠ 주의: 퍼센트를 소수로 변환하세요. +15% = 0.15, -9% = 0.09
+   - stopLoss = 패턴 구조의 핵심 이탈 가격 (현재가의 ±5~15% 이내)
 3. confidence는 패턴의 완성도, 거래량 확인, 지표 정합성을 종합하여 판단하세요.
 4. 여러 패턴이 동시에 감지될 수 있습니다. 모두 보고하세요.
 5. patternOverlay: 차트에 패턴을 시각적으로 표시하기 위해 패턴이 시작/종료되는 봉의 인덱스(최근 데이터 기준, 0=가장 오래된봉)와 핵심 가격 포인트를 제공하세요.
@@ -324,9 +327,9 @@ JSON으로만 응답 (모든 텍스트 한국어):
       "confidence": 0-100,
       "bullProb": "위 레퍼런스 참조 (0-100)",
       "bearProb": "위 레퍼런스 참조 (0-100)",
-      "targetUp": "현재가×(1+레퍼런스평균상승률) 실제 가격",
-      "targetDown": "현재가×(1-레퍼런스평균하락률) 실제 가격",
-      "stopLoss": "패턴 이탈 가격",
+      "targetUp": "실제 목표가격 숫자 (현재가의 1.05~1.50배 범위)",
+      "targetDown": "실제 하락예상가격 숫자 (현재가의 0.50~0.95배 범위)",
+      "stopLoss": "손절 가격 숫자 (현재가의 ±5~15% 이내)",
       "reasoning": "한국어로: 어떤 봉에서 어떤 형태가 보이는지 구체적 근거",
       "pctFromLow": "저점 대비 현재 몇% 상승/하락 위치인지",
       "pctToTarget": "현재가 대비 목표가까지 몇% 남았는지",
@@ -750,12 +753,18 @@ function svgPatternChart(data,pat,cp,cur,idx){
   const cs=cur==="KRW"?"₩":"$";
   const fm=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?(v/1000).toFixed(1)+"K":Number(v).toFixed(v<10?4:2);
 
-  // Price range
-  const prices=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);
-  prices.push(cp);
-  if(tUp)prices.push(tUp);if(tDn)prices.push(tDn);
-  pts.forEach(p=>prices.push(p.price));
-  const mn=Math.min(...prices)*0.992,mx=Math.max(...prices)*1.008,rng=mx-mn||1;
+  // Price range — based on OHLCV data, NOT on AI targets (which can be wildly off)
+  const ohlcPrices=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);
+  ohlcPrices.push(cp);
+  pts.forEach(p=>{if(p.price)ohlcPrices.push(p.price);});
+  const dataMin=Math.min(...ohlcPrices),dataMax=Math.max(...ohlcPrices);
+  const dataRange=dataMax-dataMin||1;
+  // Only include AI targets if within ±80% of data range (prevent chart distortion)
+  const reasonable=v=>v&&v>(dataMin-dataRange*0.8)&&v<(dataMax+dataRange*0.8);
+  if(reasonable(tUp))ohlcPrices.push(tUp);
+  if(reasonable(tDn))ohlcPrices.push(tDn);
+  if(reasonable(sl))ohlcPrices.push(sl);
+  const mn=Math.min(...ohlcPrices)*0.992,mx=Math.max(...ohlcPrices)*1.008,rng=mx-mn||1;
   const tx=i=>P.l+Math.max(0,Math.min(1,i/(data.length-1||1)))*cw;
   const ty=p=>P.t+(1-(p-mn)/rng)*ch;
   const bw=Math.max(1,Math.min(5,cw/data.length*0.5));
@@ -857,39 +866,59 @@ function svgPatternChart(data,pat,cp,cur,idx){
   }
 
   // Current price line
-  s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1" opacity=".4" stroke-dasharray="4,3"/>`;
-  s+=`<rect x="${W-P.r+2}" y="${ty(cp)-8}" width="84" height="16" rx="3" fill="rgba(201,169,110,.2)" stroke="#C9A96E40"/>`;
-  s+=`<text x="${W-P.r+8}" y="${ty(cp)+3}" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;
+  const cpY=ty(cp);
+  if(isFinite(cpY)){
+    s+=`<line x1="${P.l}" y1="${cpY}" x2="${W-P.r}" y2="${cpY}" stroke="#C9A96E" stroke-width="1" opacity=".4" stroke-dasharray="4,3"/>`;
+    s+=`<rect x="${W-P.r+2}" y="${cpY-8}" width="84" height="16" rx="3" fill="rgba(201,169,110,.2)" stroke="#C9A96E40"/>`;
+    s+=`<text x="${W-P.r+8}" y="${cpY+3}" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;
+  }
 
-  // Target up
-  if(tUp&&tUp>mn&&tUp<mx){
-    const tY=ty(tUp);
-    s+=`<line x1="${P.l}" y1="${tY}" x2="${W-P.r}" y2="${tY}" stroke="#4ECCA3" stroke-width="1" stroke-dasharray="3,3" opacity=".45"/>`;
-    s+=`<rect x="${W-P.r+2}" y="${tY-8}" width="84" height="16" rx="3" fill="rgba(78,204,163,.12)" stroke="#4ECCA325"/>`;
-    s+=`<text x="${W-P.r+8}" y="${tY+3}" fill="#4ECCA3" font-size="8" font-weight="600" font-family="DM Mono,monospace">▲${cs}${fm(tUp)}</text>`;
-    if(ty(cp)>tY+10){
-      const arX=tx(data.length-1)+14;
-      const pct=((tUp/cp-1)*100).toFixed(1);
-      s+=`<line x1="${arX}" y1="${ty(cp)-2}" x2="${arX}" y2="${tY+2}" stroke="#4ECCA3" stroke-width="2" opacity=".5"/>`;
-      s+=`<polygon points="${arX-4},${tY+6} ${arX+4},${tY+6} ${arX},${tY+1}" fill="#4ECCA3" opacity=".5"/>`;
-      s+=`<rect x="${arX+6}" y="${(ty(cp)+tY)/2-9}" width="${pct.length*7+22}" height="18" rx="4" fill="rgba(78,204,163,.18)"/>`;
-      s+=`<text x="${arX+14}" y="${(ty(cp)+tY)/2+3}" fill="#4ECCA3" font-size="10" font-weight="700" font-family="DM Mono,monospace">+${pct}%</text>`;
+  // Target up — show in chart if in range, or as edge arrow if out of range
+  if(tUp){
+    const pct=((tUp/cp-1)*100).toFixed(1);
+    if(tUp>mn&&tUp<mx){
+      const tY=ty(tUp);
+      s+=`<line x1="${P.l}" y1="${tY}" x2="${W-P.r}" y2="${tY}" stroke="#4ECCA3" stroke-width="1" stroke-dasharray="3,3" opacity=".45"/>`;
+      s+=`<rect x="${W-P.r+2}" y="${tY-8}" width="84" height="16" rx="3" fill="rgba(78,204,163,.12)" stroke="#4ECCA325"/>`;
+      s+=`<text x="${W-P.r+8}" y="${tY+3}" fill="#4ECCA3" font-size="8" font-weight="600" font-family="DM Mono,monospace">▲${cs}${fm(tUp)}</text>`;
+      if(isFinite(cpY)&&cpY>tY+10){
+        const arX=tx(data.length-1)+14;
+        s+=`<line x1="${arX}" y1="${cpY-2}" x2="${arX}" y2="${tY+2}" stroke="#4ECCA3" stroke-width="2" opacity=".5"/>`;
+        s+=`<polygon points="${arX-4},${tY+6} ${arX+4},${tY+6} ${arX},${tY+1}" fill="#4ECCA3" opacity=".5"/>`;
+        s+=`<rect x="${arX+6}" y="${(cpY+tY)/2-9}" width="${pct.length*7+22}" height="18" rx="4" fill="rgba(78,204,163,.18)"/>`;
+        s+=`<text x="${arX+14}" y="${(cpY+tY)/2+3}" fill="#4ECCA3" font-size="10" font-weight="700" font-family="DM Mono,monospace">+${pct}%</text>`;
+      }
+    } else {
+      // Out of range — show arrow at top edge
+      s+=`<rect x="${W-P.r+2}" y="${P.t}" width="84" height="18" rx="3" fill="rgba(78,204,163,.15)" stroke="#4ECCA325"/>`;
+      s+=`<text x="${W-P.r+8}" y="${P.t+13}" fill="#4ECCA3" font-size="8" font-weight="700" font-family="DM Mono,monospace">▲ +${pct}%</text>`;
+      s+=`<polygon points="${W-P.r-6},${P.t+10} ${W-P.r-2},${P.t+4} ${W-P.r+2},${P.t+10}" fill="#4ECCA3" opacity=".5"/>`;
     }
   }
 
   // Target down
-  if(tDn&&tDn>mn&&tDn<mx){
-    const tY=ty(tDn);
-    s+=`<line x1="${P.l}" y1="${tY}" x2="${W-P.r}" y2="${tY}" stroke="#E85D75" stroke-width="1" stroke-dasharray="3,3" opacity=".4"/>`;
-    s+=`<rect x="${W-P.r+2}" y="${tY-8}" width="84" height="16" rx="3" fill="rgba(232,93,117,.1)" stroke="#E85D7525"/>`;
-    s+=`<text x="${W-P.r+8}" y="${tY+3}" fill="#E85D75" font-size="8" font-weight="600" font-family="DM Mono,monospace">▼${cs}${fm(tDn)}</text>`;
+  if(tDn){
+    const pct=((1-tDn/cp)*100).toFixed(1);
+    if(tDn>mn&&tDn<mx){
+      const tY=ty(tDn);
+      s+=`<line x1="${P.l}" y1="${tY}" x2="${W-P.r}" y2="${tY}" stroke="#E85D75" stroke-width="1" stroke-dasharray="3,3" opacity=".4"/>`;
+      s+=`<rect x="${W-P.r+2}" y="${tY-8}" width="84" height="16" rx="3" fill="rgba(232,93,117,.1)" stroke="#E85D7525"/>`;
+      s+=`<text x="${W-P.r+8}" y="${tY+3}" fill="#E85D75" font-size="8" font-weight="600" font-family="DM Mono,monospace">▼${cs}${fm(tDn)}</text>`;
+    } else {
+      // Out of range — show arrow at bottom edge
+      const bY=H-P.b-4;
+      s+=`<rect x="${W-P.r+2}" y="${bY-14}" width="84" height="18" rx="3" fill="rgba(232,93,117,.12)" stroke="#E85D7525"/>`;
+      s+=`<text x="${W-P.r+8}" y="${bY-1}" fill="#E85D75" font-size="8" font-weight="700" font-family="DM Mono,monospace">▼ -${pct}%</text>`;
+    }
   }
 
   // Stop loss
-  if(sl&&sl>mn&&sl<mx){
-    const slY=ty(sl);if(isFinite(slY)){
-    s+=`<line x1="${tx(Math.max(0,data.length-50))}" y1="${slY}" x2="${W-P.r}" y2="${slY}" stroke="#C9A96E" stroke-width="1" stroke-dasharray="2,3" opacity=".3"/>`;
-    s+=`<text x="${tx(Math.max(0,data.length-50))-4}" y="${slY+3}" fill="#C9A96E" font-size="7.5" font-family="DM Mono,monospace" text-anchor="end">SL ${fm(sl)}</text>`;
+  if(sl){
+    if(sl>mn&&sl<mx){
+      const slY=ty(sl);if(isFinite(slY)){
+      s+=`<line x1="${tx(Math.max(0,data.length-50))}" y1="${slY}" x2="${W-P.r}" y2="${slY}" stroke="#C9A96E" stroke-width="1" stroke-dasharray="2,3" opacity=".3"/>`;
+      s+=`<text x="${tx(Math.max(0,data.length-50))-4}" y="${slY+3}" fill="#C9A96E" font-size="7.5" font-family="DM Mono,monospace" text-anchor="end">SL ${fm(sl)}</text>`;
+      }
     }
   }
 
