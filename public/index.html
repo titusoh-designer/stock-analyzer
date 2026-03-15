@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
 <title>Stock Pattern Analyzer</title>
-<link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Stock%20Analyzer%22%2C%22short_name%22%3A%22Stocks%22%2C%22start_url%22%3A%22%2F%22%2C%22display%22%3A%22standalone%22%7D">
 <meta name="theme-color" content="#0a0a10">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -423,7 +422,14 @@ function render(data,ai){
     <div style="display:flex;gap:6px;margin-top:3px"><span class="mono" style="font-size:11px;color:#888">${stockCode}</span><span class="badge" style="background:rgba(78,204,163,0.08);color:#4ECCA3;border:1px solid rgba(78,204,163,0.15)">● ${data.source}</span><span class="badge" style="background:rgba(201,169,110,0.08);color:#C9A96E;border:1px solid rgba(201,169,110,0.15)">${o.length}봉·${tf}</span><span class="mono" style="font-size:8px;color:#555">${new Date(data.fetchedAt).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})}</span></div></div>
     <div style="text-align:right"><div class="mono" style="font-size:28px;font-weight:700">${cs}${fp(cp)}</div><div class="mono" style="font-size:13px;margin-top:2px;color:${ch>=0?"#4ECCA3":"#E85D75"}">${ch>=0?"▲":"▼"} ${Math.abs(ch)}%</div></div>
   </div>
-  <div id="mainChartWrap" class="chart-box" style="cursor:grab;user-select:none">${svgChart(o,cp,data.currency,ai,stockLabel)}</div>
+  <div style="position:relative">
+    <div id="mainChartWrap" class="chart-box" style="cursor:crosshair;user-select:none">${svgChart(o,cp,data.currency,ai,stockLabel)}</div>
+    <div id="crosshair" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none">
+      <div id="chV" style="position:absolute;top:0;width:1px;height:100%;background:rgba(201,169,110,.3)"></div>
+      <div id="chH" style="position:absolute;left:0;height:1px;width:100%;background:rgba(201,169,110,.3)"></div>
+      <div id="chLabel" style="position:absolute;padding:4px 8px;border-radius:4px;background:rgba(10,10,16,.9);border:1px solid rgba(201,169,110,.3);white-space:nowrap;font-family:'DM Mono',monospace;font-size:10px;color:#C9A96E;pointer-events:none"></div>
+    </div>
+  </div>
   <div id="chartInfoText" class="mono" style="font-size:8px;color:#444;text-align:center;margin:-12px 0 14px">마우스 휠: 줌 · 클릭&드래그: 이동 · 표시: ${o.length}봉 / 전체 ${allData.length}봉</div>
   <div style="margin-bottom:16px">
     <div id="rsiChartWrap" class="chart-box" style="margin-bottom:8px">${svgRSI(o)}</div>
@@ -484,8 +490,11 @@ function render(data,ai){
       scheduleUpdate();
     };
 
+    // Chart dimensions for crosshair mapping (must match svgChart)
+    const chartP={t:28,r:92,b:44,l:8},chartW=900,chartH=520;
+
     // Drag pan
-    chartEl.onmousedown=(e)=>{isDragging=true;dragStartX=e.clientX;dragStartViewStart=viewStart;chartEl.style.cursor="grabbing";e.preventDefault();};
+    chartEl.onmousedown=(e)=>{isDragging=true;dragStartX=e.clientX;dragStartViewStart=viewStart;e.preventDefault();};
     const onMove=(clientX)=>{
       if(!isDragging)return;
       const visLen=viewEnd-viewStart;
@@ -494,8 +503,59 @@ function render(data,ai){
       const ns=Math.max(0,Math.min(total-visLen,dragStartViewStart+shift));
       if(ns!==viewStart){viewStart=ns;viewEnd=ns+visLen;scheduleUpdate();}
     };
-    chartEl.onmousemove=(e)=>onMove(e.clientX);
-    chartEl.onmouseup=chartEl.onmouseleave=()=>{if(isDragging){isDragging=false;chartEl.style.cursor="grab";}};
+
+    // Crosshair + drag combined
+    const crosshair=document.getElementById("crosshair");
+    const chV=document.getElementById("chV");
+    const chH=document.getElementById("chH");
+    const chLabel=document.getElementById("chLabel");
+
+    chartEl.onmousemove=(e)=>{
+      // Drag handling
+      if(isDragging){onMove(e.clientX);return;}
+
+      // Crosshair
+      if(!crosshair||!curData)return;
+      const rect=chartEl.getBoundingClientRect();
+      const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+      const pctX=mx/rect.width, pctY=my/rect.height;
+
+      // Map to chart area
+      const chartAreaX=(pctX*chartW-chartP.l)/(chartW-chartP.l-chartP.r);
+      const chartAreaY=(pctY*chartH-chartP.t)/(chartH-chartP.t-chartP.b);
+
+      if(chartAreaX<0||chartAreaX>1||chartAreaY<0||chartAreaY>1){
+        crosshair.style.display="none";return;
+      }
+
+      crosshair.style.display="block";
+      chV.style.left=mx+"px";
+      chH.style.top=my+"px";
+
+      // Calculate candle index and price
+      const visData=curData.ohlcv.slice(viewStart,viewEnd);
+      const candleIdx=Math.round(chartAreaX*(visData.length-1));
+      const d=visData[Math.max(0,Math.min(candleIdx,visData.length-1))];
+
+      const mn=Math.min(...visData.flatMap(c=>[c.low]).filter(v=>v>0));
+      const mx2=Math.max(...visData.flatMap(c=>[c.high]).filter(v=>v>0));
+      const price=mx2-(mx2-mn)*chartAreaY;
+
+      const cur2=curData.currency==="KRW"?"₩":"$";
+      const fmP=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?Number(v).toLocaleString():v.toFixed(v<10?4:2);
+
+      if(d){
+        chLabel.innerHTML=`${d.date||""} · ${cur2}${fmP(price)} · O:${fmP(d.open)} H:${fmP(d.high)} L:${fmP(d.low)} C:${fmP(d.close)}`;
+        chLabel.style.left=Math.min(mx+12,rect.width-chLabel.offsetWidth-10)+"px";
+        chLabel.style.top=Math.max(0,my-28)+"px";
+      }
+    };
+
+    chartEl.onmouseleave=()=>{
+      if(isDragging){isDragging=false;}
+      if(crosshair)crosshair.style.display="none";
+    };
+    chartEl.onmouseup=()=>{if(isDragging){isDragging=false;}};
 
     // Touch
     chartEl.ontouchstart=(e)=>{isDragging=true;dragStartX=e.touches[0].clientX;dragStartViewStart=viewStart;};
@@ -636,18 +696,53 @@ function svgPatternChart(data,pat,cp,cur,idx){
   const tUp=num(pat.targetUp),tDn=num(pat.targetDown),sl=num(pat.stopLoss);
   cp=num(cp)||data[data.length-1].close;
 
-  // Build pattern points from patternPoints or keyPrices
+  // Helper: find the candle index closest to a target price (searching in a range)
+  function findIdx(price,fromIdx,toIdx){
+    fromIdx=Math.max(0,fromIdx||0);toIdx=Math.min(data.length-1,toIdx||data.length-1);
+    let best=fromIdx,bestDist=Infinity;
+    for(let i=fromIdx;i<=toIdx;i++){
+      const d=Math.min(Math.abs(data[i].high-price),Math.abs(data[i].low-price),Math.abs(data[i].close-price));
+      if(d<bestDist){bestDist=d;best=i;}
+    }
+    return best;
+  }
+
+  // Build pattern points
   let pts=[];
+  const labels=["X","A","B","C","D","E","F"];
+
   if(pat.patternPoints&&pat.patternPoints.length>=2){
-    pts=pat.patternPoints.map(p=>({label:p.label||"",idx:Math.max(0,Math.min(data.length-1,parseInt(p.idx)||0)),price:num(p.price)})).filter(p=>p.price!==null);
+    // Use AI-provided points, but find actual candle positions by price
+    const halfLen=Math.floor(data.length*0.5);
+    pat.patternPoints.forEach((p,i)=>{
+      const price=num(p.price);
+      if(!price)return;
+      const hintIdx=parseInt(p.idx);
+      // Search around hint idx, or in recent half of data
+      const searchFrom=isFinite(hintIdx)?Math.max(0,hintIdx-20):halfLen;
+      const searchTo=isFinite(hintIdx)?Math.min(data.length-1,hintIdx+20):data.length-1;
+      const foundIdx=findIdx(price,searchFrom,searchTo);
+      pts.push({label:p.label||labels[i]||"",idx:foundIdx,price});
+    });
   }
-  if(pts.length<2&&pat.keyPrices){
+
+  if(pts.length<2){
+    // Fallback: use keyPrices and spread evenly
     const kp=(pat.keyPrices||[]).map(num).filter(v=>v!==null);
-    const labels=["X","A","B","C","D","E","F"];
-    const si=num(pat.startIdx)||Math.floor(data.length*0.3);
-    const ei=num(pat.endIdx)||data.length-1;
-    pts=kp.map((price,i)=>({label:labels[i]||String(i),idx:Math.round(si+(ei-si)*i/(kp.length-1||1)),price}));
+    if(kp.length>=2){
+      const startSearch=Math.floor(data.length*0.3);
+      const segLen=Math.floor((data.length-startSearch)/(kp.length-1||1));
+      kp.forEach((price,i)=>{
+        const from=startSearch+segLen*Math.max(0,i-1);
+        const to=Math.min(data.length-1,startSearch+segLen*(i+1));
+        const foundIdx=findIdx(price,from,to);
+        pts.push({label:labels[i]||"",idx:foundIdx,price});
+      });
+    }
   }
+
+  // Ensure points are sorted by index
+  pts.sort((a,b)=>a.idx-b.idx);
 
   const W=900,H=280,P={t:26,r:92,b:28,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const dc=pat.direction==="bullish"?"#4ECCA3":pat.direction==="bearish"?"#E85D75":"#C9A96E";
