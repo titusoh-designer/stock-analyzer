@@ -153,7 +153,7 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   <div id="patList"></div>
 </div>
 
-<div style="border-top:1px solid #1a1a28;padding:16px 0 32px;margin-top:32px"><p class="mono" style="font-size:9px;color:#444;text-align:center">※ 교육·학습 목적 참고 자료이며, 투자 판단의 근거로 사용할 수 없습니다.</p></div>
+<div style="border-top:1px solid #1a1a28;padding:16px 0 32px;margin-top:32px"><p class="mono" style="font-size:9px;color:#444;text-align:center">※ AI 분석 및 매수/매도 권유는 교육·참고 목적이며, 투자 판단의 최종 근거로 사용할 수 없습니다. 투자 손실에 대한 책임은 투자자 본인에게 있습니다.</p></div>
 </div>
 
 <script>
@@ -295,6 +295,95 @@ function calcWeeklySummary(weeklyOhlcv){
     lastClose:c[c.length-1],change4w:+((c[c.length-1]/c[Math.max(0,c.length-5)]-1)*100).toFixed(2)};
 }
 
+// ═══════ CANDLE FLOW ANALYSIS (10-bar + last candle) ═══════
+function calcCandleFlow(ohlcv){
+  if(ohlcv.length<10)return null;
+  const last10=ohlcv.slice(-10);
+  const last=ohlcv[ohlcv.length-1];
+  const prev=ohlcv[ohlcv.length-2];
+
+  // 10-bar stats
+  let bullCount=0,bearCount=0,dojiCount=0;
+  let totalBody=0,totalUpperWick=0,totalLowerWick=0;
+  let consecutiveBull=0,consecutiveBear=0,curStreak=0,streakType="";
+  const bodyRatios=[];
+
+  last10.forEach((d,i)=>{
+    const body=Math.abs(d.close-d.open);
+    const range=d.high-d.low||0.001;
+    const upperWick=d.high-Math.max(d.open,d.close);
+    const lowerWick=Math.min(d.open,d.close)-d.low;
+    const isBull=d.close>d.open;
+    const isDoji=body/range<0.1;
+
+    if(isDoji)dojiCount++;
+    else if(isBull)bullCount++;
+    else bearCount++;
+
+    totalBody+=body;
+    totalUpperWick+=upperWick;
+    totalLowerWick+=lowerWick;
+    bodyRatios.push(+(body/range*100).toFixed(0));
+
+    // Streak tracking
+    const type=isDoji?"doji":isBull?"bull":"bear";
+    if(i===0){curStreak=1;streakType=type;}
+    else if(type===streakType&&type!=="doji"){curStreak++;}
+    else{curStreak=1;streakType=type;}
+  });
+  if(streakType==="bull")consecutiveBull=curStreak;
+  if(streakType==="bear")consecutiveBear=curStreak;
+
+  // Body size trend (increasing or decreasing)
+  const firstHalfBody=last10.slice(0,5).reduce((s,d)=>s+Math.abs(d.close-d.open),0);
+  const secondHalfBody=last10.slice(5).reduce((s,d)=>s+Math.abs(d.close-d.open),0);
+  const bodyTrend=secondHalfBody>firstHalfBody*1.3?"확대":secondHalfBody<firstHalfBody*0.7?"축소":"유지";
+
+  // Last candle detailed analysis
+  const lBody=Math.abs(last.close-last.open);
+  const lRange=last.high-last.low||0.001;
+  const lUpper=last.high-Math.max(last.open,last.close);
+  const lLower=Math.min(last.open,last.close)-last.low;
+  const lIsBull=last.close>last.open;
+  const lBodyPct=+(lBody/lRange*100).toFixed(0);
+  const lUpperPct=+(lUpper/lRange*100).toFixed(0);
+  const lLowerPct=+(lLower/lRange*100).toFixed(0);
+
+  // Auto-detect last candle pattern
+  let lastPattern="일반";
+  if(lBody/lRange<0.1)lastPattern="도지";
+  else if(lLower>lBody*2&&lUpper<lBody*0.5&&!lIsBull)lastPattern="해머(잠재)";
+  else if(lLower>lBody*2&&lUpper<lBody*0.5&&lIsBull)lastPattern="해머";
+  else if(lUpper>lBody*2&&lLower<lBody*0.5&&lIsBull)lastPattern="슈팅스타(잠재)";
+  else if(lUpper>lBody*2&&lLower<lBody*0.5&&!lIsBull)lastPattern="슈팅스타";
+  else if(lIsBull&&prev&&!prev.close>prev.open&&lBody>Math.abs(prev.close-prev.open)*1.2)lastPattern="상승잉걸핑";
+  else if(!lIsBull&&prev&&prev.close>prev.open&&lBody>Math.abs(prev.close-prev.open)*1.2)lastPattern="하락잉걸핑";
+  else if(lIsBull&&lBodyPct>70)lastPattern="장대양봉";
+  else if(!lIsBull&&lBodyPct>70)lastPattern="장대음봉";
+
+  // Volume confirmation
+  const avgVol10=last10.reduce((s,d)=>s+d.volume,0)/10;
+  const lastVolRatio=last.volume/avgVol10;
+
+  // Overall momentum
+  const change10=+((last10[9].close/last10[0].open-1)*100).toFixed(2);
+  const momentum=change10>3?"강세":change10>0.5?"약한강세":change10>-0.5?"중립":change10>-3?"약한약세":"약세";
+
+  return{
+    bullCount,bearCount,dojiCount,
+    consecutiveBull,consecutiveBear,
+    bodyTrend,momentum,change10,
+    upperWickDominant:totalUpperWick>totalLowerWick*1.5,
+    lowerWickDominant:totalLowerWick>totalUpperWick*1.5,
+    lastCandle:{
+      type:lIsBull?"양봉":"음봉",pattern:lastPattern,
+      bodyPct:lBodyPct,upperPct:lUpperPct,lowerPct:lLowerPct,
+      volRatio:+lastVolRatio.toFixed(2)
+    },
+    bodyRatios
+  };
+}
+
 // ═══════ FETCH DATA (chart only, no AI) ═══════
 async function fetchData(){
   let sym,sr;if(selSym){sym=selSym.symbol;sr=selSym.source||src;setSrc(sr);}else{sym=inp.value.trim();sr=src;}
@@ -357,6 +446,9 @@ async function doAiAnalyze(){
 
     // ★ NEW: Fundamentals
     const _fund=r.fundamentals;
+
+    // ★ Candle flow analysis
+    const _candle=calcCandleFlow(r.ohlcv);
 
     // 100 candles for better pattern recognition
     const recent=r.ohlcv.slice(-100).map(d=>`${d.date}:${d.open},${d.high},${d.low},${d.close},${d.volume}`).join("\n");
@@ -437,6 +529,19 @@ ROE: ${_fund.returnOnEquity ? (_fund.returnOnEquity*100).toFixed(1)+"%" : "N/A"}
 부채비율: ${_fund.debtToEquity?.toFixed(1) ?? "N/A"} | 공매도비율: ${_fund.shortRatio?.toFixed(1) ?? "N/A"}
 애널리스트 목표가: ${_fund.targetMeanPrice ?? "N/A"} | 추천: ${_fund.recommendationKey ?? "N/A"}` : "펀더멘털 데이터 없음"}
 
+═══ 최근 10봉 캔들 흐름 분석 ═══
+${_candle ? `양봉: ${_candle.bullCount}개 | 음봉: ${_candle.bearCount}개 | 도지: ${_candle.dojiCount}개
+연속 양봉: ${_candle.consecutiveBull} | 연속 음봉: ${_candle.consecutiveBear}
+10봉 등락: ${_candle.change10}% | 모멘텀: ${_candle.momentum}
+몸통 크기 추세: ${_candle.bodyTrend} (전반5봉 대비 후반5봉)
+꼬리 특성: ${_candle.upperWickDominant?"윗꼬리 우세 (매도 압력)":_candle.lowerWickDominant?"아래꼬리 우세 (매수 압력)":"균형"}
+몸통비율(10봉): [${_candle.bodyRatios.join(",")}]%
+
+★ 마지막 캔들 상세:
+유형: ${_candle.lastCandle.type} | 감지 패턴: ${_candle.lastCandle.pattern}
+몸통: ${_candle.lastCandle.bodyPct}% | 윗꼬리: ${_candle.lastCandle.upperPct}% | 아래꼬리: ${_candle.lastCandle.lowerPct}%
+거래량 배율: ${_candle.lastCandle.volRatio}x (10봉 평균 대비)` : "캔들 분석 불가"}
+
 ═══ 최근 ${r.ohlcv.slice(-100).length}봉 OHLCV ═══
 ${recent}
 
@@ -456,6 +561,12 @@ ${recent}
 6. 고급 지표(ATR, ADX, OBV, 피보나치, VWAP)를 활용하여 패턴 신뢰도를 검증하세요.
 7. 주봉 데이터가 있으면 다중 타임프레임 정합성을 분석하세요 (일봉 신호 + 주봉 추세 일치 시 신뢰도↑).
 8. 펀더멘털 데이터가 있으면 밸류에이션 관점도 추가하세요 (PER, PBR, 애널리스트 목표가 등).
+9. 최근 10봉 캔들 흐름과 마지막 캔들 형태를 분석하여 단기 매매 타이밍을 판단하세요:
+   - 마지막 캔들이 해머/도지면서 지지선 부근 = 진입 타이밍
+   - 마지막 캔들이 슈팅스타면서 저항선 부근 = 이탈 타이밍
+   - 연속 양봉 3개 이상 + 거래량 증가 = 추세 지속 확인
+   - 몸통 크기 축소 + 꼬리 확대 = 추세 전환 임박
+10. 모든 분석을 종합하여 명확한 매수/매도/관망 권유를 제시하세요. 근거를 구체적으로 설명하세요.
 
 JSON으로만 응답 (모든 텍스트 한국어):
 \`\`\`json
@@ -525,6 +636,19 @@ JSON으로만 응답 (모든 텍스트 한국어):
   "trend": "uptrend|downtrend|sideways",
   "trendStrength": "strong|moderate|weak",
   "volumeAnalysis": "한국어 거래량 분석 + OBV 추세 1-2문장",
+  "candleFlowAnalysis": {
+    "momentum": "한국어: 10봉 흐름 분석 — 양봉/음봉 비율, 모멘텀, 몸통 추세",
+    "lastCandleSignal": "한국어: 마지막 캔들의 의미 — 패턴명, 거래량 확인, 위치 맥락",
+    "timingScore": 0-100
+  },
+  "recommendation": {
+    "action": "강력매수|매수|관망|매도|강력매도",
+    "confidence": 0-100,
+    "reasoning": "한국어 3-4문장: 왜 이 행동을 권유하는지 — 패턴+지표+캔들흐름+펀더멘털+다중TF 종합 근거",
+    "entryTiming": "한국어: 구체적 진입 조건 (예: MA20 돌파 시, 69500 지지 확인 시)",
+    "exitTiming": "한국어: 구체적 이탈 조건 (예: 65000 이탈 시, RSI 70 도달 시)",
+    "timeHorizon": "단기(1-5일)|중기(1-4주)|장기(1개월+)"
+  },
   "overallScore": 0-100
 }
 \`\`\``;
@@ -873,6 +997,58 @@ function renderAiResults(ai,data){
 
   // Volume Analysis
   if(ai?.volumeAnalysis)h+=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:9px;color:#85C1E9;letter-spacing:0.08em">거래량 + OBV</span><span class="noto" style="font-size:12px;color:#999">${ai.volumeAnalysis}</span></div></div>`;
+
+  // Candle Flow Analysis
+  if(ai?.candleFlowAnalysis){
+    const cf=ai.candleFlowAnalysis;
+    const ts=cf.timingScore||0;
+    const tsCol=ts>=60?"#4ECCA3":ts>=40?"#C9A96E":"#E85D75";
+    h+=`<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span class="mono" style="font-size:10px;color:#E8A87C;letter-spacing:0.1em">캔들 흐름 분석</span>
+        <span class="mono" style="font-size:10px;color:${tsCol}">타이밍 점수: ${ts}/100</span>
+      </div>
+      ${cf.momentum?`<p class="noto" style="font-size:12px;color:#bbb;line-height:1.7;margin:0 0 8px">${cf.momentum}</p>`:""}
+      ${cf.lastCandleSignal?`<div style="background:rgba(232,168,124,.06);border:1px solid rgba(232,168,124,.12);border-radius:6px;padding:10px;margin-top:4px"><span class="mono" style="font-size:9px;color:#E8A87C">마지막 캔들 →</span> <span class="noto" style="font-size:12px;color:#ccc">${cf.lastCandleSignal}</span></div>`:""}
+    </div>`;
+  }
+
+  // ★ RECOMMENDATION (매수/매도 권유)
+  if(ai?.recommendation){
+    const rec=ai.recommendation;
+    const actMap={"강력매수":{col:"#4ECCA3",icon:"⬆⬆",bg:"78,204,163"},"매수":{col:"#4ECCA3",icon:"⬆",bg:"78,204,163"},"관망":{col:"#C9A96E",icon:"◆",bg:"201,169,110"},"매도":{col:"#E85D75",icon:"⬇",bg:"232,93,117"},"강력매도":{col:"#E85D75",icon:"⬇⬇",bg:"232,93,117"}};
+    const act=actMap[rec.action]||actMap["관망"];
+    const conf=rec.confidence||0;
+    h+=`<div class="card" style="background:linear-gradient(135deg,rgba(${act.bg},.08),rgba(${act.bg},.02));border:1px solid rgba(${act.bg},.25);padding:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:28px">${act.icon}</span>
+          <div>
+            <div style="font-size:22px;font-weight:800;color:${act.col};font-family:'DM Mono',monospace">${rec.action}</div>
+            <div class="mono" style="font-size:10px;color:${act.col};opacity:.7;margin-top:2px">${rec.timeHorizon||""}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="mono" style="font-size:10px;color:#888;margin-bottom:4px">신뢰도</div>
+          <div class="mono" style="font-size:22px;font-weight:700;color:${act.col}">${conf}%</div>
+        </div>
+      </div>
+      <div style="height:6px;border-radius:3px;background:#1a1a24;overflow:hidden;margin-bottom:16px">
+        <div style="width:${conf}%;height:100%;background:${act.col};border-radius:3px;opacity:.6"></div>
+      </div>
+      <p class="noto" style="font-size:13px;color:#ccc;line-height:1.8;margin:0 0 14px">${rec.reasoning||""}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${rec.entryTiming?`<div style="background:rgba(78,204,163,.06);border:1px solid rgba(78,204,163,.12);border-radius:8px;padding:12px">
+          <div class="mono" style="font-size:8px;color:#4ECCA3;letter-spacing:0.08em;margin-bottom:6px">진입 조건</div>
+          <p class="noto" style="font-size:11px;color:#bbb;line-height:1.6;margin:0">${rec.entryTiming}</p>
+        </div>`:""}
+        ${rec.exitTiming?`<div style="background:rgba(232,93,117,.06);border:1px solid rgba(232,93,117,.12);border-radius:8px;padding:12px">
+          <div class="mono" style="font-size:8px;color:#E85D75;letter-spacing:0.08em;margin-bottom:6px">이탈 조건</div>
+          <p class="noto" style="font-size:11px;color:#bbb;line-height:1.6;margin:0">${rec.exitTiming}</p>
+        </div>`:""}
+      </div>
+    </div>`;
+  }
 
   // Overall Score
   if(ai?.overallScore!=null){
@@ -1241,6 +1417,152 @@ function svgChart(data,cp,cur,ai,stockName){
   // Candles
   data.forEach((d,i)=>{if(!d.close||!d.open)return;const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75",bt=ty(Math.max(d.open,d.close)),bb=ty(Math.min(d.open,d.close));if(!isFinite(bt)||!isFinite(bb))return;s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width="1" opacity=".7"/><rect x="${x-bw/2}" y="${bt}" width="${bw}" height="${Math.max(bb-bt,1)}" fill="${cl}" rx=".5" opacity=".85"/>`;});
 
+  // ★★★ BUY/SELL SIGNAL SYSTEM ★★★
+  if(data.length>=26){
+    const cls2=data.map(d=>d.close||0);
+    const vols2=data.map(d=>d.volume||0);
+
+    // Pre-compute MAs for each bar
+    const ma5s=[],ma20s=[];
+    for(let i=0;i<data.length;i++){
+      ma5s.push(i>=4?cls2.slice(i-4,i+1).reduce((a,b)=>a+b,0)/5:null);
+      ma20s.push(i>=19?cls2.slice(i-19,i+1).reduce((a,b)=>a+b,0)/20:null);
+    }
+
+    // Pre-compute RSI for each bar
+    const rsiS=[];
+    {let ag=0,al=0;
+    for(let i=1;i<=14&&i<cls2.length;i++){const d=cls2[i]-cls2[i-1];d>0?ag+=d:al+=Math.abs(d);}
+    ag/=14;al/=14;
+    for(let i=0;i<cls2.length;i++){
+      if(i<14){rsiS.push(null);continue;}
+      if(i>14){const d=cls2[i]-cls2[i-1];ag=(ag*13+(d>0?d:0))/14;al=(al*13+(d<0?Math.abs(d):0))/14;}
+      rsiS.push(al===0?100:100-100/(1+ag/al));
+    }}
+
+    // Pre-compute MACD histogram
+    const ema=(arr,n)=>{const k=2/(n+1);let e=[arr[0]];for(let i=1;i<arr.length;i++)e.push(arr[i]*k+e[i-1]*(1-k));return e;};
+    const e12=ema(cls2,12),e26=ema(cls2,26);
+    const macdL=e12.map((v,i)=>v-e26[i]);
+    const sigL=ema(macdL.slice(26),9);
+    const histS=[];
+    for(let i=0;i<cls2.length;i++){
+      if(i<34){histS.push(null);continue;}
+      histS.push(macdL[i]-(sigL[i-26]||0));
+    }
+
+    // Pre-compute BB
+    const bbUp=[],bbLo=[],bbMid=[];
+    for(let i=0;i<cls2.length;i++){
+      if(i<19){bbUp.push(null);bbLo.push(null);bbMid.push(null);continue;}
+      const sl=cls2.slice(i-19,i+1);
+      const ma=sl.reduce((a,b)=>a+b,0)/20;
+      const std=Math.sqrt(sl.reduce((s2,v)=>s2+Math.pow(v-ma,2),0)/20);
+      bbMid.push(ma);bbUp.push(ma+2*std);bbLo.push(ma-2*std);
+    }
+
+    // BB width (for squeeze detection)
+    const bbWidths=bbUp.map((u,i)=>u&&bbLo[i]?(u-bbLo[i])/(bbMid[i]||1):null);
+
+    // Volume 20-day average
+    const volAvg=[];
+    for(let i=0;i<vols2.length;i++){
+      volAvg.push(i>=19?vols2.slice(i-19,i+1).reduce((a,b)=>a+b,0)/20:null);
+    }
+
+    // Scan each bar for signals
+    const signals=[];
+    for(let i=20;i<data.length;i++){
+      const buys=[],sells=[];
+
+      // ① Golden/Dead Cross
+      if(ma5s[i]!=null&&ma20s[i]!=null&&ma5s[i-1]!=null&&ma20s[i-1]!=null){
+        if(ma5s[i-1]<=ma20s[i-1]&&ma5s[i]>ma20s[i])buys.push("GC");
+        if(ma5s[i-1]>=ma20s[i-1]&&ma5s[i]<ma20s[i])sells.push("DC");
+      }
+
+      // ② RSI reversal
+      if(rsiS[i]!=null&&rsiS[i-1]!=null){
+        if(rsiS[i-1]<30&&rsiS[i]>=30)buys.push("RSI");
+        if(rsiS[i-1]>70&&rsiS[i]<=70)sells.push("RSI");
+      }
+
+      // ③ MACD histogram flip
+      if(histS[i]!=null&&histS[i-1]!=null){
+        if(histS[i-1]<0&&histS[i]>=0)buys.push("MACD");
+        if(histS[i-1]>0&&histS[i]<=0)sells.push("MACD");
+      }
+
+      // ④ BB squeeze breakout + volume
+      if(bbWidths[i]!=null&&bbWidths[i-1]!=null&&i>=5){
+        const minW=Math.min(...bbWidths.slice(Math.max(0,i-20),i).filter(v=>v!=null));
+        const isSqueeze=bbWidths[i-1]!=null&&bbWidths[i-1]<minW*1.1;
+        const volOk=volAvg[i]&&vols2[i]>volAvg[i]*1.3;
+        if(isSqueeze||true){ // check breakout regardless
+          if(cls2[i]>bbUp[i]&&volOk)buys.push("BB");
+          if(cls2[i]<bbLo[i]&&volOk)sells.push("BB");
+        }
+      }
+
+      if(buys.length||sells.length)signals.push({i,buys,sells});
+    }
+
+    // Render signals on chart
+    signals.forEach(sig=>{
+      const x=tx(sig.i);
+      const d=data[sig.i];
+      if(!d)return;
+
+      // Buy signals
+      if(sig.buys.length){
+        const isConf=sig.buys.length>=3;
+        const isStrong=sig.buys.length>=2;
+        const yBase=ty(d.low)+12;
+        if(!isFinite(yBase))return;
+
+        if(isConf){
+          // ★ Confluence (3+): big star
+          s+=`<polygon points="${x},${yBase+4} ${x-4},${yBase+12} ${x-8},${yBase+12} ${x-5},${yBase+17} ${x-7},${yBase+25} ${x},${yBase+20} ${x+7},${yBase+25} ${x+5},${yBase+17} ${x+8},${yBase+12} ${x+4},${yBase+12}" fill="#4ECCA3" opacity=".85"/>`;
+          s+=`<text x="${x}" y="${yBase+36}" fill="#4ECCA3" font-size="7" font-weight="700" font-family="DM Mono,monospace" text-anchor="middle">★${sig.buys.length}</text>`;
+        } else {
+          // Individual signals: small triangles
+          sig.buys.forEach((type,ti)=>{
+            const yo=yBase+10+ti*14;
+            const op=isStrong?".7":".45";
+            const sz=isStrong?5:4;
+            s+=`<polygon points="${x},${yo} ${x-sz},${yo+sz*2} ${x+sz},${yo+sz*2}" fill="#4ECCA3" opacity="${op}"/>`;
+          });
+          if(isStrong)s+=`<text x="${x}" y="${yBase+10+sig.buys.length*14+6}" fill="#4ECCA3" font-size="6" font-family="DM Mono,monospace" text-anchor="middle" opacity=".6">${sig.buys.join("+")}</text>`;
+        }
+      }
+
+      // Sell signals
+      if(sig.sells.length){
+        const isConf=sig.sells.length>=3;
+        const isStrong=sig.sells.length>=2;
+        const yBase=ty(d.high)-12;
+        if(!isFinite(yBase))return;
+
+        if(isConf){
+          // ★ Confluence: big star
+          s+=`<polygon points="${x},${yBase-4} ${x-4},${yBase-12} ${x-8},${yBase-12} ${x-5},${yBase-17} ${x-7},${yBase-25} ${x},${yBase-20} ${x+7},${yBase-25} ${x+5},${yBase-17} ${x+8},${yBase-12} ${x+4},${yBase-12}" fill="#E85D75" opacity=".85"/>`;
+          s+=`<text x="${x}" y="${yBase-28}" fill="#E85D75" font-size="7" font-weight="700" font-family="DM Mono,monospace" text-anchor="middle">★${sig.sells.length}</text>`;
+        } else {
+          sig.sells.forEach((type,ti)=>{
+            const yo=yBase-10-ti*14;
+            const op=isStrong?".7":".45";
+            const sz=isStrong?5:4;
+            s+=`<polygon points="${x},${yo} ${x-sz},${yo-sz*2} ${x+sz},${yo-sz*2}" fill="#E85D75" opacity="${op}"/>`;
+          });
+          if(isStrong)s+=`<text x="${x}" y="${yBase-10-sig.sells.length*14-2}" fill="#E85D75" font-size="6" font-family="DM Mono,monospace" text-anchor="middle" opacity=".6">${sig.sells.join("+")}</text>`;
+        }
+      }
+    });
+
+    // Signal legend
+    s+=`<text x="${P.l+4}" y="${H-16}" fill="#4ECCA3" font-size="7" font-family="DM Mono,monospace" opacity=".5">▲매수: GC=골든크로스 RSI=과매도탈출 MACD=히스토그램전환 BB=밴드돌파 ★=합류(3+)</text>`;
+  }
+
   // Current price
   if(cp){s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1.5" opacity=".6" stroke-dasharray="4,2"/><rect x="${W-P.r}" y="${ty(cp)-9}" width="86" height="18" rx="4" fill="rgba(201,169,110,.25)" stroke="#C9A96E" stroke-width=".5"/><text x="${W-P.r+6}" y="${ty(cp)+4}" fill="#C9A96E" font-size="9" font-weight="700" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;}
 
@@ -1258,6 +1580,67 @@ function svgChart(data,cp,cur,ai,stockName){
   }
   s+=`</svg>`;
   return s;
+}
+
+// ═══════ DIVERGENCE SWING DETECTION HELPER ═══════
+function findSwings(series, windowSize){
+  // Find local highs and lows in a series
+  const w=windowSize||5;
+  const highs=[],lows=[];
+  for(let i=w;i<series.length-w;i++){
+    const win=series.slice(i-w,i+w+1);
+    if(series[i]>=Math.max(...win))highs.push({i,v:series[i]});
+    if(series[i]<=Math.min(...win))lows.push({i,v:series[i]});
+  }
+  return{highs,lows};
+}
+
+function findDivergences(priceSeries, indicatorSeries, txFn, tyPriceFn, tyIndFn){
+  // Returns SVG lines for divergences between price and indicator
+  const pw=Math.min(5,Math.floor(priceSeries.length/10)||3);
+  const pSwing=findSwings(priceSeries,pw);
+  const iSwing=findSwings(indicatorSeries,pw);
+  let svg="";
+
+  // Bearish divergence: price makes higher high, indicator makes lower high
+  for(let a=0;a<pSwing.highs.length-1;a++){
+    const pH1=pSwing.highs[a],pH2=pSwing.highs[a+1];
+    if(pH2.v<=pH1.v)continue; // price not making higher high
+    // Find indicator highs near these price highs
+    const iH1=iSwing.highs.find(h=>Math.abs(h.i-pH1.i)<=6);
+    const iH2=iSwing.highs.find(h=>Math.abs(h.i-pH2.i)<=6);
+    if(!iH1||!iH2)continue;
+    if(iH2.v>=iH1.v)continue; // indicator not making lower high — no divergence
+    // Draw bearish divergence line on indicator chart
+    const x1=txFn(iH1.i),y1=tyIndFn(iH1.v),x2=txFn(iH2.i),y2=tyIndFn(iH2.v);
+    if(isFinite(x1)&&isFinite(y1)&&isFinite(x2)&&isFinite(y2)){
+      svg+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#E85D75" stroke-width="2" opacity=".7" stroke-linecap="round"/>`;
+      svg+=`<circle cx="${x1}" cy="${y1}" r="3" fill="#E85D75" opacity=".8"/><circle cx="${x2}" cy="${y2}" r="3" fill="#E85D75" opacity=".8"/>`;
+      // Label
+      const mx=(x1+x2)/2,my=(y1+y2)/2;
+      svg+=`<rect x="${mx-24}" y="${my-14}" width="48" height="12" rx="3" fill="rgba(232,93,117,.2)"/>`;
+      svg+=`<text x="${mx}" y="${my-5}" fill="#E85D75" font-size="7" font-weight="600" font-family="DM Mono,monospace" text-anchor="middle">약세</text>`;
+    }
+  }
+
+  // Bullish divergence: price makes lower low, indicator makes higher low
+  for(let a=0;a<pSwing.lows.length-1;a++){
+    const pL1=pSwing.lows[a],pL2=pSwing.lows[a+1];
+    if(pL2.v>=pL1.v)continue; // price not making lower low
+    const iL1=iSwing.lows.find(l=>Math.abs(l.i-pL1.i)<=6);
+    const iL2=iSwing.lows.find(l=>Math.abs(l.i-pL2.i)<=6);
+    if(!iL1||!iL2)continue;
+    if(iL2.v<=iL1.v)continue; // indicator not making higher low — no divergence
+    const x1=txFn(iL1.i),y1=tyIndFn(iL1.v),x2=txFn(iL2.i),y2=tyIndFn(iL2.v);
+    if(isFinite(x1)&&isFinite(y1)&&isFinite(x2)&&isFinite(y2)){
+      svg+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#4ECCA3" stroke-width="2" opacity=".7" stroke-linecap="round"/>`;
+      svg+=`<circle cx="${x1}" cy="${y1}" r="3" fill="#4ECCA3" opacity=".8"/><circle cx="${x2}" cy="${y2}" r="3" fill="#4ECCA3" opacity=".8"/>`;
+      const mx=(x1+x2)/2,my=(y1+y2)/2;
+      svg+=`<rect x="${mx-24}" y="${my+4}" width="48" height="12" rx="3" fill="rgba(78,204,163,.2)"/>`;
+      svg+=`<text x="${mx}" y="${my+13}" fill="#4ECCA3" font-size="7" font-weight="600" font-family="DM Mono,monospace" text-anchor="middle">강세</text>`;
+    }
+  }
+  return svg;
 }
 
 // ═══════ RSI CHART (with price overlay + divergence) ═══════
@@ -1310,6 +1693,11 @@ function svgRSI(data){
   // Legend
   s+=`<line x1="${W-P.r-100}" y1="${H-5}" x2="${W-P.r-88}" y2="${H-5}" stroke="${rc}" stroke-width="1.5"/><text x="${W-P.r-84}" y="${H-2}" fill="${rc}" font-size="7" font-family="DM Mono,monospace">RSI</text>`;
   s+=`<line x1="${W-P.r-50}" y1="${H-5}" x2="${W-P.r-38}" y2="${H-5}" stroke="#C9A96E" stroke-width=".8" stroke-dasharray="3,2"/><text x="${W-P.r-34}" y="${H-2}" fill="#C9A96E" font-size="7" font-family="DM Mono,monospace">가격</text>`;
+
+  // ★ Divergence lines (swing point connections)
+  if(pSlice.length===rs.length&&rs.length>=20){
+    s+=findDivergences(pSlice,rs,tx,tyP,ty);
+  }
 
   s+=`</svg>`;
   return s;
@@ -1375,6 +1763,11 @@ function svgMACD(data){
   s+=`<line x1="${W-P.r-160}" y1="${H-5}" x2="${W-P.r-148}" y2="${H-5}" stroke="#85C1E9" stroke-width="1.5"/><text x="${W-P.r-144}" y="${H-2}" fill="#85C1E9" font-size="7" font-family="DM Mono,monospace">MACD</text>`;
   s+=`<line x1="${W-P.r-108}" y1="${H-5}" x2="${W-P.r-96}" y2="${H-5}" stroke="#E8A87C" stroke-width="1.5" stroke-dasharray="3,2"/><text x="${W-P.r-92}" y="${H-2}" fill="#E8A87C" font-size="7" font-family="DM Mono,monospace">Signal</text>`;
   s+=`<line x1="${W-P.r-56}" y1="${H-5}" x2="${W-P.r-44}" y2="${H-5}" stroke="#C9A96E" stroke-width=".8" stroke-dasharray="3,2"/><text x="${W-P.r-40}" y="${H-2}" fill="#C9A96E" font-size="7" font-family="DM Mono,monospace">가격</text>`;
+
+  // ★ Divergence lines (swing point connections)
+  if(pSlice.length===m.length&&m.length>=20){
+    s+=findDivergences(pSlice,m,tx,tyP,ty);
+  }
 
   s+=`</svg>`;
   return s;
@@ -1467,6 +1860,15 @@ function svgOBV(data){
   // Legend
   s+=`<line x1="${W-P.r-140}" y1="${H-5}" x2="${W-P.r-128}" y2="${H-5}" stroke="#7DCEA0" stroke-width="1.5"/><text x="${W-P.r-124}" y="${H-2}" fill="#7DCEA0" font-size="7" font-family="DM Mono,monospace">OBV</text>`;
   s+=`<line x1="${W-P.r-80}" y1="${H-5}" x2="${W-P.r-68}" y2="${H-5}" stroke="#C9A96E" stroke-width="1" stroke-dasharray="3,2"/><text x="${W-P.r-64}" y="${H-2}" fill="#C9A96E" font-size="7" font-family="DM Mono,monospace">가격</text>`;
+
+  // ★ Divergence lines (swing point connections)
+  if(cls.length>=20&&obvS.length>=20){
+    const minLen=Math.min(cls.length,obvS.length);
+    const pSliceO=cls.slice(cls.length-minLen);
+    const obvSlice=obvS.slice(obvS.length-minLen);
+    const txO=i=>P.l+(i/(minLen-1||1))*cw;
+    s+=findDivergences(pSliceO,obvSlice,txO,v=>P.t+(1-((v-pMin)/pRng))*ch,tyO);
+  }
 
   s+=`</svg>`;
   return s;
