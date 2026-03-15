@@ -437,8 +437,17 @@ async function fetchData(){
 }
 
 // ═══════ AI PATTERN ANALYSIS (manual trigger) ═══════
+let _aiPass=null; // session password cache
 async function doAiAnalyze(){
   if(!curData){alert("먼저 종목을 검색하세요.");return;}
+
+  // Password check (cached for session)
+  if(!_aiPass){
+    const pw=prompt("🔒 AI 분석 비밀번호를 입력하세요:");
+    if(!pw)return;
+    _aiPass=pw;
+  }
+
   const r=curData;
   const sym=curSym?.symbol||"";
   const aiBtn=document.getElementById("aiAnalyzeBtn");
@@ -698,7 +707,9 @@ JSON으로만 응답 (모든 텍스트 한국어):
 }
 \`\`\``;
 
-    const ar=await(await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})})).json();
+    const ar=await(await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt,password:_aiPass})})).json();
+    // Password wrong → reset and ask again
+    if(ar.error&&ar.authFail){_aiPass=null;throw new Error("비밀번호가 올바르지 않습니다.");}
     aiDebug="Response keys: "+Object.keys(ar).join(",")+"\n";
     if(ar.version)aiDebug+="Version: "+ar.version+"\n";
     if(ar.error){aiDebug+="Error: "+ar.error+"\n";throw new Error(ar.error);}
