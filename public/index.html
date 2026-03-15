@@ -203,6 +203,98 @@ function calcMA(c,n){return c.length>=n?+(c.slice(-n).reduce((a,b)=>a+b,0)/n).to
 function calcBB(c,n=20,k=2){if(c.length<n)return null;const ma=c.slice(-n).reduce((a,b)=>a+b,0)/n;const std=Math.sqrt(c.slice(-n).reduce((s,v)=>s+Math.pow(v-ma,2),0)/n);return{upper:+(ma+k*std).toFixed(2),middle:+ma.toFixed(2),lower:+(ma-k*std).toFixed(2)};}
 function calcStoch(ohlcv,n=14){if(ohlcv.length<n)return null;const s=ohlcv.slice(-n);const hi=Math.max(...s.map(d=>d.high)),lo=Math.min(...s.map(d=>d.low));const c=s[s.length-1].close;return hi===lo?50:+((c-lo)/(hi-lo)*100).toFixed(1);}
 
+// ATR (Average True Range)
+function calcATR(ohlcv,n=14){
+  if(ohlcv.length<n+1)return null;
+  const trs=[];for(let i=1;i<ohlcv.length;i++){
+    const h=ohlcv[i].high,l=ohlcv[i].low,pc=ohlcv[i-1].close;
+    trs.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)));
+  }
+  let atr=trs.slice(0,n).reduce((a,b)=>a+b,0)/n;
+  for(let i=n;i<trs.length;i++)atr=(atr*(n-1)+trs[i])/n;
+  return +atr.toFixed(2);
+}
+
+// ADX (Average Directional Index)
+function calcADX(ohlcv,n=14){
+  if(ohlcv.length<n*2+1)return null;
+  const pdm=[],ndm=[],trs=[];
+  for(let i=1;i<ohlcv.length;i++){
+    const h=ohlcv[i].high,l=ohlcv[i].low,ph=ohlcv[i-1].high,pl=ohlcv[i-1].low,pc=ohlcv[i-1].close;
+    pdm.push(h-ph>pl-l?Math.max(h-ph,0):0);
+    ndm.push(pl-l>h-ph?Math.max(pl-l,0):0);
+    trs.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)));
+  }
+  const smooth=(arr)=>{let s=arr.slice(0,n).reduce((a,b)=>a+b,0);const r=[s];for(let i=n;i<arr.length;i++){s=s-s/n+arr[i];r.push(s);}return r;};
+  const sPdm=smooth(pdm),sNdm=smooth(ndm),sTr=smooth(trs);
+  const dx=sPdm.map((v,i)=>{const pdi=v/sTr[i]*100,ndi=sNdm[i]/sTr[i]*100;return Math.abs(pdi-ndi)/(pdi+ndi||1)*100;});
+  if(dx.length<n)return null;
+  let adx=dx.slice(0,n).reduce((a,b)=>a+b,0)/n;
+  for(let i=n;i<dx.length;i++)adx=(adx*(n-1)+dx[i])/n;
+  return +adx.toFixed(1);
+}
+
+// OBV (On Balance Volume)
+function calcOBV(ohlcv){
+  if(ohlcv.length<2)return null;
+  let obv=0;const series=[0];
+  for(let i=1;i<ohlcv.length;i++){
+    if(ohlcv[i].close>ohlcv[i-1].close)obv+=ohlcv[i].volume;
+    else if(ohlcv[i].close<ohlcv[i-1].close)obv-=ohlcv[i].volume;
+    series.push(obv);
+  }
+  const recent=series.slice(-20);
+  const trend=recent[recent.length-1]>recent[0]?"상승":"하락";
+  return{value:obv,trend,divergence:null};
+}
+
+// Fibonacci Retracement
+function calcFibonacci(ohlcv){
+  if(ohlcv.length<20)return null;
+  const highs=ohlcv.map(d=>d.high),lows=ohlcv.map(d=>d.low);
+  const hi=Math.max(...highs),lo=Math.min(...lows);
+  const diff=hi-lo;
+  return{high:+hi.toFixed(2),low:+lo.toFixed(2),
+    fib236:+(hi-diff*0.236).toFixed(2),fib382:+(hi-diff*0.382).toFixed(2),
+    fib500:+(hi-diff*0.5).toFixed(2),fib618:+(hi-diff*0.618).toFixed(2),
+    fib786:+(hi-diff*0.786).toFixed(2)};
+}
+
+// VWAP (Volume Weighted Average Price)
+function calcVWAP(ohlcv){
+  if(ohlcv.length<5)return null;
+  let cumVP=0,cumV=0;
+  ohlcv.forEach(d=>{const tp=(d.high+d.low+d.close)/3;cumVP+=tp*d.volume;cumV+=d.volume;});
+  return cumV>0?+(cumVP/cumV).toFixed(2):null;
+}
+
+// Gap Analysis
+function calcGaps(ohlcv){
+  if(ohlcv.length<10)return[];
+  const gaps=[];
+  for(let i=1;i<ohlcv.length;i++){
+    const prevC=ohlcv[i-1].close,curO=ohlcv[i].open;
+    const pct=((curO-prevC)/prevC*100);
+    if(Math.abs(pct)>1.5){
+      gaps.push({date:ohlcv[i].date,type:pct>0?"갭상승":"갭하락",pct:+pct.toFixed(2),from:prevC,to:curO,filled:pct>0?ohlcv[i].low<=prevC:ohlcv[i].high>=prevC});
+    }
+  }
+  return gaps.slice(-5); // last 5 gaps
+}
+
+// Weekly summary for multi-timeframe
+function calcWeeklySummary(weeklyOhlcv){
+  if(!weeklyOhlcv||weeklyOhlcv.length<10)return null;
+  const c=weeklyOhlcv.map(d=>d.close);
+  const rsi=calcRSI(c);
+  const macd=calcMACD(c);
+  const ma20=calcMA(c,20);
+  const ma50=c.length>=50?calcMA(c,50):null;
+  const trend=c[c.length-1]>c[c.length-5]?"상승":"하락";
+  return{rsi,macd:{v:macd.v,s:macd.s,h:macd.h},ma20,ma50,trend,
+    lastClose:c[c.length-1],change4w:+((c[c.length-1]/c[Math.max(0,c.length-5)]-1)*100).toFixed(2)};
+}
+
 // ═══════ FETCH DATA (chart only, no AI) ═══════
 async function fetchData(){
   let sym,sr;if(selSym){sym=selSym.symbol;sr=selSym.source||src;setSrc(sr);}else{sym=inp.value.trim();sr=src;}
@@ -238,18 +330,38 @@ async function doAiAnalyze(){
     const cp=r.currentPrice||r.ohlcv[r.ohlcv.length-1].close;
     const closes=r.ohlcv.map(d=>d.close);
     const h52=Math.max(...r.ohlcv.map(d=>d.high)),l52=Math.min(...r.ohlcv.map(d=>d.low));
+
+    // Basic indicators
     const _rsi=calcRSI(closes);
     const _macd=calcMACD(closes);
     const _bb=calcBB(closes);
     const _stoch=calcStoch(r.ohlcv);
     const _ma5=calcMA(closes,5),_ma20=calcMA(closes,20),_ma100=calcMA(closes,100),_ma250=calcMA(closes,250);
+
+    // Volume analysis
     const vols=r.ohlcv.map(d=>d.volume).filter(v=>v>0);
     const avgVol=vols.length>=20?vols.slice(-20).reduce((a,b)=>a+b,0)/20:null;
     const lastVol=vols.length?vols[vols.length-1]:null;
     const volRatio=avgVol&&lastVol?(lastVol/avgVol).toFixed(2):null;
-    const recent=r.ohlcv.slice(-50).map(d=>`${d.date}:${d.open},${d.high},${d.low},${d.close},${d.volume}`).join("\n");
 
-    const prompt = `당신은 전문 차트 패턴 분석가입니다. 아래 실제 거래소 API 데이터를 기반으로, 제공된 35개 패턴 레퍼런스와 대조하여 정밀 분석하세요.
+    // ★ NEW: Advanced indicators
+    const _atr=calcATR(r.ohlcv);
+    const _adx=calcADX(r.ohlcv);
+    const _obv=calcOBV(r.ohlcv);
+    const _fib=calcFibonacci(r.ohlcv);
+    const _vwap=calcVWAP(r.ohlcv);
+    const _gaps=calcGaps(r.ohlcv);
+
+    // ★ NEW: Multi-timeframe (weekly)
+    const _weekly=calcWeeklySummary(r.weeklyOhlcv);
+
+    // ★ NEW: Fundamentals
+    const _fund=r.fundamentals;
+
+    // 100 candles for better pattern recognition
+    const recent=r.ohlcv.slice(-100).map(d=>`${d.date}:${d.open},${d.high},${d.low},${d.close},${d.volume}`).join("\n");
+
+    const prompt = `당신은 전문 차트 패턴 분석가 겸 종합 투자 분석가입니다. 아래 실제 거래소 API 데이터를 기반으로 기술적 분석, 기본적 분석, 다중 타임프레임 분석을 종합하여 정밀 분석하세요.
 
 ═══ 35개 패턴 레퍼런스 (이름|카테고리|방향|상승확률|하락확률|평균상승|평균하락) ═══
 헤드앤숄더|reversal|bearish|23%|77%|+18%|-15%
@@ -298,7 +410,34 @@ Stoch %K(14): ${_stoch ?? "N/A"} | BB: ${_bb?.upper ?? "N/A"} / ${_bb?.middle ??
 MA5: ${_ma5 ?? "N/A"} | MA20: ${_ma20 ?? "N/A"} | MA100: ${_ma100 ?? "N/A"} | MA250: ${_ma250 ?? "N/A"}
 거래량(최근/20일평균): ${volRatio ?? "N/A"}x
 
-═══ 최근 ${r.ohlcv.slice(-50).length}봉 OHLCV ═══
+═══ 고급 기술적 지표 ═══
+ATR(14): ${_atr ?? "N/A"} (변동성 — 높으면 급등/급락 가능)
+ADX(14): ${_adx ?? "N/A"} (추세강도 — 25이상=추세존재, 20이하=횡보)
+OBV: ${_obv?.value?.toLocaleString() ?? "N/A"} (추세: ${_obv?.trend ?? "N/A"})
+VWAP: ${_vwap ?? "N/A"} (기관 매매 기준선 — 현재가 위=강세, 아래=약세)
+
+═══ 피보나치 되돌림 ═══
+${_fib ? `고점: ${_fib.high} | 저점: ${_fib.low}
+23.6%: ${_fib.fib236} | 38.2%: ${_fib.fib382} | 50.0%: ${_fib.fib500}
+61.8%: ${_fib.fib618} | 78.6%: ${_fib.fib786}` : "계산 불가"}
+
+═══ 갭 분석 (최근 5개) ═══
+${_gaps.length ? _gaps.map(g=>`${g.date}: ${g.type} ${g.pct}% (${g.from}→${g.to}) ${g.filled?"✓매워짐":"미매워짐"}`).join("\n") : "최근 유의미한 갭 없음"}
+
+═══ 주봉 분석 (다중 타임프레임) ═══
+${_weekly ? `주봉 추세: ${_weekly.trend} | 최근4주 등락: ${_weekly.change4w}%
+주봉 RSI: ${_weekly.rsi ?? "N/A"} | 주봉 MACD: ${_weekly.macd?.v ?? "N/A"}
+주봉 MA20: ${_weekly.ma20 ?? "N/A"} | 주봉 MA50: ${_weekly.ma50 ?? "N/A"}` : "주봉 데이터 없음"}
+
+═══ 기본적 분석 (펀더멘털) ═══
+${_fund ? `PER: ${_fund.per?.toFixed(1) ?? "N/A"} | Forward PER: ${_fund.forwardPer?.toFixed(1) ?? "N/A"} | PBR: ${_fund.pbr?.toFixed(2) ?? "N/A"}
+시가총액: ${_fund.marketCap ? (_fund.marketCap>=1e12?(_fund.marketCap/1e12).toFixed(1)+"조":(_fund.marketCap/1e8).toFixed(0)+"억") : "N/A"}
+배당수익률: ${_fund.dividendYield ? (_fund.dividendYield*100).toFixed(2)+"%" : "N/A"} | 베타: ${_fund.beta?.toFixed(2) ?? "N/A"}
+ROE: ${_fund.returnOnEquity ? (_fund.returnOnEquity*100).toFixed(1)+"%" : "N/A"} | 이익률: ${_fund.profitMargins ? (_fund.profitMargins*100).toFixed(1)+"%" : "N/A"}
+부채비율: ${_fund.debtToEquity?.toFixed(1) ?? "N/A"} | 공매도비율: ${_fund.shortRatio?.toFixed(1) ?? "N/A"}
+애널리스트 목표가: ${_fund.targetMeanPrice ?? "N/A"} | 추천: ${_fund.recommendationKey ?? "N/A"}` : "펀더멘털 데이터 없음"}
+
+═══ 최근 ${r.ohlcv.slice(-100).length}봉 OHLCV ═══
 ${recent}
 
 ═══ 분석 규칙 ═══
@@ -311,9 +450,12 @@ ${recent}
      예시: 현재가 69100, 이중바닥 평균하락 -9% → targetDown = 69100 × 0.91 = 62881
    - ⚠ 주의: 퍼센트를 소수로 변환하세요. +15% = 0.15, -9% = 0.09
    - stopLoss = 패턴 구조의 핵심 이탈 가격 (현재가의 ±5~15% 이내)
-3. confidence는 패턴의 완성도, 거래량 확인, 지표 정합성을 종합하여 판단하세요.
+3. confidence는 패턴의 완성도, 거래량 확인, 지표 정합성, ADX 추세강도, 다중 타임프레임 정합성을 종합하여 판단하세요.
 4. 여러 패턴이 동시에 감지될 수 있습니다. 모두 보고하세요.
-5. patternOverlay: 차트에 패턴을 시각적으로 표시하기 위해 패턴이 시작/종료되는 봉의 인덱스(최근 데이터 기준, 0=가장 오래된봉)와 핵심 가격 포인트를 제공하세요.
+5. patternPoints: 차트에 패턴을 시각적으로 XABCD 형태로 표시하기 위해 각 핵심 포인트의 봉 인덱스와 가격을 제공하세요.
+6. 고급 지표(ATR, ADX, OBV, 피보나치, VWAP)를 활용하여 패턴 신뢰도를 검증하세요.
+7. 주봉 데이터가 있으면 다중 타임프레임 정합성을 분석하세요 (일봉 신호 + 주봉 추세 일치 시 신뢰도↑).
+8. 펀더멘털 데이터가 있으면 밸류에이션 관점도 추가하세요 (PER, PBR, 애널리스트 목표가 등).
 
 JSON으로만 응답 (모든 텍스트 한국어):
 \`\`\`json
@@ -330,14 +472,14 @@ JSON으로만 응답 (모든 텍스트 한국어):
       "targetUp": "실제 목표가격 숫자 (현재가의 1.05~1.50배 범위)",
       "targetDown": "실제 하락예상가격 숫자 (현재가의 0.50~0.95배 범위)",
       "stopLoss": "손절 가격 숫자 (현재가의 ±5~15% 이내)",
-      "reasoning": "한국어로: 어떤 봉에서 어떤 형태가 보이는지 구체적 근거",
+      "reasoning": "한국어로: 어떤 봉에서 어떤 형태가 보이는지 + ADX/OBV/피보나치 검증 결과",
       "pctFromLow": "저점 대비 현재 몇% 상승/하락 위치인지",
       "pctToTarget": "현재가 대비 목표가까지 몇% 남았는지",
       "startIdx": "패턴 시작 봉 인덱스(전체 데이터 기준)",
       "endIdx": "패턴 종료 봉 인덱스",
       "keyPrices": [패턴핵심가격1, 가격2, 가격3],
       "patternPoints": [
-        {"label": "X 또는 시작점", "idx": "봉 인덱스(최근50봉 기준)", "price": 가격},
+        {"label": "X 또는 시작점", "idx": "봉 인덱스(최근100봉 기준)", "price": 가격},
         {"label": "A 또는 고점", "idx": "봉 인덱스", "price": 가격},
         {"label": "B 또는 저점", "idx": "봉 인덱스", "price": 가격}
       ],
@@ -352,10 +494,22 @@ JSON으로만 응답 (모든 텍스트 한국어):
     {"indicator": "BB", "signal": "bullish|bearish|neutral", "detail": "한국어 밴드 위치/스퀴즈"},
     {"indicator": "Stochastic", "signal": "bullish|bearish|neutral", "detail": "한국어 과매수/과매도"},
     {"indicator": "MA", "signal": "bullish|bearish|neutral", "detail": "한국어 골든/데드크로스, 배열"},
-    {"indicator": "Volume", "signal": "bullish|bearish|neutral", "detail": "한국어 거래량 추세"}
+    {"indicator": "Volume", "signal": "bullish|bearish|neutral", "detail": "한국어 거래량 추세"},
+    {"indicator": "ATR", "signal": "bullish|bearish|neutral", "detail": "변동성 분석 — 손절/목표가 적정성"},
+    {"indicator": "ADX", "signal": "bullish|bearish|neutral", "detail": "추세강도 — 패턴 유효성 검증"},
+    {"indicator": "OBV", "signal": "bullish|bearish|neutral", "detail": "누적거래량 추세 — 가격추세와 다이버전스 여부"},
+    {"indicator": "VWAP", "signal": "bullish|bearish|neutral", "detail": "기관매매 기준 — 현재가 대비 위치"},
+    {"indicator": "피보나치", "signal": "bullish|bearish|neutral", "detail": "현재가가 어떤 피보나치 레벨에 위치하는지"}
   ],
+  "multiTimeframe": {
+    "weekly": "주봉 추세와 일봉 신호의 정합성 분석 (한국어 2-3문장)",
+    "alignment": "aligned|divergent|neutral"
+  },
+  "fundamentalAnalysis": "펀더멘털 관점 분석 — PER/PBR 적정성, 애널리스트 목표가 대비, 밸류에이션 (한국어 2-3문장, 데이터 없으면 null)",
+  "gapAnalysis": "갭 분석 — 미매워진 갭의 지지/저항 역할 (한국어 1-2문장, 갭 없으면 null)",
   "supports": [지지선1, 지지선2, 지지선3],
   "resistances": [저항선1, 저항선2, 저항선3],
+  "fibLevels": "현재가 기준 주요 피보나치 지지/저항 요약",
   "strategy": {
     "position": "long|short|hold",
     "entryPrice": 진입가,
@@ -363,14 +517,15 @@ JSON으로만 응답 (모든 텍스트 한국어):
     "targetPrice2": 2차목표가,
     "stopLoss": 손절가,
     "riskReward": "1:X",
-    "reasoning": "한국어 전략 근거 2-3문장"
+    "reasoning": "한국어 전략 근거 — 기술적+기본적+다중TF 종합 3-4문장"
   },
   "riskLevel": "low|medium|high",
   "riskFactors": ["한국어 리스크 요인1", "한국어 리스크 요인2"],
-  "summary": "한국어 종합 분석 3-4문장",
+  "summary": "한국어 종합 분석 4-5문장 — 기술적 패턴 + 지표 + 펀더멘털 + 다중TF 종합",
   "trend": "uptrend|downtrend|sideways",
   "trendStrength": "strong|moderate|weak",
-  "volumeAnalysis": "한국어 거래량 분석 1문장"
+  "volumeAnalysis": "한국어 거래량 분석 + OBV 추세 1-2문장",
+  "overallScore": 0-100
 }
 \`\`\``;
 
@@ -682,8 +837,58 @@ function renderAiResults(ai,data){
     });
   }
 
+  // Multi-Timeframe Analysis
+  if(ai?.multiTimeframe){
+    const mt=ai.multiTimeframe;
+    const ac=mt.alignment==="aligned"?"#4ECCA3":mt.alignment==="divergent"?"#E85D75":"#C9A96E";
+    h+=`<div class="card" style="border-left:3px solid ${ac}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span class="mono" style="font-size:10px;color:${ac};letter-spacing:0.1em">다중 타임프레임 분석</span>
+        <span class="badge" style="background:${ac}12;color:${ac};border:1px solid ${ac}25">${mt.alignment==="aligned"?"정합":"불일치"}</span>
+      </div>
+      <p class="noto" style="font-size:12px;color:#bbb;line-height:1.7;margin:0">${mt.weekly||""}</p>
+    </div>`;
+  }
+
+  // Fundamental Analysis
+  if(ai?.fundamentalAnalysis){
+    h+=`<div class="card">
+      <div class="mono" style="font-size:10px;color:#85C1E9;letter-spacing:0.1em;margin-bottom:8px">기본적 분석 (펀더멘털)</div>
+      <p class="noto" style="font-size:12px;color:#bbb;line-height:1.7;margin:0">${ai.fundamentalAnalysis}</p>
+    </div>`;
+  }
+
+  // Fibonacci Levels
+  if(ai?.fibLevels){
+    h+=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:9px;color:#C39BD3;letter-spacing:0.08em">피보나치</span><span class="noto" style="font-size:12px;color:#999">${ai.fibLevels}</span></div></div>`;
+  }
+
+  // Gap Analysis
+  if(ai?.gapAnalysis){
+    h+=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:9px;color:#E8A87C;letter-spacing:0.08em">갭 분석</span><span class="noto" style="font-size:12px;color:#999">${ai.gapAnalysis}</span></div></div>`;
+  }
+
   // Volume Analysis
-  if(ai?.volumeAnalysis)h+=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:9px;color:#85C1E9;letter-spacing:0.08em">VOLUME</span><span class="noto" style="font-size:12px;color:#999">${ai.volumeAnalysis}</span></div></div>`;
+  if(ai?.volumeAnalysis)h+=`<div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:9px;color:#85C1E9;letter-spacing:0.08em">거래량 + OBV</span><span class="noto" style="font-size:12px;color:#999">${ai.volumeAnalysis}</span></div></div>`;
+
+  // Overall Score
+  if(ai?.overallScore!=null){
+    const sc=ai.overallScore;
+    const scCol=sc>=70?"#4ECCA3":sc>=40?"#C9A96E":"#E85D75";
+    const scLabel=sc>=70?"매수 우위":sc>=40?"중립":"매도 우위";
+    h+=`<div class="card" style="background:linear-gradient(135deg,rgba(${sc>=70?"78,204,163":sc>=40?"201,169,110":"232,93,117"},.06),transparent);border-color:${scCol}25">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span class="mono" style="font-size:10px;color:${scCol};letter-spacing:0.12em">종합 점수</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="mono" style="font-size:24px;font-weight:700;color:${scCol}">${sc}</span>
+          <span class="mono" style="font-size:10px;color:${scCol}">/100 · ${scLabel}</span>
+        </div>
+      </div>
+      <div style="height:6px;border-radius:3px;background:#1a1a24;overflow:hidden">
+        <div style="width:${sc}%;height:100%;background:linear-gradient(90deg,#E85D75,#C9A96E 40%,#4ECCA3);border-radius:3px"></div>
+      </div>
+    </div>`;
+  }
 
   // Summary
   if(ai?.summary)h+=`<div class="card" style="background:linear-gradient(135deg,rgba(201,169,110,0.04),rgba(201,169,110,0.01));border-color:rgba(201,169,110,0.15)"><div class="mono" style="font-size:9px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:8px">종합 분석</div><p class="noto" style="font-size:13px;color:#ccc;line-height:1.8">${ai.summary}</p></div>`;
