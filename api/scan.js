@@ -8,9 +8,9 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-  const { symbols, days } = req.body;
+  const { symbols } = req.body;
   if (!symbols || !symbols.length) return res.status(400).json({ error: "symbols required" });
-  const scanDays = Math.min(Math.max(parseInt(days) || 10, 5), 365);
+  const scanDays = 365; // always scan full year, frontend filters
 
   const results = [];
 
