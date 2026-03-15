@@ -159,7 +159,6 @@ export default async function handler(req, res) {
           mini,
           dataLen: ohlcv.length
         });
-        });
       }
     } catch (e) {
       // Skip failed stocks
