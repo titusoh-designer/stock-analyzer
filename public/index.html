@@ -114,6 +114,7 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
       <button class="tf-btn" data-t="1mo" onclick="setTf('1mo')">월봉</button>
     </div>
     <button class="pill" id="addWlBtn" onclick="addToWatchlist()" style="display:none;border-color:#C9A96E40;color:#C9A96E">+ 워치리스트</button>
+    <button class="pill" id="ichiBtn" onclick="toggleIchimoku()" style="border-color:#C39BD340;color:#C39BD3;opacity:.5">일목균형표</button>
   </div>
   <div id="analyzeOut"></div>
   <div id="loadEl" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p id="loadMsg" class="noto" style="color:#666;font-size:12px;margin-top:14px"></p></div>
@@ -159,7 +160,8 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 <script>
 // ═══════ STATE ═══════
 let src="yahoo",tf="1d",curData=null,curSym=null,selSym=null;
-let viewStart=0,viewEnd=260; // visible candle range (indices into ohlcv)
+let viewStart=0,viewEnd=260;
+let showIchimoku=false;
 let isDragging=false,dragStartX=0,dragStartViewStart=0;
 let watchlist=JSON.parse(localStorage.getItem("wl")||"[]");
 
@@ -178,6 +180,12 @@ function setSrc(s){src=s;document.querySelectorAll("#srcBar .src-btn").forEach(b
 function setTf(t){tf=t;document.querySelectorAll("#tfBar .tf-btn").forEach(b=>b.classList.toggle("on",b.dataset.t===t));if(curData)fetchData();}
 function resetView(totalLen){viewStart=Math.max(0,totalLen-260);viewEnd=totalLen;}
 function reRender(){if(curData)render(curData,null);}
+function toggleIchimoku(){
+  showIchimoku=!showIchimoku;
+  const btn=document.getElementById("ichiBtn");
+  if(btn){btn.style.opacity=showIchimoku?"1":".5";btn.style.borderColor=showIchimoku?"#C39BD3":"#C39BD340";btn.style.background=showIchimoku?"rgba(195,155,211,.1)":"transparent";}
+  if(curData)render(curData,null);
+}
 function qk(s,sr){document.getElementById("symInput").value=s;selSym={symbol:s,source:sr};setSrc(sr);hideDrop();fetchData();}
 
 // ═══════ AUTOCOMPLETE ═══════
@@ -283,6 +291,30 @@ function calcGaps(ohlcv){
 }
 
 // Weekly summary for multi-timeframe
+// Ichimoku Cloud (일목균형표)
+function calcIchimoku(ohlcv){
+  if(ohlcv.length<52)return null;
+  const donchian=(arr,period,idx)=>{
+    const start=Math.max(0,idx-period+1);
+    const slice=arr.slice(start,idx+1);
+    return{high:Math.max(...slice.map(d=>d.high)),low:Math.min(...slice.map(d=>d.low))};
+  };
+  const tenkan=[],kijun=[],senkouA=[],senkouB=[],chikou=[];
+  for(let i=0;i<ohlcv.length;i++){
+    // Tenkan-sen (전환선, 9일)
+    if(i>=8){const d=donchian(ohlcv,9,i);tenkan.push((d.high+d.low)/2);}else tenkan.push(null);
+    // Kijun-sen (기준선, 26일)
+    if(i>=25){const d=donchian(ohlcv,26,i);kijun.push((d.high+d.low)/2);}else kijun.push(null);
+    // Senkou Span A (선행스팬A, 26일 앞)
+    if(tenkan[i]!=null&&kijun[i]!=null)senkouA.push((tenkan[i]+kijun[i])/2);else senkouA.push(null);
+    // Senkou Span B (선행스팬B, 52일 기준, 26일 앞)
+    if(i>=51){const d=donchian(ohlcv,52,i);senkouB.push((d.high+d.low)/2);}else senkouB.push(null);
+    // Chikou Span (후행스팬, 26일 뒤)
+    chikou.push(ohlcv[i].close);
+  }
+  return{tenkan,kijun,senkouA,senkouB,chikou};
+}
+
 function calcWeeklySummary(weeklyOhlcv){
   if(!weeklyOhlcv||weeklyOhlcv.length<10)return null;
   const c=weeklyOhlcv.map(d=>d.close);
@@ -450,6 +482,9 @@ async function doAiAnalyze(){
     // ★ Candle flow analysis
     const _candle=calcCandleFlow(r.ohlcv);
 
+    // ★ Ichimoku for AI
+    const _ichi=calcIchimoku(r.ohlcv);
+
     // 100 candles for better pattern recognition
     const recent=r.ohlcv.slice(-100).map(d=>`${d.date}:${d.open},${d.high},${d.low},${d.close},${d.volume}`).join("\n");
 
@@ -515,6 +550,15 @@ ${_fib ? `고점: ${_fib.high} | 저점: ${_fib.low}
 
 ═══ 갭 분석 (최근 5개) ═══
 ${_gaps.length ? _gaps.map(g=>`${g.date}: ${g.type} ${g.pct}% (${g.from}→${g.to}) ${g.filled?"✓매워짐":"미매워짐"}`).join("\n") : "최근 유의미한 갭 없음"}
+
+═══ 일목균형표 (Ichimoku Cloud) ═══
+${_ichi ? `전환선(9일): ${_ichi.tenkan[_ichi.tenkan.length-1]?.toFixed(0) ?? "N/A"}
+기준선(26일): ${_ichi.kijun[_ichi.kijun.length-1]?.toFixed(0) ?? "N/A"}
+선행스팬A: ${_ichi.senkouA[_ichi.senkouA.length-1]?.toFixed(0) ?? "N/A"}
+선행스팬B: ${_ichi.senkouB[_ichi.senkouB.length-1]?.toFixed(0) ?? "N/A"}
+구름 상태: ${_ichi.senkouA[_ichi.senkouA.length-1]>_ichi.senkouB[_ichi.senkouB.length-1]?"양운(강세)":"음운(약세)"}
+가격 vs 구름: ${cp>Math.max(_ichi.senkouA[_ichi.senkouA.length-27]||0,_ichi.senkouB[_ichi.senkouB.length-27]||0)?"구름 위(강세)":cp<Math.min(_ichi.senkouA[_ichi.senkouA.length-27]||Infinity,_ichi.senkouB[_ichi.senkouB.length-27]||Infinity)?"구름 아래(약세)":"구름 안(보합)"}
+전환선 vs 기준선: ${(_ichi.tenkan[_ichi.tenkan.length-1]||0)>(_ichi.kijun[_ichi.kijun.length-1]||0)?"전환>기준(강세)":"기준>전환(약세)"}` : "데이터 부족 (52봉 미만)"}
 
 ═══ 주봉 분석 (다중 타임프레임) ═══
 ${_weekly ? `주봉 추세: ${_weekly.trend} | 최근4주 등락: ${_weekly.change4w}%
@@ -610,7 +654,8 @@ JSON으로만 응답 (모든 텍스트 한국어):
     {"indicator": "ADX", "signal": "bullish|bearish|neutral", "detail": "추세강도 — 패턴 유효성 검증"},
     {"indicator": "OBV", "signal": "bullish|bearish|neutral", "detail": "누적거래량 추세 — 가격추세와 다이버전스 여부"},
     {"indicator": "VWAP", "signal": "bullish|bearish|neutral", "detail": "기관매매 기준 — 현재가 대비 위치"},
-    {"indicator": "피보나치", "signal": "bullish|bearish|neutral", "detail": "현재가가 어떤 피보나치 레벨에 위치하는지"}
+    {"indicator": "피보나치", "signal": "bullish|bearish|neutral", "detail": "현재가가 어떤 피보나치 레벨에 위치하는지"},
+    {"indicator": "일목균형표", "signal": "bullish|bearish|neutral", "detail": "구름 대비 위치, 전환선/기준선 관계, 삼역호전/삼역역전 여부"}
   ],
   "multiTimeframe": {
     "weekly": "주봉 추세와 일봉 신호의 정합성 분석 (한국어 2-3문장)",
@@ -1373,6 +1418,59 @@ function svgChart(data,cp,cur,ai,stockName){
       s+=`<polygon points="${uPts.join(" ")} ${lPts.slice().reverse().join(" ")}" fill="#C39BD3" opacity=".04"/>`;
       s+=`<polyline points="${uPts.join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
       s+=`<polyline points="${lPts.join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
+    }
+  }
+
+  // ★ Ichimoku Cloud (일목균형표) — toggle
+  if(showIchimoku&&data.length>=52){
+    const ichi=calcIchimoku(data);
+    if(ichi){
+      // Senkou Span Cloud (shifted 26 bars forward, but we draw in current position since we don't have future data)
+      // Draw cloud between senkouA and senkouB
+      const cloudPts=[];
+      for(let i=51;i<data.length;i++){
+        const a=ichi.senkouA[Math.max(0,i-26)],b=ichi.senkouB[Math.max(0,i-26)];
+        if(a!=null&&b!=null&&isFinite(ty(a))&&isFinite(ty(b)))
+          cloudPts.push({i,a,b,bullish:a>=b});
+      }
+      // Draw cloud fill
+      if(cloudPts.length>1){
+        // Split into bullish/bearish segments for coloring
+        let segStart=0;
+        for(let k=0;k<=cloudPts.length;k++){
+          if(k===cloudPts.length||cloudPts[k].bullish!==cloudPts[segStart].bullish){
+            const seg=cloudPts.slice(segStart,k);
+            if(seg.length>1){
+              const col=seg[0].bullish?"78,204,163":"232,93,117";
+              const upper=seg.map(p=>`${tx(p.i).toFixed(1)},${ty(p.a).toFixed(1)}`);
+              const lower=seg.map(p=>`${tx(p.i).toFixed(1)},${ty(p.b).toFixed(1)}`).reverse();
+              s+=`<polygon points="${upper.join(" ")} ${lower.join(" ")}" fill="rgba(${col},.08)" stroke="none"/>`;
+            }
+            segStart=k;
+          }
+        }
+      }
+      // Tenkan-sen (전환선, 빨간 계열)
+      const tenPts=ichi.tenkan.map((v,i)=>v!=null&&isFinite(ty(v))?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);
+      if(tenPts.length>1)s+=`<polyline points="${tenPts.join(" ")}" fill="none" stroke="#E85D75" stroke-width="1" opacity=".5"/>`;
+      // Kijun-sen (기준선, 파란 계열)
+      const kijPts=ichi.kijun.map((v,i)=>v!=null&&isFinite(ty(v))?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);
+      if(kijPts.length>1)s+=`<polyline points="${kijPts.join(" ")}" fill="none" stroke="#85C1E9" stroke-width="1" opacity=".5"/>`;
+      // Chikou Span (후행스팬, 26일 뒤로)
+      const chikPts=ichi.chikou.map((v,i)=>{
+        const shiftI=i-26;
+        if(shiftI<0||!isFinite(ty(v)))return null;
+        return`${tx(shiftI).toFixed(1)},${ty(v).toFixed(1)}`;
+      }).filter(Boolean);
+      if(chikPts.length>1)s+=`<polyline points="${chikPts.join(" ")}" fill="none" stroke="#7DCEA0" stroke-width=".8" opacity=".4" stroke-dasharray="3,3"/>`;
+
+      // Ichimoku legend
+      s+=`<rect x="${P.l+4}" y="${H-30}" width="260" height="12" rx="3" fill="rgba(10,10,16,.7)"/>`;
+      s+=`<line x1="${P.l+8}" y1="${H-24}" x2="${P.l+18}" y2="${H-24}" stroke="#E85D75" stroke-width="1"/><text x="${P.l+22}" y="${H-22}" fill="#E85D75" font-size="6.5" font-family="DM Mono,monospace">전환</text>`;
+      s+=`<line x1="${P.l+48}" y1="${H-24}" x2="${P.l+58}" y2="${H-24}" stroke="#85C1E9" stroke-width="1"/><text x="${P.l+62}" y="${H-22}" fill="#85C1E9" font-size="6.5" font-family="DM Mono,monospace">기준</text>`;
+      s+=`<line x1="${P.l+88}" y1="${H-24}" x2="${P.l+98}" y2="${H-24}" stroke="#7DCEA0" stroke-width=".8" stroke-dasharray="3,2"/><text x="${P.l+102}" y="${H-22}" fill="#7DCEA0" font-size="6.5" font-family="DM Mono,monospace">후행</text>`;
+      s+=`<rect x="${P.l+132}" y="${H-28}" width="20" height="6" rx="2" fill="rgba(78,204,163,.2)"/><text x="${P.l+156}" y="${H-22}" fill="#4ECCA3" font-size="6.5" font-family="DM Mono,monospace">양운</text>`;
+      s+=`<rect x="${P.l+178}" y="${H-28}" width="20" height="6" rx="2" fill="rgba(232,93,117,.2)"/><text x="${P.l+202}" y="${H-22}" fill="#E85D75" font-size="6.5" font-family="DM Mono,monospace">음운</text>`;
     }
   }
 
