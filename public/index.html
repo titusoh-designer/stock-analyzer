@@ -748,9 +748,10 @@ function svgPatternChart(data,pat,cp,cur,idx){
 // ═══════ CHART SVG ═══════
 function svgChart(data,cp,cur,ai,stockName){
   const W=900,H=520,P={t:28,r:92,b:44,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
-  const aP=data.flatMap(d=>[d.high,d.low]);if(cp)aP.push(cp);
+  const aP=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);if(cp&&isFinite(cp))aP.push(cp);
   (ai?.supports||[]).forEach(s=>aP.push(s));(ai?.resistances||[]).forEach(r=>aP.push(r));
   (ai?.detectedPatterns||[]).forEach(p=>{if(p.targetUp)aP.push(p.targetUp);if(p.targetDown)aP.push(p.targetDown);});
+  if(!aP.length)aP.push(1);
   const mn=Math.min(...aP)*.994,mx=Math.max(...aP)*1.006;
   const tx=i=>P.l+(i/(data.length-1||1))*cw,ty=p=>P.t+(1-(p-mn)/(mx-mn||1))*ch;
   const bw=Math.max(1.5,Math.min(8,cw/data.length*.55)),cs=cur==="KRW"?"₩":"$";
@@ -782,17 +783,20 @@ function svgChart(data,cp,cur,ai,stockName){
   });
 
   // MAs
-  const cma=(n)=>data.map((_,i)=>i<n-1?null:data.slice(i-n+1,i+1).reduce((s,d)=>s+d.close,0)/n);
-  [{v:cma(5),c:"#E8A87C",w:1},{v:cma(20),c:"#85C1E9",w:1.2},{v:cma(100),c:"#C39BD3",w:1.5},{v:cma(250),c:"#7DCEA0",w:1.8}].forEach(m=>{const pts=m.v.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);if(pts.length>1)s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${m.c}" stroke-width="${m.w}" opacity=".5"/>`;});
+  // MAs (filter NaN)
+  const cma=(n)=>data.map((_,i)=>{if(i<n-1)return null;const sl=data.slice(i-n+1,i+1);const sum=sl.reduce((s,d)=>s+(d.close||0),0);const v=sum/n;return isFinite(v)&&v>0?v:null;});
+  [{v:cma(5),c:"#E8A87C",w:1},{v:cma(20),c:"#85C1E9",w:1.2},{v:cma(100),c:"#C39BD3",w:1.5},{v:cma(250),c:"#7DCEA0",w:1.8}].forEach(m=>{const pts=m.v.map((v,i)=>v!=null&&isFinite(ty(v))?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);if(pts.length>1)s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${m.c}" stroke-width="${m.w}" opacity=".5"/>`;});
 
-  // Bollinger Bands
-  const bbS=[];for(let i=19;i<data.length;i++){const sl=data.slice(i-19,i+1).map(d=>d.close);const ma=sl.reduce((a,b)=>a+b,0)/20;const std=Math.sqrt(sl.reduce((s,v)=>s+Math.pow(v-ma,2),0)/20);bbS.push({u:ma+2*std,m:ma,l:ma-2*std});}
-  if(bbS.length>1){const off=data.length-bbS.length;
-    const uPts=bbS.map((b,i)=>`${tx(i+off).toFixed(1)},${ty(b.u).toFixed(1)}`);
-    const lPts=bbS.map((b,i)=>`${tx(i+off).toFixed(1)},${ty(b.l).toFixed(1)}`).reverse();
-    s+=`<polygon points="${uPts.join(" ")} ${lPts.join(" ")}" fill="#C39BD3" opacity=".04"/>`;
-    s+=`<polyline points="${uPts.join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
-    s+=`<polyline points="${lPts.reverse().join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
+  // Bollinger Bands (filter NaN)
+  const bbS=[];for(let i=19;i<data.length;i++){const sl=data.slice(i-19,i+1).map(d=>d.close||0).filter(v=>v>0);if(sl.length<10)continue;const ma=sl.reduce((a,b)=>a+b,0)/sl.length;const std=Math.sqrt(sl.reduce((s,v)=>s+Math.pow(v-ma,2),0)/sl.length);if(isFinite(ma)&&isFinite(std))bbS.push({u:ma+2*std,m:ma,l:ma-2*std,i});}
+  if(bbS.length>1){
+    const uPts=bbS.map(b=>{const y=ty(b.u);return isFinite(y)?`${tx(b.i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+    const lPts=bbS.map(b=>{const y=ty(b.l);return isFinite(y)?`${tx(b.i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+    if(uPts.length>1&&lPts.length>1){
+      s+=`<polygon points="${uPts.join(" ")} ${lPts.slice().reverse().join(" ")}" fill="#C39BD3" opacity=".04"/>`;
+      s+=`<polyline points="${uPts.join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
+      s+=`<polyline points="${lPts.join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
+    }
   }
 
   // ★ Auto Trendlines (linear regression of swing highs/lows)
@@ -816,21 +820,25 @@ function svgChart(data,cp,cur,ai,stockName){
     const regH=linReg(recentH);
     if(regH&&Math.abs(regH.slope)>0.0001){
       const y1=ty(regH.eval(cutoff)),y2=ty(regH.eval(data.length-1));
+      if(isFinite(y1)&&isFinite(y2)){
       const col=regH.slope>0?"#4ECCA3":"#E85D75";
       s+=`<line x1="${tx(cutoff)}" y1="${y1}" x2="${tx(data.length-1)}" y2="${y2}" stroke="${col}" stroke-width="1.5" opacity=".35" stroke-dasharray="8,4"/>`;
       s+=`<text x="${tx(data.length-1)+4}" y="${y2+3}" fill="${col}" font-size="7" font-family="DM Mono,monospace" opacity=".5">상단추세</text>`;
+      }
     }
     const regL=linReg(recentL);
     if(regL&&Math.abs(regL.slope)>0.0001){
       const y1=ty(regL.eval(cutoff)),y2=ty(regL.eval(data.length-1));
+      if(isFinite(y1)&&isFinite(y2)){
       const col=regL.slope>0?"#4ECCA3":"#E85D75";
       s+=`<line x1="${tx(cutoff)}" y1="${y1}" x2="${tx(data.length-1)}" y2="${y2}" stroke="${col}" stroke-width="1.5" opacity=".35" stroke-dasharray="8,4"/>`;
       s+=`<text x="${tx(data.length-1)+4}" y="${y2+3}" fill="${col}" font-size="7" font-family="DM Mono,monospace" opacity=".5">하단추세</text>`;
+      }
     }
   }
 
   // Candles
-  data.forEach((d,i)=>{const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75",bt=ty(Math.max(d.open,d.close)),bb=ty(Math.min(d.open,d.close));s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width="1" opacity=".7"/><rect x="${x-bw/2}" y="${bt}" width="${bw}" height="${Math.max(bb-bt,1)}" fill="${cl}" rx=".5" opacity=".85"/>`;});
+  data.forEach((d,i)=>{if(!d.close||!d.open)return;const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75",bt=ty(Math.max(d.open,d.close)),bb=ty(Math.min(d.open,d.close));if(!isFinite(bt)||!isFinite(bb))return;s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width="1" opacity=".7"/><rect x="${x-bw/2}" y="${bt}" width="${bw}" height="${Math.max(bb-bt,1)}" fill="${cl}" rx=".5" opacity=".85"/>`;});
 
   // Current price
   if(cp){s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1.5" opacity=".6" stroke-dasharray="4,2"/><rect x="${W-P.r}" y="${ty(cp)-9}" width="86" height="18" rx="4" fill="rgba(201,169,110,.25)" stroke="#C9A96E" stroke-width=".5"/><text x="${W-P.r+6}" y="${ty(cp)+4}" fill="#C9A96E" font-size="9" font-weight="700" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;}
@@ -853,8 +861,9 @@ function svgChart(data,cp,cur,ai,stockName){
 
 // ═══════ RSI CHART ═══════
 function svgRSI(data){
-  const cls=data.map(d=>d.close);if(cls.length<15)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI: 15봉 이상 필요</div>`;
-  const n=14,rs=[];for(let e=n;e<=cls.length;e++){let g=0,l=0;for(let i=1;i<=n;i++){const d=cls[e-n+i]-cls[e-n+i-1];d>0?g+=d:l+=Math.abs(d);}let ag=g/n,al=l/n;for(let i=n+1;i<e;i++){const d=cls[i]-cls[i-1];ag=(ag*(n-1)+(d>0?d:0))/n;al=(al*(n-1)+(d<0?Math.abs(d):0))/n;}rs.push(al===0?100:+(100-100/(1+ag/al)).toFixed(1));}
+  const cls=data.map(d=>d.close||0).filter(v=>v>0);if(cls.length<15)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI: 15봉 이상 필요</div>`;
+  const n=14,rs=[];for(let e=n;e<=cls.length;e++){let g=0,l=0;for(let i=1;i<=n;i++){const d=cls[e-n+i]-cls[e-n+i-1];d>0?g+=d:l+=Math.abs(d);}let ag=g/n,al=l/n;for(let i=n+1;i<e;i++){const d=cls[i]-cls[i-1];ag=(ag*(n-1)+(d>0?d:0))/n;al=(al*(n-1)+(d<0?Math.abs(d):0))/n;}const rv=al===0?100:+(100-100/(1+ag/al)).toFixed(1);if(isFinite(rv))rs.push(rv);}
+  if(rs.length<2)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI 계산 불가</div>`;
   const W=900,H=100,P={t:18,r:92,b:12,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const tx=i=>P.l+(i/(rs.length-1||1))*cw,ty=v=>P.t+(1-v/100)*ch;
   const lv=rs[rs.length-1],rc=lv>70?"#E85D75":lv<30?"#4ECCA3":"#C9A96E";
@@ -862,13 +871,16 @@ function svgRSI(data){
   s+=`<text x="${P.l+2}" y="12" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">RSI(14)</text><text x="${W-P.r}" y="12" fill="${rc}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${lv}</text>`;
   s+=`<rect x="${P.l}" y="${ty(100)}" width="${cw}" height="${ty(70)-ty(100)}" fill="rgba(78,204,163,.03)"/><rect x="${P.l}" y="${ty(30)}" width="${cw}" height="${ty(0)-ty(30)}" fill="rgba(232,93,117,.03)"/>`;
   [30,50,70].forEach(v=>{s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#fff" stroke-opacity="${v===50?".05":".07"}" stroke-dasharray="3,4"/><text x="${W-P.r+6}" y="${ty(v)+3}" fill="${v>=70?"#E85D75":v<=30?"#4ECCA3":"#555"}" font-size="7" font-family="DM Mono,monospace">${v}</text>`;});
-  s+=`<polyline points="${rs.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" fill="none" stroke="${rc}" stroke-width="1.3" stroke-linecap="round"/><circle cx="${tx(rs.length-1)}" cy="${ty(lv)}" r="2.5" fill="${rc}"/></svg>`;
+  const rPts=rs.map((v,i)=>{const y=ty(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  if(rPts.length>1)s+=`<polyline points="${rPts.join(" ")}" fill="none" stroke="${rc}" stroke-width="1.3" stroke-linecap="round"/>`;
+  const lastY=ty(lv);if(isFinite(lastY))s+=`<circle cx="${tx(rs.length-1)}" cy="${lastY}" r="2.5" fill="${rc}"/>`;
+  s+=`</svg>`;
   return s;
 }
 
 // ═══════ MACD CHART ═══════
 function svgMACD(data){
-  const cls=data.map(d=>d.close);if(cls.length<35)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">MACD: 35봉 이상 필요</div>`;
+  const cls=data.map(d=>d.close||0).filter(v=>v>0);if(cls.length<35)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">MACD: 35봉 이상 필요</div>`;
   const ema=(d,n)=>{const k=2/(n+1);let e=[d[0]];for(let i=1;i<d.length;i++)e.push(d[i]*k+e[i-1]*(1-k));return e;};
   const e12=ema(cls,12),e26=ema(cls,26),ml=e12.map((v,i)=>v-e26[i]);
   const slR=ema(ml.slice(26),9),sl=Array(34).fill(null).concat(slR);
@@ -882,9 +894,10 @@ function svgMACD(data){
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:110px">`;
   s+=`<text x="${P.l+2}" y="12" fill="#C39BD3" font-size="8" font-weight="600" font-family="DM Mono,monospace">MACD(12,26,9)</text><text x="${W-P.r}" y="12" fill="${hi[hi.length-1]>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${m[m.length-1]?.toFixed(2)||"-"}</text>`;
   s+=`<line x1="${P.l}" y1="${ty(0)}" x2="${W-P.r}" y2="${ty(0)}" stroke="#fff" stroke-opacity=".06"/>`;
-  hi.forEach((v,i)=>{if(v==null)return;const x=tx(i),y0=ty(0),y1=ty(v);s+=`<rect x="${x-bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.abs(y1-y0)||1}" fill="${v>=0?"#4ECCA3":"#E85D75"}" opacity=".45" rx=".5"/>`;});
-  s+=`<polyline points="${m.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" fill="none" stroke="#85C1E9" stroke-width="1.2"/>`;
-  const sP=sg.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);
+  hi.forEach((v,i)=>{if(v==null||!isFinite(v))return;const x=tx(i),y0=ty(0),y1=ty(v);if(!isFinite(y1))return;s+=`<rect x="${x-bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.abs(y1-y0)||1}" fill="${v>=0?"#4ECCA3":"#E85D75"}" opacity=".45" rx=".5"/>`;});
+  const mPts=m.map((v,i)=>{const y=ty(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  if(mPts.length>1)s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#85C1E9" stroke-width="1.2"/>`;
+  const sP=sg.map((v,i)=>{if(v==null)return null;const y=ty(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(sP.length>1)s+=`<polyline points="${sP.join(" ")}" fill="none" stroke="#E8A87C" stroke-width="1.2" stroke-dasharray="3,2"/>`;
   s+=`<line x1="${W-P.r-110}" y1="${H-6}" x2="${W-P.r-98}" y2="${H-6}" stroke="#85C1E9" stroke-width="1.5"/><text x="${W-P.r-94}" y="${H-3}" fill="#85C1E9" font-size="7" font-family="DM Mono,monospace">MACD</text>`;
   s+=`<line x1="${W-P.r-60}" y1="${H-6}" x2="${W-P.r-48}" y2="${H-6}" stroke="#E8A87C" stroke-width="1.5" stroke-dasharray="3,2"/><text x="${W-P.r-44}" y="${H-3}" fill="#E8A87C" font-size="7" font-family="DM Mono,monospace">Signal</text>`;
