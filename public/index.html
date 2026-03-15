@@ -138,9 +138,9 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   </div>
   <!-- Category filters -->
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-    <button id="scanCat_kospi" onclick="toggleScanCat('kospi')" class="pill" style="border-color:#E8A87C30;color:#E8A87C;padding:5px 12px;font-size:11px">코스피 <span id="scanCnt_kospi">500</span></button>
-    <button id="scanCat_kosdaq" onclick="toggleScanCat('kosdaq')" class="pill" style="border-color:#85C1E930;color:#85C1E9;padding:5px 12px;font-size:11px">코스닥 <span id="scanCnt_kosdaq">500</span></button>
-    <button id="scanCat_us" onclick="toggleScanCat('us')" class="pill" style="border-color:#C39BD330;color:#C39BD3;padding:5px 12px;font-size:11px">미국 80</button>
+    <button id="scanCat_kospi" onclick="toggleScanCat('kospi')" class="pill" style="border-color:#E8A87C30;color:#E8A87C;padding:5px 12px;font-size:11px">코스피 <span id="scanCnt_kospi">1000</span></button>
+    <button id="scanCat_kosdaq" onclick="toggleScanCat('kosdaq')" class="pill" style="border-color:#85C1E930;color:#85C1E9;padding:5px 12px;font-size:11px">코스닥 <span id="scanCnt_kosdaq">1000</span></button>
+    <button id="scanCat_us" onclick="toggleScanCat('us')" class="pill" style="border-color:#C39BD330;color:#C39BD3;padding:5px 12px;font-size:11px">미국 300</button>
     <button id="scanCat_crypto" onclick="toggleScanCat('crypto')" class="pill" style="border-color:#7DCEA030;color:#7DCEA0;padding:5px 12px;font-size:11px">암호화폐 20</button>
     <span style="border-left:1px solid #1a1a24;height:20px;margin:0 4px"></span>
     <select id="scanDays" onchange="saveScanDays();filterScanResults()" style="background:#0e0e14;color:#C9A96E;border:1px solid #C9A96E30;border-radius:6px;padding:4px 8px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer">
@@ -2037,6 +2037,7 @@ function svgOBV(data){
 // ═══════ STOCK UNIVERSE (dynamic KOSPI/KOSDAQ + hardcoded US/crypto) ═══════
 const _U={kospi:[],kosdaq:[],
 us:[
+// S&P 500 Top + Growth + Popular — 300 stocks
 {s:"AAPL",n:"Apple"},{s:"MSFT",n:"Microsoft"},{s:"NVDA",n:"NVIDIA"},{s:"GOOGL",n:"Alphabet"},{s:"AMZN",n:"Amazon"},{s:"META",n:"Meta"},{s:"TSLA",n:"Tesla"},{s:"BRK-B",n:"Berkshire"},{s:"AVGO",n:"Broadcom"},{s:"JPM",n:"JP Morgan"},
 {s:"LLY",n:"Eli Lilly"},{s:"V",n:"Visa"},{s:"UNH",n:"UnitedHealth"},{s:"MA",n:"Mastercard"},{s:"XOM",n:"ExxonMobil"},{s:"COST",n:"Costco"},{s:"HD",n:"Home Depot"},{s:"PG",n:"P&G"},{s:"ABBV",n:"AbbVie"},{s:"WMT",n:"Walmart"},
 {s:"NFLX",n:"Netflix"},{s:"BAC",n:"BofA"},{s:"CRM",n:"Salesforce"},{s:"KO",n:"Coca-Cola"},{s:"AMD",n:"AMD"},{s:"MRK",n:"Merck"},{s:"CVX",n:"Chevron"},{s:"PEP",n:"PepsiCo"},{s:"ORCL",n:"Oracle"},{s:"CSCO",n:"Cisco"},
@@ -2044,7 +2045,32 @@ us:[
 {s:"TXN",n:"Texas Inst"},{s:"BKNG",n:"Booking"},{s:"AXP",n:"AmEx"},{s:"AMGN",n:"Amgen"},{s:"GS",n:"Goldman Sachs"},{s:"BA",n:"Boeing"},{s:"PFE",n:"Pfizer"},{s:"UBER",n:"Uber"},{s:"AMAT",n:"Applied Materials"},{s:"LMT",n:"Lockheed Martin"},
 {s:"PLTR",n:"Palantir"},{s:"PANW",n:"Palo Alto"},{s:"INTC",n:"Intel"},{s:"LRCX",n:"Lam Research"},{s:"KLAC",n:"KLA"},{s:"COIN",n:"Coinbase"},{s:"SOFI",n:"SoFi"},{s:"SQ",n:"Block"},{s:"SHOP",n:"Shopify"},{s:"MRVL",n:"Marvell"},
 {s:"ON",n:"ON Semi"},{s:"CRWD",n:"CrowdStrike"},{s:"DDOG",n:"Datadog"},{s:"NET",n:"Cloudflare"},{s:"ARM",n:"ARM"},{s:"MU",n:"Micron"},{s:"SMCI",n:"Super Micro"},{s:"SNOW",n:"Snowflake"},{s:"ROKU",n:"Roku"},{s:"SNAP",n:"Snap"},
-{s:"SBUX",n:"Starbucks"},{s:"LOW",n:"Lowes"},{s:"HON",n:"Honeywell"},{s:"BMY",n:"Bristol-Myers"},{s:"GILD",n:"Gilead"},{s:"MDLZ",n:"Mondelez"},{s:"SCHW",n:"Schwab"},{s:"ADI",n:"Analog"},{s:"NEE",n:"NextEra"},{s:"T",n:"AT&T"}
+{s:"SBUX",n:"Starbucks"},{s:"LOW",n:"Lowes"},{s:"HON",n:"Honeywell"},{s:"BMY",n:"Bristol-Myers"},{s:"GILD",n:"Gilead"},{s:"MDLZ",n:"Mondelez"},{s:"SCHW",n:"Schwab"},{s:"ADI",n:"Analog"},{s:"NEE",n:"NextEra"},{s:"T",n:"AT&T"},
+// 81-160
+{s:"TMO",n:"ThermoFisher"},{s:"ACN",n:"Accenture"},{s:"LIN",n:"Linde"},{s:"JNJ",n:"J&J"},{s:"VZ",n:"Verizon"},{s:"INTU",n:"Intuit"},{s:"WFC",n:"Wells Fargo"},{s:"PM",n:"Philip Morris"},{s:"RTX",n:"RTX"},{s:"SPGI",n:"S&P Global"},
+{s:"BLK",n:"BlackRock"},{s:"MS",n:"Morgan Stanley"},{s:"UNP",n:"Union Pacific"},{s:"DE",n:"Deere"},{s:"SYK",n:"Stryker"},{s:"ELV",n:"Elevance"},{s:"ADP",n:"ADP"},{s:"VRTX",n:"Vertex"},{s:"CB",n:"Chubb"},{s:"MMC",n:"Marsh McLennan"},
+{s:"CI",n:"Cigna"},{s:"SO",n:"Southern Co"},{s:"DUK",n:"Duke Energy"},{s:"ICE",n:"ICE"},{s:"CME",n:"CME Group"},{s:"PLD",n:"Prologis"},{s:"CL",n:"Colgate"},{s:"MCO",n:"Moodys"},{s:"ITW",n:"Illinois Tool"},{s:"USB",n:"US Bancorp"},
+{s:"EOG",n:"EOG Resources"},{s:"SLB",n:"Schlumberger"},{s:"EMR",n:"Emerson"},{s:"APD",n:"Air Products"},{s:"NOC",n:"Northrop"},{s:"GD",n:"General Dynamics"},{s:"FDX",n:"FedEx"},{s:"UPS",n:"UPS"},{s:"PSA",n:"Public Storage"},{s:"TGT",n:"Target"},
+{s:"ETN",n:"Eaton"},{s:"REGN",n:"Regeneron"},{s:"ZTS",n:"Zoetis"},{s:"PNC",n:"PNC"},{s:"TFC",n:"Truist"},{s:"BDX",n:"Becton"},{s:"CSX",n:"CSX"},{s:"NSC",n:"Norfolk Southern"},{s:"ORLY",n:"OReilly"},{s:"AZO",n:"AutoZone"},
+{s:"MNST",n:"Monster Bev"},{s:"FTNT",n:"Fortinet"},{s:"KDP",n:"Keurig Dr Pepper"},{s:"CTAS",n:"Cintas"},{s:"HCA",n:"HCA Health"},{s:"PCAR",n:"PACCAR"},{s:"IDXX",n:"IDEXX"},{s:"CARR",n:"Carrier"},{s:"ROP",n:"Roper"},{s:"FAST",n:"Fastenal"},
+{s:"MSCI",n:"MSCI"},{s:"ODFL",n:"Old Dominion"},{s:"AJG",n:"Arthur Gallagher"},{s:"NXPI",n:"NXP Semi"},{s:"MCHP",n:"Microchip"},{s:"TEL",n:"TE Connectivity"},{s:"KMB",n:"Kimberly-Clark"},{s:"DXCM",n:"Dexcom"},{s:"CPRT",n:"Copart"},{s:"PAYX",n:"Paychex"},
+// 161-240
+{s:"EA",n:"EA"},{s:"LULU",n:"Lululemon"},{s:"TTD",n:"TradeDesk"},{s:"WDAY",n:"Workday"},{s:"ZS",n:"Zscaler"},{s:"TEAM",n:"Atlassian"},{s:"HUBS",n:"HubSpot"},{s:"BILL",n:"Bill.com"},{s:"VEEV",n:"Veeva"},{s:"ANSS",n:"Ansys"},
+{s:"ABNB",n:"Airbnb"},{s:"DASH",n:"DoorDash"},{s:"RBLX",n:"Roblox"},{s:"U",n:"Unity"},{s:"PATH",n:"UiPath"},{s:"RIVN",n:"Rivian"},{s:"LCID",n:"Lucid"},{s:"NIO",n:"NIO"},{s:"XPEV",n:"XPeng"},{s:"LI",n:"Li Auto"},
+{s:"ENPH",n:"Enphase"},{s:"SEDG",n:"SolarEdge"},{s:"FSLR",n:"First Solar"},{s:"PLUG",n:"Plug Power"},{s:"RUN",n:"Sunrun"},{s:"MRNA",n:"Moderna"},{s:"BNTX",n:"BioNTech"},{s:"CRSP",n:"CRISPR"},{s:"EDIT",n:"Editas"},{s:"NTLA",n:"Intellia"},
+{s:"PYPL",n:"PayPal"},{s:"TWLO",n:"Twilio"},{s:"HOOD",n:"Robinhood"},{s:"AFRM",n:"Affirm"},{s:"UPST",n:"Upstart"},{s:"MELI",n:"MercadoLibre"},{s:"SE",n:"Sea Ltd"},{s:"GRAB",n:"Grab"},{s:"BABA",n:"Alibaba"},{s:"JD",n:"JD.com"},
+{s:"PDD",n:"PDD Holdings"},{s:"BIDU",n:"Baidu"},{s:"TSM",n:"TSMC"},{s:"ASML",n:"ASML"},{s:"SNPS",n:"Synopsys"},{s:"CDNS",n:"Cadence"},{s:"WOLF",n:"Wolfspeed"},{s:"ACLS",n:"Axcelis"},{s:"AEHR",n:"Aehr Test"},{s:"CAMT",n:"Camtek"},
+{s:"WBD",n:"Warner Bros"},{s:"PARA",n:"Paramount"},{s:"CMCSA",n:"Comcast"},{s:"CHTR",n:"Charter"},{s:"TMUS",n:"T-Mobile"},{s:"AMT",n:"American Tower"},{s:"CCI",n:"Crown Castle"},{s:"EQIX",n:"Equinix"},{s:"DLR",n:"Digital Realty"},{s:"O",n:"Realty Income"},
+{s:"SPG",n:"Simon Property"},{s:"WELL",n:"Welltower"},{s:"ARE",n:"Alexandria RE"},{s:"EXR",n:"Extra Space"},{s:"MAA",n:"Mid-America"},{s:"AVB",n:"AvalonBay"},{s:"EQR",n:"Equity Residential"},{s:"INVH",n:"Invitation Homes"},{s:"VTR",n:"Ventas"},{s:"HST",n:"Host Hotels"},
+// 241-300
+{s:"F",n:"Ford"},{s:"GM",n:"GM"},{s:"STLA",n:"Stellantis"},{s:"HMC",n:"Honda"},{s:"TM",n:"Toyota"},{s:"DAL",n:"Delta Air"},{s:"UAL",n:"United Airlines"},{s:"AAL",n:"American Airlines"},{s:"LUV",n:"Southwest"},{s:"CCL",n:"Carnival"},
+{s:"RCL",n:"Royal Caribbean"},{s:"MAR",n:"Marriott"},{s:"HLT",n:"Hilton"},{s:"WYNN",n:"Wynn"},{s:"MGM",n:"MGM Resorts"},{s:"NKE",n:"Nike"},{s:"LEVI",n:"Levis"},{s:"RL",n:"Ralph Lauren"},{s:"TPR",n:"Tapestry"},{s:"CPNG",n:"Coupang"},
+{s:"W",n:"Wayfair"},{s:"ETSY",n:"Etsy"},{s:"EBAY",n:"eBay"},{s:"CHWY",n:"Chewy"},{s:"DKS",n:"Dicks Sporting"},{s:"ROST",n:"Ross Stores"},{s:"TJX",n:"TJ Maxx"},{s:"DLTR",n:"Dollar Tree"},{s:"DG",n:"Dollar General"},{s:"KR",n:"Kroger"},
+{s:"SYY",n:"Sysco"},{s:"HSY",n:"Hershey"},{s:"GIS",n:"General Mills"},{s:"K",n:"Kellanova"},{s:"CAG",n:"Conagra"},{s:"TSN",n:"Tyson"},{s:"HRL",n:"Hormel"},{s:"MO",n:"Altria"},{s:"BTI",n:"British Tobacco"},{s:"STZ",n:"Constellation"},
+{s:"DEO",n:"Diageo"},{s:"BUD",n:"AB InBev"},{s:"EL",n:"Estee Lauder"},{s:"CELH",n:"Celsius"},{s:"DOCS",n:"Doximity"},{s:"DOCU",n:"DocuSign"},{s:"ZM",n:"Zoom"},{s:"OKTA",n:"Okta"},{s:"MDB",n:"MongoDB"},{s:"ESTC",n:"Elastic"},
+{s:"CFLT",n:"Confluent"},{s:"S",n:"SentinelOne"},{s:"GTLB",n:"GitLab"},{s:"IOT",n:"Samsara"},{s:"AI",n:"C3.ai"},{s:"BBAI",n:"BigBear.ai"},{s:"IONQ",n:"IonQ"},{s:"RGTI",n:"Rigetti"},{s:"SOUN",n:"SoundHound"},{s:"ASTS",n:"AST SpaceMobile"},
+{s:"DUOL",n:"Duolingo"},{s:"APP",n:"AppLovin"},{s:"TOST",n:"Toast"},{s:"PINS",n:"Pinterest"},{s:"SPOT",n:"Spotify"},{s:"LYFT",n:"Lyft"},{s:"ZI",n:"ZoomInfo"},{s:"FOUR",n:"Shift4"},{s:"GLBE",n:"Global-E Online"},{s:"CAVA",n:"Cava Group"},
+{s:"BIRK",n:"Birkenstock"},{s:"CART",n:"Instacart"},{s:"RDDT",n:"Reddit"},{s:"IBKR",n:"Interactive Brokers"},{s:"MSTR",n:"MicroStrategy"},{s:"RIOT",n:"Riot Platforms"},{s:"MARA",n:"Marathon Digital"},{s:"CLSK",n:"CleanSpark"},{s:"OPEN",n:"Opendoor"},{s:"LAZR",n:"Luminar"}
 ],
 crypto:[
 {s:"BTC-USD",n:"Bitcoin"},{s:"ETH-USD",n:"Ethereum"},{s:"SOL-USD",n:"Solana"},{s:"BNB-USD",n:"BNB"},{s:"XRP-USD",n:"Ripple"},{s:"ADA-USD",n:"Cardano"},{s:"DOGE-USD",n:"Dogecoin"},{s:"AVAX-USD",n:"Avalanche"},{s:"DOT-USD",n:"Polkadot"},{s:"LINK-USD",n:"Chainlink"},
@@ -2072,8 +2098,8 @@ async function loadKRStocks(){
   }
   try{
     const [kpResp,kdResp]=await Promise.all([
-      fetch("/api/universe?market=kospi&count=500"),
-      fetch("/api/universe?market=kosdaq&count=500")
+      fetch("/api/universe?market=kospi&count=1000"),
+      fetch("/api/universe?market=kosdaq&count=1000")
     ]);
     const kp=await kpResp.json(),kd=await kdResp.json();
     if(kp.stocks?.length>50&&kd.stocks?.length>50){
@@ -2182,7 +2208,7 @@ async function runScan(){
   document.getElementById("scanResults").innerHTML="";
 
   const allResults=[];
-  const batchSize=6;
+  const batchSize=8;
   const scanList=getScanUniverse();
   const totalBatches=Math.ceil(scanList.length/batchSize);
 
