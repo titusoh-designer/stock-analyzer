@@ -29,16 +29,23 @@ export default async function handler(req, res) {
         const endDate = new Date().toISOString().slice(0, 10).replace(/-/g, "");
         const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${endDate}&timeframe=day`;
         const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
-        // ★ Decode as EUC-KR
         const buffer = await resp.arrayBuffer();
         let text;
         try { text = new TextDecoder('euc-kr').decode(buffer); }
         catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buffer); }
-        const rows = text.match(/\["(\d{8})","(\d+)","(\d+)","(\d+)","(\d+)","(\d+)"\]/g) || [];
-        ohlcv = rows.map(r => {
-          const m = r.match(/"(\d{8})","(\d+)","(\d+)","(\d+)","(\d+)","(\d+)"/);
-          return m ? { date: m[1].slice(0,4)+"-"+m[1].slice(4,6)+"-"+m[1].slice(6), open:+m[2], high:+m[3], low:+m[4], close:+m[5], volume:+m[6] } : null;
-        }).filter(Boolean);
+        // Naver uses single quotes: ['20240315', '69800', ...]
+        // Parse all bracket rows, strip quotes/spaces
+        const rowRegex = /\[([^\]]+)\]/g;
+        let rmatch;
+        while ((rmatch = rowRegex.exec(text)) !== null) {
+          const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
+          if (vals.length >= 6 && /^\d{8}$/.test(vals[0]) && +vals[4] > 0) {
+            ohlcv.push({
+              date: vals[0].slice(0,4)+"-"+vals[0].slice(4,6)+"-"+vals[0].slice(6),
+              open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5]
+            });
+          }
+        }
         currency = "KRW";
         if (ohlcv.length) currentPrice = ohlcv[ohlcv.length - 1].close;
       } else {
@@ -124,7 +131,7 @@ export default async function handler(req, res) {
 
         if (ma20 && ma20p && cls[i - 1] < ma20p && cls[i] > ma20 && bullCandle) buys.push("MA↑");
 
-        if (buys.length >= 3) {
+        if (buys.length >= 2) {
           starSignals.push({
             date: ohlcv[i].date,
             signals: buys,
@@ -149,7 +156,9 @@ export default async function handler(req, res) {
           change: +change,
           starSignals,
           bestSignal: starSignals.reduce((a, b) => b.count > a.count ? b : a),
-          mini
+          mini,
+          dataLen: ohlcv.length
+        });
         });
       }
     } catch (e) {
