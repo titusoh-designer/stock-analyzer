@@ -28,8 +28,12 @@ export default async function handler(req, res) {
         const startDate = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
         const endDate = new Date().toISOString().slice(0, 10).replace(/-/g, "");
         const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${endDate}&timeframe=day`;
-        const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-        const text = await resp.text();
+        const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+        // ★ Decode as EUC-KR
+        const buffer = await resp.arrayBuffer();
+        let text;
+        try { text = new TextDecoder('euc-kr').decode(buffer); }
+        catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buffer); }
         const rows = text.match(/\["(\d{8})","(\d+)","(\d+)","(\d+)","(\d+)","(\d+)"\]/g) || [];
         ohlcv = rows.map(r => {
           const m = r.match(/"(\d{8})","(\d+)","(\d+)","(\d+)","(\d+)","(\d+)"/);

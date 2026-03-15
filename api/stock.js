@@ -210,8 +210,12 @@ export default async function handler(req, res) {
       const end = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const startDate = new Date(Date.now() - (tf === "week" ? 1460 : tf === "month" ? 3650 : 600) * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
       const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${end}&timeframe=${tf}`;
-      const resp = await fetch(url);
-      const text = await resp.text();
+      const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+      // Decode as EUC-KR (Naver encoding)
+      const buf = await resp.arrayBuffer();
+      let text;
+      try { text = new TextDecoder('euc-kr').decode(buf); }
+      catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
 
       // Parse Naver's pseudo-JSON response
       const rows = text.match(/\[.*?\]/g) || [];

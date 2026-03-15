@@ -1,5 +1,5 @@
 // Vercel Serverless — Fetch KOSPI/KOSDAQ stock universe from Naver Finance
-// Returns top N stocks by market cap
+// ★ Key: Naver Finance uses EUC-KR encoding → must decode with TextDecoder
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -8,12 +8,11 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const { market, count } = req.query;
-  const mkt = market || "kospi"; // kospi or kosdaq
+  const mkt = market || "kospi";
   const limit = Math.min(parseInt(count) || 500, 800);
 
   try {
-    // Naver Finance stock list API (sorted by market cap)
-    const sosok = mkt === "kosdaq" ? "1" : "0"; // 0=KOSPI, 1=KOSDAQ
+    const sosok = mkt === "kosdaq" ? "1" : "0";
     const pageSize = 50;
     const totalPages = Math.ceil(limit / pageSize);
     const stocks = [];
@@ -22,20 +21,41 @@ export default async function handler(req, res) {
       const url = `https://finance.naver.com/sise/sise_market_sum.naver?sosok=${sosok}&page=${page}`;
       const resp = await fetch(url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Accept-Language": "ko-KR,ko;q=0.9"
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept-Language": "ko-KR,ko;q=0.9",
+          "Accept": "text/html,application/xhtml+xml"
         }
       });
-      const html = await resp.text();
 
-      // Parse stock table rows
-      const rowRegex = /<a href="\/item\/main\.naver\?code=(\d{6})"[^>]*>([^<]+)<\/a>/g;
+      // ★ Decode as EUC-KR (Naver Finance encoding)
+      const buffer = await resp.arrayBuffer();
+      let html;
+      try {
+        html = new TextDecoder('euc-kr').decode(buffer);
+      } catch (e) {
+        html = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+      }
+
+      // Parse stock links: <a href="/item/main.naver?code=005930">삼성전자</a>
+      const regex = /<a\s+href="\/item\/main\.(?:naver|nhn)\?code=(\d{6})"[^>]*>\s*([^<]+?)\s*<\/a>/g;
       let match;
-      while ((match = rowRegex.exec(html)) !== null && stocks.length < limit) {
+      while ((match = regex.exec(html)) !== null && stocks.length < limit) {
         const code = match[1];
         const name = match[2].trim();
-        if (name && code && !stocks.find(s => s.s === code)) {
+        if (name && code && name.length > 0 && !stocks.find(s => s.s === code)) {
           stocks.push({ s: code, n: name });
+        }
+      }
+
+      // Fallback: try title attribute
+      if (stocks.length === 0 && page === 1) {
+        const altRegex = /code=(\d{6})[^>]*title="([^"]+)"/g;
+        while ((match = altRegex.exec(html)) !== null && stocks.length < limit) {
+          const code = match[1];
+          const name = match[2].trim();
+          if (name && code && !stocks.find(s => s.s === code)) {
+            stocks.push({ s: code, n: name });
+          }
         }
       }
     }
