@@ -1478,46 +1478,50 @@ function svgChart(data,cp,cur,ai,stockName){
       const bullCandle=cls2[i]>data[i].open;
       const bearCandle=cls2[i]<data[i].open;
 
-      // ① Golden Cross / Dead Cross (MA5 vs MA20)
+      // ① Golden Cross / Dead Cross — require matching candle
       if(ma5s[i]!=null&&ma20s[i]!=null&&ma5s[i-1]!=null&&ma20s[i-1]!=null){
-        if(ma5s[i-1]<=ma20s[i-1]&&ma5s[i]>ma20s[i])buys.push("GC");
-        if(ma5s[i-1]>=ma20s[i-1]&&ma5s[i]<ma20s[i])sells.push("DC");
+        if(ma5s[i-1]<=ma20s[i-1]&&ma5s[i]>ma20s[i]&&bullCandle)buys.push("GC");
+        if(ma5s[i-1]>=ma20s[i-1]&&ma5s[i]<ma20s[i]&&bearCandle)sells.push("DC");
       }
 
-      // ② RSI
+      // ② RSI — require matching candle
       if(rsiS[i]!=null&&rsiS[i-1]!=null){
-        if(rsiS[i-1]<30&&rsiS[i]>=30)buys.push("RSI");
-        if(rsiS[i-1]>70&&rsiS[i]<=70)sells.push("RSI");
+        if(rsiS[i-1]<30&&rsiS[i]>=30&&bullCandle)buys.push("RSI");
+        if(rsiS[i-1]>70&&rsiS[i]<=70&&bearCandle)sells.push("RSI");
       }
 
-      // ③ MACD histogram flip
+      // ③ MACD histogram flip — require matching candle
       if(histS[i]!=null&&histS[i-1]!=null){
-        if(histS[i-1]<0&&histS[i]>=0)buys.push("MACD");
-        if(histS[i-1]>0&&histS[i]<=0)sells.push("MACD");
+        if(histS[i-1]<0&&histS[i]>=0&&bullCandle)buys.push("MACD");
+        if(histS[i-1]>0&&histS[i]<=0&&bearCandle)sells.push("MACD");
       }
 
-      // ④ BB band touch/break
-      if(bbUp[i]!=null&&bbLo[i]!=null){
-        if(cls2[i]>bbUp[i])buys.push("BB");
-        if(cls2[i]<bbLo[i])sells.push("BB");
+      // ④ BB band break — require volume 1.2x
+      if(bbUp[i]!=null&&bbLo[i]!=null&&volUp>=1.2){
+        if(cls2[i]>bbUp[i]&&bullCandle)buys.push("BB");
+        if(cls2[i]<bbLo[i]&&bearCandle)sells.push("BB");
       }
 
-      // ⑤ Price vs MA20 cross
+      // ⑤ Price vs MA20 cross — require matching candle
       if(ma20s[i]!=null&&ma20s[i-1]!=null){
         if(cls2[i-1]<ma20s[i-1]&&cls2[i]>ma20s[i]&&bullCandle)buys.push("MA↑");
         if(cls2[i-1]>ma20s[i-1]&&cls2[i]<ma20s[i]&&bearCandle)sells.push("MA↓");
       }
 
-      // Record ALL signals (no minimum threshold)
-      if(buys.length||sells.length)signals.push({i,buys,sells,volUp});
+      // ★ Only record 2+ confluence
+      if(buys.length>=2||sells.length>=2)signals.push({i,buys,sells,volUp});
     }
 
-    // Deduplicate: if same type within 3 bars, keep only the first
+    // Deduplicate: within 5 bars, keep only the strongest
     const filtered=[];
     signals.forEach(sig=>{
-      const tooClose=filtered.some(f=>Math.abs(f.i-sig.i)<3&&(
+      const nearby=filtered.findIndex(f=>Math.abs(f.i-sig.i)<5&&(
         (f.buys.length&&sig.buys.length)||(f.sells.length&&sig.sells.length)));
-      if(!tooClose)filtered.push(sig);
+      if(nearby>=0){
+        // Keep the one with more signals
+        if((sig.buys.length+sig.sells.length)>(filtered[nearby].buys.length+filtered[nearby].sells.length))
+          filtered[nearby]=sig;
+      } else filtered.push(sig);
     });
 
     // Render signals on chart
@@ -1525,68 +1529,52 @@ function svgChart(data,cp,cur,ai,stockName){
       const x=tx(sig.i);
       const d=data[sig.i];
       if(!d)return;
-      const vol=sig.volUp||1;
-      const volBonus=vol>1.5; // volume confirmation bonus
 
-      // ═══ BUY signals ═══
-      if(sig.buys.length){
+      // ═══ BUY signals (2+ only) ═══
+      if(sig.buys.length>=2){
         const n=sig.buys.length;
         const yB=ty(d.low);
         if(!isFinite(yB))return;
         const y=yB+6;
 
         if(n>=3){
-          // ★★★ STRONG CONFLUENCE — huge glowing star
           s+=`<circle cx="${x}" cy="${y+20}" r="18" fill="#4ECCA3" opacity=".15"/>`;
           s+=`<circle cx="${x}" cy="${y+20}" r="11" fill="#4ECCA3" opacity=".1"/>`;
           s+=`<polygon points="${x},${y+6} ${x-6},${y+16} ${x-11},${y+16} ${x-7},${y+23} ${x-9},${y+33} ${x},${y+27} ${x+9},${y+33} ${x+7},${y+23} ${x+11},${y+16} ${x+6},${y+16}" fill="#4ECCA3" stroke="#fff" stroke-width=".6" stroke-opacity=".4"/>`;
           s+=`<rect x="${x-28}" y="${y+36}" width="56" height="16" rx="4" fill="rgba(78,204,163,.25)" stroke="#4ECCA350"/>`;
           s+=`<text x="${x}" y="${y+47}" fill="#4ECCA3" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="middle">★매수 ${n}</text>`;
-        } else if(n===2){
-          // ▲▲ DOUBLE — medium triangle + label
+        } else {
           s+=`<circle cx="${x}" cy="${y+14}" r="12" fill="#4ECCA3" opacity=".1"/>`;
           s+=`<polygon points="${x},${y+4} ${x-8},${y+22} ${x+8},${y+22}" fill="#4ECCA3" opacity=".85" stroke="#4ECCA3" stroke-width=".8"/>`;
           s+=`<rect x="${x-22}" y="${y+24}" width="44" height="14" rx="3" fill="rgba(78,204,163,.2)"/>`;
           s+=`<text x="${x}" y="${y+34}" fill="#4ECCA3" font-size="7.5" font-weight="600" font-family="DM Mono,monospace" text-anchor="middle">${sig.buys.join("+")}</text>`;
-        } else {
-          // ▲ SINGLE — small triangle
-          const op=volBonus?".65":".4";
-          s+=`<polygon points="${x},${y+6} ${x-5},${y+18} ${x+5},${y+18}" fill="#4ECCA3" opacity="${op}"/>`;
-          if(volBonus)s+=`<text x="${x}" y="${y+26}" fill="#4ECCA3" font-size="6" font-family="DM Mono,monospace" text-anchor="middle" opacity=".5">${sig.buys[0]}</text>`;
         }
       }
 
-      // ═══ SELL signals ═══
-      if(sig.sells.length){
+      // ═══ SELL signals (2+ only) ═══
+      if(sig.sells.length>=2){
         const n=sig.sells.length;
         const yB=ty(d.high);
         if(!isFinite(yB))return;
         const y=yB-6;
 
         if(n>=3){
-          // ★★★ STRONG CONFLUENCE
           s+=`<circle cx="${x}" cy="${y-20}" r="18" fill="#E85D75" opacity=".15"/>`;
           s+=`<circle cx="${x}" cy="${y-20}" r="11" fill="#E85D75" opacity=".1"/>`;
           s+=`<polygon points="${x},${y-6} ${x-6},${y-16} ${x-11},${y-16} ${x-7},${y-23} ${x-9},${y-33} ${x},${y-27} ${x+9},${y-33} ${x+7},${y-23} ${x+11},${y-16} ${x+6},${y-16}" fill="#E85D75" stroke="#fff" stroke-width=".6" stroke-opacity=".4"/>`;
           s+=`<rect x="${x-28}" y="${y-52}" width="56" height="16" rx="4" fill="rgba(232,93,117,.25)" stroke="#E85D7550"/>`;
           s+=`<text x="${x}" y="${y-41}" fill="#E85D75" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="middle">★매도 ${n}</text>`;
-        } else if(n===2){
-          // ▼▼ DOUBLE
+        } else {
           s+=`<circle cx="${x}" cy="${y-14}" r="12" fill="#E85D75" opacity=".1"/>`;
           s+=`<polygon points="${x},${y-4} ${x-8},${y-22} ${x+8},${y-22}" fill="#E85D75" opacity=".85" stroke="#E85D75" stroke-width=".8"/>`;
           s+=`<rect x="${x-22}" y="${y-38}" width="44" height="14" rx="3" fill="rgba(232,93,117,.2)"/>`;
           s+=`<text x="${x}" y="${y-28}" fill="#E85D75" font-size="7.5" font-weight="600" font-family="DM Mono,monospace" text-anchor="middle">${sig.sells.join("+")}</text>`;
-        } else {
-          // ▼ SINGLE
-          const op=volBonus?".65":".4";
-          s+=`<polygon points="${x},${y-6} ${x-5},${y-18} ${x+5},${y-18}" fill="#E85D75" opacity="${op}"/>`;
-          if(volBonus)s+=`<text x="${x}" y="${y-22}" fill="#E85D75" font-size="6" font-family="DM Mono,monospace" text-anchor="middle" opacity=".5">${sig.sells[0]}</text>`;
         }
       }
     });
 
     // Signal legend
-    s+=`<text x="${P.l+4}" y="${H-16}" fill="#888" font-size="7" font-family="DM Mono,monospace" opacity=".5">▲매수 ▼매도 | GC=골든 DC=데드 RSI MACD BB MA↑↓ | ★=강력합류(3+) | 거래량 동반 시 강조</text>`;
+    s+=`<text x="${P.l+4}" y="${H-16}" fill="#888" font-size="7" font-family="DM Mono,monospace" opacity=".5">▲매수 ▼매도 (2+합류+캔들확인) GC DC RSI MACD BB MA↑↓ ★=3+강력합류</text>`;
   }
 
   // Current price
