@@ -1260,26 +1260,62 @@ function svgChart(data,cp,cur,ai,stockName){
   return s;
 }
 
-// ═══════ RSI CHART ═══════
+// ═══════ RSI CHART (with price overlay + divergence) ═══════
 function svgRSI(data){
   const cls=data.map(d=>d.close||0).filter(v=>v>0);if(cls.length<15)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI: 15봉 이상 필요</div>`;
   const n=14,rs=[];for(let e=n;e<=cls.length;e++){let g=0,l=0;for(let i=1;i<=n;i++){const d=cls[e-n+i]-cls[e-n+i-1];d>0?g+=d:l+=Math.abs(d);}let ag=g/n,al=l/n;for(let i=n+1;i<e;i++){const d=cls[i]-cls[i-1];ag=(ag*(n-1)+(d>0?d:0))/n;al=(al*(n-1)+(d<0?Math.abs(d):0))/n;}const rv=al===0?100:+(100-100/(1+ag/al)).toFixed(1);if(isFinite(rv))rs.push(rv);}
   if(rs.length<2)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI 계산 불가</div>`;
-  const W=900,H=100,P={t:18,r:92,b:12,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const W=900,H=110,P={t:18,r:92,b:14,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const tx=i=>P.l+(i/(rs.length-1||1))*cw,ty=v=>P.t+(1-v/100)*ch;
   const lv=rs[rs.length-1],rc=lv>70?"#E85D75":lv<30?"#4ECCA3":"#C9A96E";
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:110px">`;
-  s+=`<text x="${P.l+2}" y="12" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">RSI(14)</text><text x="${W-P.r}" y="12" fill="${rc}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${lv}</text>`;
+
+  // Price normalized to RSI chart Y range
+  const pSlice=cls.slice(cls.length-rs.length);
+  const pMin=Math.min(...pSlice),pMax=Math.max(...pSlice),pRng=pMax-pMin||1;
+  const tyP=v=>P.t+(1-(v-pMin)/pRng)*ch;
+
+  // Divergence detection (last 20 bars)
+  const dLen=Math.min(20,rs.length);
+  const rsiUp=rs[rs.length-1]>rs[rs.length-dLen];
+  const priceUp=pSlice[pSlice.length-1]>pSlice[pSlice.length-dLen];
+  const divergence=rsiUp!==priceUp;
+  const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ RSI↓)":"⚠ 강세 다이버전스 (가격↓ RSI↑)"):"";
+  const divCol=divergence?(priceUp?"#E85D75":"#4ECCA3"):"#666";
+
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:120px">`;
+  // Title
+  s+=`<text x="${P.l+2}" y="12" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">RSI(14)</text>`;
+  s+=`<text x="${P.l+50}" y="12" fill="${rc}" font-size="9" font-weight="700" font-family="DM Mono,monospace">${lv}</text>`;
+  if(divergence)s+=`<text x="${W-P.r}" y="12" fill="${divCol}" font-size="8" font-weight="500" font-family="DM Mono,monospace" text-anchor="end">${divText}</text>`;
+
+  // Zones
   s+=`<rect x="${P.l}" y="${ty(100)}" width="${cw}" height="${ty(70)-ty(100)}" fill="rgba(78,204,163,.03)"/><rect x="${P.l}" y="${ty(30)}" width="${cw}" height="${ty(0)-ty(30)}" fill="rgba(232,93,117,.03)"/>`;
   [30,50,70].forEach(v=>{s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#fff" stroke-opacity="${v===50?".05":".07"}" stroke-dasharray="3,4"/><text x="${W-P.r+6}" y="${ty(v)+3}" fill="${v>=70?"#E85D75":v<=30?"#4ECCA3":"#555"}" font-size="7" font-family="DM Mono,monospace">${v}</text>`;});
+
+  // Divergence zone highlight
+  if(divergence){
+    const startX=tx(Math.max(0,rs.length-dLen));
+    s+=`<rect x="${startX}" y="${P.t}" width="${tx(rs.length-1)-startX}" height="${ch}" fill="${divCol}" opacity=".05" rx="3"/>`;
+  }
+
+  // Price overlay (normalized)
+  const pPts=pSlice.map((v,i)=>{const y=tyP(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  if(pPts.length>1)s+=`<polyline points="${pPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width=".8" opacity=".3" stroke-dasharray="4,2"/>`;
+
+  // RSI line
   const rPts=rs.map((v,i)=>{const y=ty(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(rPts.length>1)s+=`<polyline points="${rPts.join(" ")}" fill="none" stroke="${rc}" stroke-width="1.3" stroke-linecap="round"/>`;
   const lastY=ty(lv);if(isFinite(lastY))s+=`<circle cx="${tx(rs.length-1)}" cy="${lastY}" r="2.5" fill="${rc}"/>`;
+
+  // Legend
+  s+=`<line x1="${W-P.r-100}" y1="${H-5}" x2="${W-P.r-88}" y2="${H-5}" stroke="${rc}" stroke-width="1.5"/><text x="${W-P.r-84}" y="${H-2}" fill="${rc}" font-size="7" font-family="DM Mono,monospace">RSI</text>`;
+  s+=`<line x1="${W-P.r-50}" y1="${H-5}" x2="${W-P.r-38}" y2="${H-5}" stroke="#C9A96E" stroke-width=".8" stroke-dasharray="3,2"/><text x="${W-P.r-34}" y="${H-2}" fill="#C9A96E" font-size="7" font-family="DM Mono,monospace">가격</text>`;
+
   s+=`</svg>`;
   return s;
 }
 
-// ═══════ MACD CHART ═══════
+// ═══════ MACD CHART (with price overlay + divergence) ═══════
 function svgMACD(data){
   const cls=data.map(d=>d.close||0).filter(v=>v>0);if(cls.length<35)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">MACD: 35봉 이상 필요</div>`;
   const ema=(d,n)=>{const k=2/(n+1);let e=[d[0]];for(let i=1;i<d.length;i++)e.push(d[i]*k+e[i-1]*(1-k));return e;};
@@ -1287,21 +1323,59 @@ function svgMACD(data){
   const slR=ema(ml.slice(26),9),sl=Array(34).fill(null).concat(slR);
   const hl=ml.map((v,i)=>sl[i]!=null?v-sl[i]:null);
   const st=26,m=ml.slice(st),sg=sl.slice(st),hi=hl.slice(st);
-  const W=900,H=100,P={t:18,r:92,b:12,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const W=900,H=110,P={t:18,r:92,b:14,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const aV=[...m,...sg.filter(v=>v!=null),...hi.filter(v=>v!=null)];
   const vM=Math.max(...aV.map(Math.abs))*1.1||1;
   const tx=i=>P.l+(i/(m.length-1||1))*cw,ty=v=>P.t+ch/2-(v/vM)*(ch/2);
   const bw=Math.max(1,Math.min(5,cw/m.length*.65));
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:110px">`;
-  s+=`<text x="${P.l+2}" y="12" fill="#C39BD3" font-size="8" font-weight="600" font-family="DM Mono,monospace">MACD(12,26,9)</text><text x="${W-P.r}" y="12" fill="${hi[hi.length-1]>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${m[m.length-1]?.toFixed(2)||"-"}</text>`;
+
+  // Price normalized to MACD chart Y range
+  const pSlice=cls.slice(cls.length-m.length);
+  const pMin=Math.min(...pSlice),pMax=Math.max(...pSlice),pRng=pMax-pMin||1;
+  const tyP=v=>P.t+(1-(v-pMin)/pRng)*ch;
+
+  // Divergence detection (MACD vs price, last 20 bars)
+  const dLen=Math.min(20,m.length);
+  const macdUp=m[m.length-1]>m[m.length-dLen];
+  const priceUp=pSlice[pSlice.length-1]>pSlice[pSlice.length-dLen];
+  const divergence=macdUp!==priceUp;
+  const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ MACD↓)":"⚠ 강세 다이버전스 (가격↓ MACD↑)"):"";
+  const divCol=divergence?(priceUp?"#E85D75":"#4ECCA3"):"#666";
+
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:120px">`;
+  // Title
+  s+=`<text x="${P.l+2}" y="12" fill="#C39BD3" font-size="8" font-weight="600" font-family="DM Mono,monospace">MACD(12,26,9)</text>`;
+  s+=`<text x="${P.l+90}" y="12" fill="${hi[hi.length-1]>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace">${m[m.length-1]?.toFixed(2)||"-"}</text>`;
+  if(divergence)s+=`<text x="${W-P.r}" y="12" fill="${divCol}" font-size="8" font-weight="500" font-family="DM Mono,monospace" text-anchor="end">${divText}</text>`;
+
   s+=`<line x1="${P.l}" y1="${ty(0)}" x2="${W-P.r}" y2="${ty(0)}" stroke="#fff" stroke-opacity=".06"/>`;
+
+  // Divergence zone highlight
+  if(divergence){
+    const startX=tx(Math.max(0,m.length-dLen));
+    s+=`<rect x="${startX}" y="${P.t}" width="${tx(m.length-1)-startX}" height="${ch}" fill="${divCol}" opacity=".05" rx="3"/>`;
+  }
+
+  // Price overlay (normalized)
+  const pPts=pSlice.map((v,i)=>{const y=tyP(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  if(pPts.length>1)s+=`<polyline points="${pPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width=".8" opacity=".3" stroke-dasharray="4,2"/>`;
+
+  // Histogram
   hi.forEach((v,i)=>{if(v==null||!isFinite(v))return;const x=tx(i),y0=ty(0),y1=ty(v);if(!isFinite(y1))return;s+=`<rect x="${x-bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.abs(y1-y0)||1}" fill="${v>=0?"#4ECCA3":"#E85D75"}" opacity=".45" rx=".5"/>`;});
+
+  // MACD line
   const mPts=m.map((v,i)=>{const y=ty(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(mPts.length>1)s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#85C1E9" stroke-width="1.2"/>`;
+
+  // Signal line
   const sP=sg.map((v,i)=>{if(v==null)return null;const y=ty(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(sP.length>1)s+=`<polyline points="${sP.join(" ")}" fill="none" stroke="#E8A87C" stroke-width="1.2" stroke-dasharray="3,2"/>`;
-  s+=`<line x1="${W-P.r-110}" y1="${H-6}" x2="${W-P.r-98}" y2="${H-6}" stroke="#85C1E9" stroke-width="1.5"/><text x="${W-P.r-94}" y="${H-3}" fill="#85C1E9" font-size="7" font-family="DM Mono,monospace">MACD</text>`;
-  s+=`<line x1="${W-P.r-60}" y1="${H-6}" x2="${W-P.r-48}" y2="${H-6}" stroke="#E8A87C" stroke-width="1.5" stroke-dasharray="3,2"/><text x="${W-P.r-44}" y="${H-3}" fill="#E8A87C" font-size="7" font-family="DM Mono,monospace">Signal</text>`;
+
+  // Legend
+  s+=`<line x1="${W-P.r-160}" y1="${H-5}" x2="${W-P.r-148}" y2="${H-5}" stroke="#85C1E9" stroke-width="1.5"/><text x="${W-P.r-144}" y="${H-2}" fill="#85C1E9" font-size="7" font-family="DM Mono,monospace">MACD</text>`;
+  s+=`<line x1="${W-P.r-108}" y1="${H-5}" x2="${W-P.r-96}" y2="${H-5}" stroke="#E8A87C" stroke-width="1.5" stroke-dasharray="3,2"/><text x="${W-P.r-92}" y="${H-2}" fill="#E8A87C" font-size="7" font-family="DM Mono,monospace">Signal</text>`;
+  s+=`<line x1="${W-P.r-56}" y1="${H-5}" x2="${W-P.r-44}" y2="${H-5}" stroke="#C9A96E" stroke-width=".8" stroke-dasharray="3,2"/><text x="${W-P.r-40}" y="${H-2}" fill="#C9A96E" font-size="7" font-family="DM Mono,monospace">가격</text>`;
+
   s+=`</svg>`;
   return s;
 }
