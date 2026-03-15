@@ -9,7 +9,7 @@ export default async function handler(req, res) {
 
   const { market, count } = req.query;
   const mkt = market || "kospi";
-  const limit = Math.min(parseInt(count) || 500, 800);
+  const limit = Math.min(parseInt(count) || 1000, 1200);
 
   try {
     const sosok = mkt === "kosdaq" ? "1" : "0";

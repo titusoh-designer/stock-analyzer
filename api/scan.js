@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
   const results = [];
 
-  for (const sym of symbols.slice(0, 8)) { // max 8 per batch
+  for (const sym of symbols.slice(0, 10)) { // max 10 per batch
     try {
       const source = sym.source || "yahoo";
       const ticker = sym.symbol;
