@@ -1279,14 +1279,14 @@ function svgRSI(data){
   const rsiUp=rs[rs.length-1]>rs[rs.length-dLen];
   const priceUp=pSlice[pSlice.length-1]>pSlice[pSlice.length-dLen];
   const divergence=rsiUp!==priceUp;
-  const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ RSI↓)":"⚠ 강세 다이버전스 (가격↓ RSI↑)"):"";
-  const divCol=divergence?(priceUp?"#E85D75":"#4ECCA3"):"#666";
+  const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ RSI↓)":"⚠ 강세 다이버전스 (가격↓ RSI↑)"):"정합 (추세 확인)";
+  const divCol=divergence?(priceUp?"#E85D75":"#4ECCA3"):"#555";
 
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:120px">`;
   // Title
   s+=`<text x="${P.l+2}" y="12" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">RSI(14)</text>`;
   s+=`<text x="${P.l+50}" y="12" fill="${rc}" font-size="9" font-weight="700" font-family="DM Mono,monospace">${lv}</text>`;
-  if(divergence)s+=`<text x="${W-P.r}" y="12" fill="${divCol}" font-size="8" font-weight="500" font-family="DM Mono,monospace" text-anchor="end">${divText}</text>`;
+  s+=`<text x="${W-P.r}" y="12" fill="${divCol}" font-size="8" font-weight="500" font-family="DM Mono,monospace" text-anchor="end">${divText}</text>`;
 
   // Zones
   s+=`<rect x="${P.l}" y="${ty(100)}" width="${cw}" height="${ty(70)-ty(100)}" fill="rgba(78,204,163,.03)"/><rect x="${P.l}" y="${ty(30)}" width="${cw}" height="${ty(0)-ty(30)}" fill="rgba(232,93,117,.03)"/>`;
@@ -1339,14 +1339,14 @@ function svgMACD(data){
   const macdUp=m[m.length-1]>m[m.length-dLen];
   const priceUp=pSlice[pSlice.length-1]>pSlice[pSlice.length-dLen];
   const divergence=macdUp!==priceUp;
-  const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ MACD↓)":"⚠ 강세 다이버전스 (가격↓ MACD↑)"):"";
-  const divCol=divergence?(priceUp?"#E85D75":"#4ECCA3"):"#666";
+  const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ MACD↓)":"⚠ 강세 다이버전스 (가격↓ MACD↑)"):"정합 (추세 확인)";
+  const divCol=divergence?(priceUp?"#E85D75":"#4ECCA3"):"#555";
 
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:120px">`;
   // Title
   s+=`<text x="${P.l+2}" y="12" fill="#C39BD3" font-size="8" font-weight="600" font-family="DM Mono,monospace">MACD(12,26,9)</text>`;
   s+=`<text x="${P.l+90}" y="12" fill="${hi[hi.length-1]>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace">${m[m.length-1]?.toFixed(2)||"-"}</text>`;
-  if(divergence)s+=`<text x="${W-P.r}" y="12" fill="${divCol}" font-size="8" font-weight="500" font-family="DM Mono,monospace" text-anchor="end">${divText}</text>`;
+  s+=`<text x="${W-P.r}" y="12" fill="${divCol}" font-size="8" font-weight="500" font-family="DM Mono,monospace" text-anchor="end">${divText}</text>`;
 
   s+=`<line x1="${P.l}" y1="${ty(0)}" x2="${W-P.r}" y2="${ty(0)}" stroke="#fff" stroke-opacity=".06"/>`;
 
