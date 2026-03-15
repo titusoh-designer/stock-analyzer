@@ -41,7 +41,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "grok-3-mini-fast",
-        max_tokens: 4000,
+        max_tokens: 8000,
         temperature: 0.3,
         messages: [
           { role: "system", content: "You are a professional stock chart pattern analyst. Always respond in Korean (한국어). Always respond with valid JSON only inside ```json``` code blocks. No text outside the JSON block." },

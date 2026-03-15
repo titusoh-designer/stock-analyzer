@@ -82,6 +82,55 @@ export default async function handler(req, res) {
         interval: int,
         fetchedAt: new Date().toISOString()
       };
+
+      // ── Fundamental data (PER, PBR, market cap, etc.) ──
+      try {
+        const fUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=defaultKeyStatistics,financialData,summaryDetail,price`;
+        const fResp = await fetch(fUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+        const fJson = await fResp.json();
+        const ks = fJson?.quoteSummary?.result?.[0]?.defaultKeyStatistics || {};
+        const fd = fJson?.quoteSummary?.result?.[0]?.financialData || {};
+        const sd = fJson?.quoteSummary?.result?.[0]?.summaryDetail || {};
+        const pr = fJson?.quoteSummary?.result?.[0]?.price || {};
+        data.fundamentals = {
+          marketCap: pr.marketCap?.raw || sd.marketCap?.raw || null,
+          per: sd.trailingPE?.raw || ks.trailingPE?.raw || null,
+          forwardPer: sd.forwardPE?.raw || ks.forwardPE?.raw || null,
+          pbr: sd.priceToBook?.raw || ks.priceToBook?.raw || null,
+          eps: fd.revenuePerShare?.raw || null,
+          dividendYield: sd.dividendYield?.raw || null,
+          beta: sd.beta?.raw || ks.beta?.raw || null,
+          fiftyTwoWeekHigh: sd.fiftyTwoWeekHigh?.raw || null,
+          fiftyTwoWeekLow: sd.fiftyTwoWeekLow?.raw || null,
+          shortRatio: ks.shortRatio?.raw || null,
+          targetMeanPrice: fd.targetMeanPrice?.raw || null,
+          recommendationMean: fd.recommendationMean?.raw || null,
+          recommendationKey: fd.recommendationKey || null,
+          profitMargins: fd.profitMargins?.raw || null,
+          returnOnEquity: fd.returnOnEquity?.raw || null,
+          debtToEquity: fd.debtToEquity?.raw || null,
+        };
+      } catch (e) { data.fundamentals = null; }
+
+      // ── Weekly summary for multi-timeframe analysis ──
+      if (["1d","60m","4h","30m","15m","10m","5m","1m"].includes(interval)) {
+        try {
+          const wUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=2y&interval=1wk&includePrePost=false`;
+          const wResp = await fetch(wUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+          const wJson = await wResp.json();
+          const wResult = wJson.chart?.result?.[0];
+          if (wResult) {
+            const wTs = wResult.timestamp || [];
+            const wQ = wResult.indicators?.quote?.[0] || {};
+            data.weeklyOhlcv = wTs.slice(-52).map((ts, i) => ({
+              date: new Date(ts * 1000).toISOString().split("T")[0],
+              open: wQ.open?.[i] ?? 0, high: wQ.high?.[i] ?? 0,
+              low: wQ.low?.[i] ?? 0, close: wQ.close?.[i] ?? 0,
+              volume: wQ.volume?.[i] ?? 0
+            })).filter(d => d.close > 0);
+          }
+        } catch (e) { /* weekly fetch failed */ }
+      }
     }
 
     // ── Alpha Vantage ──
