@@ -591,7 +591,8 @@ function render(data,ai){
   <div id="chartInfoText" class="mono" style="font-size:8px;color:#444;text-align:center;margin:-12px 0 14px">마우스 휠: 줌 · 클릭&드래그: 이동 · 표시: ${o.length}봉 / 전체 ${allData.length}봉</div>
   <div style="margin-bottom:16px">
     <div id="rsiChartWrap" class="chart-box" style="margin-bottom:8px">${svgRSI(o)}</div>
-    <div id="macdChartWrap" class="chart-box" style="margin-bottom:0">${svgMACD(o)}</div>
+    <div id="macdChartWrap" class="chart-box" style="margin-bottom:8px">${svgMACD(o)}</div>
+    <div id="obvChartWrap" class="chart-box" style="margin-bottom:0">${svgOBV(o)}</div>
   </div>
   <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(95px,1fr))">
     ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"MA20",v:ma20?fp(ma20):"-",c:"#85C1E9"},{l:"MA100",v:ma100?fp(ma100):"-",c:"#C39BD3"},{l:"MA250",v:ma250?fp(ma250):"-",c:"#7DCEA0"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
@@ -627,6 +628,8 @@ function render(data,ai){
       const macdEl=document.getElementById("macdChartWrap");
       if(rsiEl)rsiEl.innerHTML=svgRSI(d);
       if(macdEl)macdEl.innerHTML=svgMACD(d);
+      const obvEl=document.getElementById("obvChartWrap");
+      if(obvEl)obvEl.innerHTML=svgOBV(d);
       // Update info text
       const infoEl=document.getElementById("chartInfoText");
       if(infoEl)infoEl.textContent=`마우스 휠: 줌 · 클릭&드래그: 이동 · 표시: ${d.length}봉 / 전체 ${total}봉`;
@@ -1299,6 +1302,98 @@ function svgMACD(data){
   if(sP.length>1)s+=`<polyline points="${sP.join(" ")}" fill="none" stroke="#E8A87C" stroke-width="1.2" stroke-dasharray="3,2"/>`;
   s+=`<line x1="${W-P.r-110}" y1="${H-6}" x2="${W-P.r-98}" y2="${H-6}" stroke="#85C1E9" stroke-width="1.5"/><text x="${W-P.r-94}" y="${H-3}" fill="#85C1E9" font-size="7" font-family="DM Mono,monospace">MACD</text>`;
   s+=`<line x1="${W-P.r-60}" y1="${H-6}" x2="${W-P.r-48}" y2="${H-6}" stroke="#E8A87C" stroke-width="1.5" stroke-dasharray="3,2"/><text x="${W-P.r-44}" y="${H-3}" fill="#E8A87C" font-size="7" font-family="DM Mono,monospace">Signal</text>`;
+  s+=`</svg>`;
+  return s;
+}
+
+// ═══════ OBV CHART (with price overlay) ═══════
+function svgOBV(data){
+  if(data.length<10)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">OBV: 10봉 이상 필요</div>`;
+
+  // Calculate OBV series
+  const obvS=[0];
+  for(let i=1;i<data.length;i++){
+    if(data[i].close>data[i-1].close)obvS.push(obvS[i-1]+data[i].volume);
+    else if(data[i].close<data[i-1].close)obvS.push(obvS[i-1]-data[i].volume);
+    else obvS.push(obvS[i-1]);
+  }
+
+  // Price series (closes)
+  const cls=data.map(d=>d.close).filter(v=>v>0);
+
+  const W=900,H=120,P={t:20,r:92,b:14,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const tx=i=>P.l+(i/(data.length-1||1))*cw;
+
+  // OBV range
+  const obvValid=obvS.filter(v=>isFinite(v));
+  const obvMin=Math.min(...obvValid),obvMax=Math.max(...obvValid);
+  const obvRng=obvMax-obvMin||1;
+  const tyO=v=>P.t+(1-(v-obvMin)/obvRng)*ch;
+
+  // Price range (normalized to same chart height)
+  const pMin=Math.min(...cls),pMax=Math.max(...cls);
+  const pRng=pMax-pMin||1;
+  const tyP=v=>P.t+(1-(v-pMin)/pRng)*ch;
+
+  // Detect divergence
+  const recentLen=Math.min(20,data.length);
+  const priceUp=cls[cls.length-1]>cls[cls.length-recentLen];
+  const obvUp=obvS[obvS.length-1]>obvS[obvS.length-recentLen];
+  const divergence=priceUp!==obvUp;
+  const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ OBV↓)":"⚠ 강세 다이버전스 (가격↓ OBV↑)"):"정합 (추세 확인)";
+  const divCol=divergence?(priceUp?"#E85D75":"#4ECCA3"):"#C9A96E";
+
+  // OBV trend direction
+  const obvTrend=obvS[obvS.length-1]>obvS[Math.max(0,obvS.length-20)]?"상승":"하락";
+  const obvTrendCol=obvTrend==="상승"?"#4ECCA3":"#E85D75";
+
+  // Format large numbers
+  const fmV=v=>{const a=Math.abs(v);return a>=1e9?(v/1e9).toFixed(1)+"B":a>=1e6?(v/1e6).toFixed(1)+"M":a>=1e3?(v/1e3).toFixed(0)+"K":v.toFixed(0);};
+
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:130px">`;
+
+  // Title + values
+  s+=`<text x="${P.l+2}" y="12" fill="#7DCEA0" font-size="8" font-weight="600" font-family="DM Mono,monospace">OBV</text>`;
+  s+=`<text x="${P.l+30}" y="12" fill="${obvTrendCol}" font-size="8" font-family="DM Mono,monospace">${fmV(obvS[obvS.length-1])} (${obvTrend})</text>`;
+  s+=`<text x="${W-P.r}" y="12" fill="${divCol}" font-size="8" font-weight="500" font-family="DM Mono,monospace" text-anchor="end">${divText}</text>`;
+
+  // Zero line for OBV
+  if(obvMin<0&&obvMax>0){
+    const zy=tyO(0);
+    if(isFinite(zy))s+=`<line x1="${P.l}" y1="${zy}" x2="${W-P.r}" y2="${zy}" stroke="#fff" stroke-opacity=".05"/>`;
+  }
+
+  // OBV area fill (gradient)
+  const obvPts=obvS.map((v,i)=>{const y=tyO(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  if(obvPts.length>1){
+    // Filled area
+    s+=`<polygon points="${obvPts.join(" ")} ${tx(data.length-1).toFixed(1)},${(P.t+ch).toFixed(1)} ${P.l.toFixed(1)},${(P.t+ch).toFixed(1)}" fill="#7DCEA0" opacity=".06"/>`;
+    // OBV line
+    s+=`<polyline points="${obvPts.join(" ")}" fill="none" stroke="#7DCEA0" stroke-width="1.5" opacity=".7"/>`;
+  }
+
+  // Price overlay line (thinner, different color)
+  const pPts=cls.map((v,i)=>{const y=tyP(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  if(pPts.length>1){
+    s+=`<polyline points="${pPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1" opacity=".4" stroke-dasharray="4,2"/>`;
+  }
+
+  // Divergence highlight zone (last 20 bars)
+  if(divergence){
+    const startX=tx(Math.max(0,data.length-recentLen));
+    s+=`<rect x="${startX}" y="${P.t}" width="${tx(data.length-1)-startX}" height="${ch}" fill="${divCol}" opacity=".04" rx="4"/>`;
+  }
+
+  // Y-axis labels (OBV)
+  [obvMin,obvMin+obvRng/2,obvMax].forEach(v=>{
+    const y=tyO(v);
+    if(isFinite(y))s+=`<text x="${W-P.r+6}" y="${y+3}" fill="#7DCEA055" font-size="7" font-family="DM Mono,monospace">${fmV(v)}</text>`;
+  });
+
+  // Legend
+  s+=`<line x1="${W-P.r-140}" y1="${H-5}" x2="${W-P.r-128}" y2="${H-5}" stroke="#7DCEA0" stroke-width="1.5"/><text x="${W-P.r-124}" y="${H-2}" fill="#7DCEA0" font-size="7" font-family="DM Mono,monospace">OBV</text>`;
+  s+=`<line x1="${W-P.r-80}" y1="${H-5}" x2="${W-P.r-68}" y2="${H-5}" stroke="#C9A96E" stroke-width="1" stroke-dasharray="3,2"/><text x="${W-P.r-64}" y="${H-2}" fill="#C9A96E" font-size="7" font-family="DM Mono,monospace">가격</text>`;
+
   s+=`</svg>`;
   return s;
 }
