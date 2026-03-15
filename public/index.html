@@ -2211,30 +2211,52 @@ async function runScan(){
   const batchSize=8;
   const scanList=getScanUniverse();
   const totalBatches=Math.ceil(scanList.length/batchSize);
+  let errCount=0;
 
   for(let b=0;b<totalBatches;b++){
     const batch=scanList.slice(b*batchSize,(b+1)*batchSize);
     status.textContent=`스캔 중... ${batch.map(s=>s.name).join(", ")}`;
     const p=Math.round((b+1)/totalBatches*100);
-    pct.textContent=p+"%";
+    pct.textContent=`${p}% · ${allResults.length}건 발견${errCount?` · ${errCount}오류`:""}`;
     bar.style.width=p+"%";
 
     try{
       const resp=await fetch("/api/scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbols:batch})});
+      if(!resp.ok){errCount++;continue;}
       const data=await resp.json();
       if(data.results)allResults.push(...data.results);
-    }catch(e){/* batch failed, continue */}
+    }catch(e){errCount++;}
 
-    // Small delay between batches
-    if(b<totalBatches-1)await new Promise(r=>setTimeout(r,500));
+    if(b<totalBatches-1)await new Promise(r=>setTimeout(r,300));
   }
 
-  // Sort by signal count desc, then by daysAgo asc
-  allResults.sort((a,b)=>(b.bestSignal.count-a.bestSignal.count)||(a.bestSignal.daysAgo-b.bestSignal.daysAgo));
+  // Post-scan processing (wrapped in try/catch to prevent hang)
+  try{
+    // Sort by signal count desc, then by daysAgo asc
+    allResults.sort((a,b)=>{
+      const ac=a.bestSignal?.count||0,bc=b.bestSignal?.count||0;
+      if(bc!==ac)return bc-ac;
+      return(a.bestSignal?.daysAgo||999)-(b.bestSignal?.daysAgo||999);
+    });
 
-  const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length};
-  localStorage.setItem("scanResults",JSON.stringify(result));
-  renderScanResults(result);
+    const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length};
+
+    // Try to save — if localStorage full, trim mini data
+    try{
+      localStorage.setItem("scanResults",JSON.stringify(result));
+    }catch(storageErr){
+      // Storage full — remove mini chart data to reduce size
+      const slim={...result,results:allResults.map(r=>({...r,mini:null}))};
+      try{localStorage.setItem("scanResults",JSON.stringify(slim));}
+      catch(e2){/* give up saving, just render */}
+    }
+
+    renderScanResults(result);
+  }catch(postErr){
+    console.error("Post-scan error:",postErr);
+    // Still try to show whatever we have
+    try{renderScanResults({results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length});}catch(e){}
+  }
 
   prog.style.display="none";
   btn.disabled=false;btn.textContent="🔍 스캔 시작";
