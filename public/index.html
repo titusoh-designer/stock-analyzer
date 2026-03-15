@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
 <title>Stock Pattern Analyzer</title>
-<link rel="manifest" href="data:application/json,{}">
+<link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Stock%20Analyzer%22%2C%22short_name%22%3A%22Stocks%22%2C%22start_url%22%3A%22%2F%22%2C%22display%22%3A%22standalone%22%7D">
 <meta name="theme-color" content="#0a0a10">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -333,7 +333,15 @@ JSON으로만 응답 (모든 텍스트 한국어):
       "pctToTarget": "현재가 대비 목표가까지 몇% 남았는지",
       "startIdx": "패턴 시작 봉 인덱스(전체 데이터 기준)",
       "endIdx": "패턴 종료 봉 인덱스",
-      "keyPrices": [패턴핵심가격1, 가격2, 가격3]
+      "keyPrices": [패턴핵심가격1, 가격2, 가격3],
+      "patternPoints": [
+        {"label": "X 또는 시작점", "idx": "봉 인덱스(최근50봉 기준)", "price": 가격},
+        {"label": "A 또는 고점", "idx": "봉 인덱스", "price": 가격},
+        {"label": "B 또는 저점", "idx": "봉 인덱스", "price": 가격}
+      ],
+      "ratios": [
+        {"from": "X→A", "to": "A→B", "value": "0.618 등 피보나치 비율"}
+      ]
     }
   ],
   "indicatorSignals": [
@@ -619,123 +627,184 @@ function renderAiResults(ai,data){
   return h;
 }
 
-// ═══════ PATTERN CHART (individual per pattern) ═══════
+// ═══════ PATTERN CHART (XABCD-style overlay like TradingView) ═══════
 function svgPatternChart(data,pat,cp,cur,idx){
   try{
   if(!data||data.length<5)return`<div class="mono" style="text-align:center;padding:20px;color:#555;font-size:10px">차트 데이터 부족</div>`;
 
-  // Ensure all values are numbers (strip currency symbols, commas)
   const num=v=>{if(v==null)return null;const n=parseFloat(String(v).replace(/[^0-9.\-]/g,''));return isFinite(n)&&n>0?n:null;};
-  const tUp=num(pat.targetUp), tDn=num(pat.targetDown), sl=num(pat.stopLoss);
-  const kp=(pat.keyPrices||[]).map(num).filter(v=>v!==null);
+  const tUp=num(pat.targetUp),tDn=num(pat.targetDown),sl=num(pat.stopLoss);
   cp=num(cp)||data[data.length-1].close;
 
-  const W=900,H=260,P={t:22,r:92,b:28,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  // Build pattern points from patternPoints or keyPrices
+  let pts=[];
+  if(pat.patternPoints&&pat.patternPoints.length>=2){
+    pts=pat.patternPoints.map(p=>({label:p.label||"",idx:Math.max(0,Math.min(data.length-1,parseInt(p.idx)||0)),price:num(p.price)})).filter(p=>p.price!==null);
+  }
+  if(pts.length<2&&pat.keyPrices){
+    const kp=(pat.keyPrices||[]).map(num).filter(v=>v!==null);
+    const labels=["X","A","B","C","D","E","F"];
+    const si=num(pat.startIdx)||Math.floor(data.length*0.3);
+    const ei=num(pat.endIdx)||data.length-1;
+    pts=kp.map((price,i)=>({label:labels[i]||String(i),idx:Math.round(si+(ei-si)*i/(kp.length-1||1)),price}));
+  }
+
+  const W=900,H=280,P={t:26,r:92,b:28,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const dc=pat.direction==="bullish"?"#4ECCA3":pat.direction==="bearish"?"#E85D75":"#C9A96E";
+  const fillC=pat.direction==="bullish"?"78,204,163":pat.direction==="bearish"?"232,93,117":"201,169,110";
   const cs=cur==="KRW"?"₩":"$";
   const fm=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?(v/1000).toFixed(1)+"K":Number(v).toFixed(v<10?4:2);
 
-  // Build price range from OHLCV + targets
-  const prices=data.flatMap(d=>[d.high,d.low]);
+  // Price range
+  const prices=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);
   prices.push(cp);
-  if(tUp)prices.push(tUp);
-  if(tDn)prices.push(tDn);
-  if(sl)prices.push(sl);
-  kp.forEach(v=>prices.push(v));
-  const validP=prices.filter(v=>isFinite(v)&&v>0);
-  if(!validP.length)return`<div class="mono" style="text-align:center;padding:20px;color:#555;font-size:10px">가격 데이터 오류</div>`;
-
-  const mn=Math.min(...validP)*0.993, mx=Math.max(...validP)*1.007;
-  const rng=mx-mn||1;
-  const tx=i=>P.l+(i/(data.length-1||1))*cw;
+  if(tUp)prices.push(tUp);if(tDn)prices.push(tDn);
+  pts.forEach(p=>prices.push(p.price));
+  const mn=Math.min(...prices)*0.992,mx=Math.max(...prices)*1.008,rng=mx-mn||1;
+  const tx=i=>P.l+Math.max(0,Math.min(1,i/(data.length-1||1)))*cw;
   const ty=p=>P.t+(1-(p-mn)/rng)*ch;
-  const bw=Math.max(1.5,Math.min(6,cw/data.length*0.5));
+  const bw=Math.max(1,Math.min(5,cw/data.length*0.5));
 
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
 
   // Grid
-  for(let i=0;i<=4;i++){const p=mn+rng*(i/4);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".03"/><text x="${W-P.r+6}" y="${ty(p)+3}" fill="#555" font-size="7.5" font-family="DM Mono,monospace">${fm(p)}</text>`;}
+  for(let i=0;i<=4;i++){const p=mn+rng*(i/4);const y=ty(p);if(isFinite(y))s+=`<line x1="${P.l}" y1="${y}" x2="${W-P.r}" y2="${y}" stroke="#fff" stroke-opacity=".03"/><text x="${W-P.r+6}" y="${y+3}" fill="#555" font-size="7.5" font-family="DM Mono,monospace">${fm(p)}</text>`;}
 
-  // Candles (dimmed background)
+  // Candles (dimmed)
   data.forEach((d,i)=>{
-    if(!d||!isFinite(d.close))return;
+    if(!d.close||!d.open)return;
     const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75";
     const top=ty(Math.max(d.open,d.close)),bot=ty(Math.min(d.open,d.close));
-    s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width=".8" opacity=".35"/>`;
-    s+=`<rect x="${x-bw/2}" y="${top}" width="${bw}" height="${Math.max(bot-top,0.5)}" fill="${cl}" opacity=".45" rx=".5"/>`;
+    if(!isFinite(top)||!isFinite(bot))return;
+    s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width=".7" opacity=".3"/>`;
+    s+=`<rect x="${x-bw/2}" y="${top}" width="${bw}" height="${Math.max(bot-top,0.5)}" fill="${cl}" opacity=".4" rx=".5"/>`;
   });
 
-  // ★ Pattern shape overlay
-  const patStart=Math.max(0,Math.min(data.length-1,num(pat.startIdx)||Math.floor(data.length*0.5)));
-  const patEnd=Math.max(patStart+1,Math.min(data.length-1,num(pat.endIdx)||data.length-1));
+  // ★★★ PATTERN SHAPE OVERLAY (like reference image) ★★★
+  if(pts.length>=2){
+    const pCoords=pts.map(p=>({...p,x:tx(Math.min(p.idx,data.length-1)),y:ty(p.price)})).filter(p=>isFinite(p.x)&&isFinite(p.y));
 
-  if(kp.length>=2){
-    // Draw pattern shape through key prices
-    const pts=kp.map((price,ki)=>{
-      const xi=patStart+Math.round((patEnd-patStart)*ki/(kp.length-1||1));
-      return [tx(Math.min(xi,data.length-1)),ty(price)];
+    if(pCoords.length>=3){
+      // Filled triangular regions between consecutive segments
+      for(let i=0;i<pCoords.length-2;i++){
+        const a=pCoords[i],b=pCoords[i+1],c=pCoords[i+2];
+        s+=`<polygon points="${a.x},${a.y} ${b.x},${b.y} ${c.x},${c.y}" fill="rgba(${fillC},.12)" stroke="none"/>`;
+      }
+    }
+
+    // Thick connecting lines
+    for(let i=0;i<pCoords.length-1;i++){
+      const a=pCoords[i],b=pCoords[i+1];
+      s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${dc}" stroke-width="2.5" opacity=".7" stroke-linecap="round"/>`;
+    }
+
+    // Horizontal dotted projection lines (like X---D in reference)
+    if(pCoords.length>=2){
+      const first=pCoords[0],last=pCoords[pCoords.length-1];
+      s+=`<line x1="${first.x}" y1="${first.y}" x2="${last.x}" y2="${first.y}" stroke="${dc}" stroke-width=".7" stroke-dasharray="3,4" opacity=".25"/>`;
+      // Top projection
+      const topPt=pCoords.reduce((a,b)=>a.y<b.y?a:b);
+      if(topPt!==first&&topPt!==last){
+        s+=`<line x1="${topPt.x}" y1="${topPt.y}" x2="${last.x}" y2="${topPt.y}" stroke="${dc}" stroke-width=".7" stroke-dasharray="3,4" opacity=".25"/>`;
+      }
+    }
+
+    // Point labels + price values + dots
+    pCoords.forEach((p,i)=>{
+      // Outer glow circle
+      s+=`<circle cx="${p.x}" cy="${p.y}" r="8" fill="rgba(${fillC},.12)" stroke="none"/>`;
+      // Inner dot
+      s+=`<circle cx="${p.x}" cy="${p.y}" r="4" fill="${dc}" opacity=".85"/>`;
+      s+=`<circle cx="${p.x}" cy="${p.y}" r="4" fill="none" stroke="#fff" stroke-width=".5" opacity=".3"/>`;
+
+      // Label (X, A, B, C, D) positioned above/below based on local high/low
+      const isHigh=i>0&&i<pCoords.length-1?p.price>pCoords[i-1].price&&p.price>pCoords[i+1].price:i===0?true:p.price>pCoords[i-1].price;
+      const ly=isHigh?p.y-16:p.y+20;
+      const labelBg=`rgba(${fillC},.2)`;
+
+      // Label badge
+      s+=`<rect x="${p.x-14}" y="${ly-10}" width="28" height="15" rx="3" fill="${labelBg}"/>`;
+      s+=`<text x="${p.x}" y="${ly}" fill="${dc}" font-size="10" font-weight="700" font-family="DM Mono,monospace" text-anchor="middle">${p.label}</text>`;
+
+      // Price value
+      const py=isHigh?ly-14:ly+14;
+      s+=`<text x="${p.x}" y="${py}" fill="#999" font-size="7.5" font-family="DM Mono,monospace" text-anchor="middle">${fm(p.price)}</text>`;
     });
-    // Shaded zone
-    const zTop=ty(Math.max(...kp)), zBot=ty(Math.min(...kp));
-    s+=`<rect x="${tx(patStart)}" y="${zTop}" width="${Math.abs(tx(patEnd)-tx(patStart))||10}" height="${Math.abs(zBot-zTop)||10}" fill="${dc}" opacity=".06" rx="4"/>`;
-    // Pattern line with glow
-    const d=pts.map((p,i)=>`${i===0?"M":"L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-    s+=`<path d="${d}" fill="none" stroke="${dc}" stroke-width="3" opacity=".15" stroke-linecap="round" stroke-linejoin="round"/>`;
-    s+=`<path d="${d}" fill="none" stroke="${dc}" stroke-width="2" opacity=".65" stroke-linecap="round" stroke-linejoin="round"/>`;
-    // Dots
-    pts.forEach(p=>{
-      s+=`<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="${dc}" opacity=".7"/>`;
-      s+=`<circle cx="${p[0]}" cy="${p[1]}" r="6.5" fill="none" stroke="${dc}" opacity=".25" stroke-width=".8"/>`;
-    });
-  } else {
-    // Fallback: horizontal neckline
-    const neckP=tDn||sl||cp;
-    if(neckP){
-      s+=`<line x1="${tx(patStart)}" y1="${ty(neckP)}" x2="${tx(patEnd)}" y2="${ty(neckP)}" stroke="${dc}" stroke-width="1.5" stroke-dasharray="6,3" opacity=".45"/>`;
+
+    // Ratio annotations along segments
+    const ratios=pat.ratios||[];
+    if(ratios.length>0){
+      ratios.forEach((r,i)=>{
+        if(!r.value)return;
+        // Place ratio text at midpoint of relevant segment
+        const segIdx=Math.min(i,pCoords.length-2);
+        if(segIdx<0||segIdx>=pCoords.length-1)return;
+        const a=pCoords[segIdx],b=pCoords[segIdx+1];
+        const mx2=(a.x+b.x)/2,my=(a.y+b.y)/2;
+        const val=String(r.value);
+        s+=`<rect x="${mx2-val.length*3.5-6}" y="${my-8}" width="${val.length*7+12}" height="15" rx="3" fill="rgba(10,10,16,.8)" stroke="${dc}40"/>`;
+        s+=`<text x="${mx2}" y="${my+3}" fill="${dc}" font-size="8.5" font-weight="600" font-family="DM Mono,monospace" text-anchor="middle">${val}</text>`;
+      });
+    } else if(pCoords.length>=3){
+      // Auto-calculate ratios between segments
+      for(let i=0;i<pCoords.length-2;i++){
+        const segA=Math.abs(pCoords[i+1].price-pCoords[i].price);
+        const segB=Math.abs(pCoords[i+2].price-pCoords[i+1].price);
+        if(segA>0){
+          const ratio=(segB/segA).toFixed(3);
+          const a=pCoords[i+1],b=pCoords[i+2];
+          const mx2=(a.x+b.x)/2,my=(a.y+b.y)/2;
+          s+=`<rect x="${mx2-20}" y="${my-8}" width="40" height="14" rx="3" fill="rgba(10,10,16,.8)" stroke="${dc}35"/>`;
+          s+=`<text x="${mx2}" y="${my+2}" fill="${dc}" font-size="8" font-weight="500" font-family="DM Mono,monospace" text-anchor="middle" opacity=".7">${ratio}</text>`;
+        }
+      }
     }
   }
 
   // Current price line
-  s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1" opacity=".45" stroke-dasharray="4,3"/>`;
+  s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1" opacity=".4" stroke-dasharray="4,3"/>`;
   s+=`<rect x="${W-P.r+2}" y="${ty(cp)-8}" width="84" height="16" rx="3" fill="rgba(201,169,110,.2)" stroke="#C9A96E40"/>`;
   s+=`<text x="${W-P.r+8}" y="${ty(cp)+3}" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;
 
-  // Target up line + arrow + percentage
+  // Target up
   if(tUp&&tUp>mn&&tUp<mx){
-    s+=`<line x1="${P.l}" y1="${ty(tUp)}" x2="${W-P.r}" y2="${ty(tUp)}" stroke="#4ECCA3" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
-    s+=`<rect x="${W-P.r+2}" y="${ty(tUp)-8}" width="84" height="16" rx="3" fill="rgba(78,204,163,.12)" stroke="#4ECCA325"/>`;
-    s+=`<text x="${W-P.r+8}" y="${ty(tUp)+3}" fill="#4ECCA3" font-size="8" font-weight="600" font-family="DM Mono,monospace">▲${cs}${fm(tUp)}</text>`;
-    // Arrow + pct
-    const arX=tx(data.length-1)+14;
-    if(ty(cp)>ty(tUp)+10){
-      s+=`<line x1="${arX}" y1="${ty(cp)-4}" x2="${arX}" y2="${ty(tUp)+4}" stroke="#4ECCA3" stroke-width="2" opacity=".5"/>`;
-      s+=`<polygon points="${arX-4},${ty(tUp)+8} ${arX+4},${ty(tUp)+8} ${arX},${ty(tUp)+2}" fill="#4ECCA3" opacity=".5"/>`;
-      const midY=(ty(cp)+ty(tUp))/2;
+    const tY=ty(tUp);
+    s+=`<line x1="${P.l}" y1="${tY}" x2="${W-P.r}" y2="${tY}" stroke="#4ECCA3" stroke-width="1" stroke-dasharray="3,3" opacity=".45"/>`;
+    s+=`<rect x="${W-P.r+2}" y="${tY-8}" width="84" height="16" rx="3" fill="rgba(78,204,163,.12)" stroke="#4ECCA325"/>`;
+    s+=`<text x="${W-P.r+8}" y="${tY+3}" fill="#4ECCA3" font-size="8" font-weight="600" font-family="DM Mono,monospace">▲${cs}${fm(tUp)}</text>`;
+    if(ty(cp)>tY+10){
+      const arX=tx(data.length-1)+14;
       const pct=((tUp/cp-1)*100).toFixed(1);
-      s+=`<rect x="${arX+6}" y="${midY-9}" width="${pct.length*7+22}" height="18" rx="4" fill="rgba(78,204,163,.18)"/>`;
-      s+=`<text x="${arX+12}" y="${midY+3}" fill="#4ECCA3" font-size="10" font-weight="700" font-family="DM Mono,monospace">+${pct}%</text>`;
+      s+=`<line x1="${arX}" y1="${ty(cp)-2}" x2="${arX}" y2="${tY+2}" stroke="#4ECCA3" stroke-width="2" opacity=".5"/>`;
+      s+=`<polygon points="${arX-4},${tY+6} ${arX+4},${tY+6} ${arX},${tY+1}" fill="#4ECCA3" opacity=".5"/>`;
+      s+=`<rect x="${arX+6}" y="${(ty(cp)+tY)/2-9}" width="${pct.length*7+22}" height="18" rx="4" fill="rgba(78,204,163,.18)"/>`;
+      s+=`<text x="${arX+14}" y="${(ty(cp)+tY)/2+3}" fill="#4ECCA3" font-size="10" font-weight="700" font-family="DM Mono,monospace">+${pct}%</text>`;
     }
   }
 
-  // Target down line
+  // Target down
   if(tDn&&tDn>mn&&tDn<mx){
-    s+=`<line x1="${P.l}" y1="${ty(tDn)}" x2="${W-P.r}" y2="${ty(tDn)}" stroke="#E85D75" stroke-width="1" stroke-dasharray="3,3" opacity=".45"/>`;
-    s+=`<rect x="${W-P.r+2}" y="${ty(tDn)-8}" width="84" height="16" rx="3" fill="rgba(232,93,117,.1)" stroke="#E85D7525"/>`;
-    s+=`<text x="${W-P.r+8}" y="${ty(tDn)+3}" fill="#E85D75" font-size="8" font-weight="600" font-family="DM Mono,monospace">▼${cs}${fm(tDn)}</text>`;
+    const tY=ty(tDn);
+    s+=`<line x1="${P.l}" y1="${tY}" x2="${W-P.r}" y2="${tY}" stroke="#E85D75" stroke-width="1" stroke-dasharray="3,3" opacity=".4"/>`;
+    s+=`<rect x="${W-P.r+2}" y="${tY-8}" width="84" height="16" rx="3" fill="rgba(232,93,117,.1)" stroke="#E85D7525"/>`;
+    s+=`<text x="${W-P.r+8}" y="${tY+3}" fill="#E85D75" font-size="8" font-weight="600" font-family="DM Mono,monospace">▼${cs}${fm(tDn)}</text>`;
   }
 
-  // Stop loss line
+  // Stop loss
   if(sl&&sl>mn&&sl<mx){
-    s+=`<line x1="${tx(Math.max(0,data.length-50))}" y1="${ty(sl)}" x2="${W-P.r}" y2="${ty(sl)}" stroke="#C9A96E" stroke-width="1" stroke-dasharray="2,3" opacity=".35"/>`;
-    s+=`<text x="${tx(Math.max(0,data.length-50))-4}" y="${ty(sl)+3}" fill="#C9A96E" font-size="7.5" font-family="DM Mono,monospace" text-anchor="end">SL ${fm(sl)}</text>`;
+    const slY=ty(sl);if(isFinite(slY)){
+    s+=`<line x1="${tx(Math.max(0,data.length-50))}" y1="${slY}" x2="${W-P.r}" y2="${slY}" stroke="#C9A96E" stroke-width="1" stroke-dasharray="2,3" opacity=".3"/>`;
+    s+=`<text x="${tx(Math.max(0,data.length-50))-4}" y="${slY+3}" fill="#C9A96E" font-size="7.5" font-family="DM Mono,monospace" text-anchor="end">SL ${fm(sl)}</text>`;
+    }
   }
 
-  // Pattern name
-  s+=`<text x="${P.l+4}" y="14" fill="${dc}" font-size="9" font-weight="600" font-family="DM Mono,monospace">${pat.name||""} (${pat.confidence||"?"}%)</text>`;
+  // Pattern name badge
+  s+=`<rect x="${P.l+2}" y="4" width="${(pat.name||"").length*8+60}" height="18" rx="4" fill="rgba(${fillC},.12)" stroke="${dc}30"/>`;
+  s+=`<text x="${P.l+10}" y="16" fill="${dc}" font-size="10" font-weight="600" font-family="DM Mono,monospace">${pat.name||""} (${pat.confidence||"?"}%)</text>`;
 
   // Date labels
   const step=Math.max(1,Math.floor(data.length/7));
-  data.filter((_,i)=>i%step===0).forEach((d,_,arr)=>{const i=data.indexOf(d);s+=`<text x="${tx(i)}" y="${H-P.b+14}" fill="#444" font-size="7" font-family="DM Mono,monospace" text-anchor="middle">${(d.date||"").slice(5,10)}</text>`;});
+  data.filter((_,i)=>i%step===0).forEach(d=>{const i=data.indexOf(d);s+=`<text x="${tx(i)}" y="${H-P.b+14}" fill="#444" font-size="7" font-family="DM Mono,monospace" text-anchor="middle">${(d.date||"").slice(5,10)}</text>`;});
 
   s+=`</svg>`;
   return s;
