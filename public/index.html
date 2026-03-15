@@ -416,10 +416,10 @@ function render(data,ai){
     <div style="text-align:right"><div class="mono" style="font-size:28px;font-weight:700">${cs}${fp(cp)}</div><div class="mono" style="font-size:13px;margin-top:2px;color:${ch>=0?"#4ECCA3":"#E85D75"}">${ch>=0?"▲":"▼"} ${Math.abs(ch)}%</div></div>
   </div>
   <div id="mainChartWrap" class="chart-box" style="cursor:grab;user-select:none">${svgChart(o,cp,data.currency,ai,stockLabel)}</div>
-  <div class="mono" style="font-size:8px;color:#444;text-align:center;margin:-12px 0 14px">마우스 휠: 줌 · 클릭&드래그: 이동 · 표시: ${o.length}봉 / 전체 ${allData.length}봉</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-    <div class="chart-box" style="margin-bottom:0">${svgRSI(o)}</div>
-    <div class="chart-box" style="margin-bottom:0">${svgMACD(o)}</div>
+  <div id="chartInfoText" class="mono" style="font-size:8px;color:#444;text-align:center;margin:-12px 0 14px">마우스 휠: 줌 · 클릭&드래그: 이동 · 표시: ${o.length}봉 / 전체 ${allData.length}봉</div>
+  <div style="margin-bottom:16px">
+    <div id="rsiChartWrap" class="chart-box" style="margin-bottom:8px">${svgRSI(o)}</div>
+    <div id="macdChartWrap" class="chart-box" style="margin-bottom:0">${svgMACD(o)}</div>
   </div>
   <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(95px,1fr))">
     ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"MA20",v:ma20?fp(ma20):"-",c:"#85C1E9"},{l:"MA100",v:ma100?fp(ma100):"-",c:"#C39BD3"},{l:"MA250",v:ma250?fp(ma250):"-",c:"#7DCEA0"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
@@ -440,48 +440,58 @@ function render(data,ai){
   const chartEl=document.getElementById("mainChartWrap");
   if(chartEl&&curData){
     const total=curData.ohlcv.length;
-    // Wheel zoom
+    let rafId=null;
+
+    // Lightweight chart-only update (skips full render)
+    function updateChartView(){
+      const d=curData.ohlcv.slice(viewStart,viewEnd);
+      const cp2=curData.currentPrice||d[d.length-1]?.close||0;
+      const stockFullName2=curData.name||curSym?.name||curData.symbol;
+      const stockCode2=curData.symbol||curSym?.symbol||"";
+      const stockLabel2=stockFullName2!==stockCode2?`${stockFullName2} (${stockCode2})`:stockFullName2;
+      // Update chart SVGs only
+      chartEl.innerHTML=svgChart(d,cp2,curData.currency,null,stockLabel2);
+      const rsiEl=document.getElementById("rsiChartWrap");
+      const macdEl=document.getElementById("macdChartWrap");
+      if(rsiEl)rsiEl.innerHTML=svgRSI(d);
+      if(macdEl)macdEl.innerHTML=svgMACD(d);
+      // Update info text
+      const infoEl=document.getElementById("chartInfoText");
+      if(infoEl)infoEl.textContent=`마우스 휠: 줌 · 클릭&드래그: 이동 · 표시: ${d.length}봉 / 전체 ${total}봉`;
+    }
+
+    function scheduleUpdate(){
+      if(rafId)return;
+      rafId=requestAnimationFrame(()=>{rafId=null;updateChartView();});
+    }
+
+    // Wheel zoom (finer steps)
     chartEl.onwheel=(e)=>{
       e.preventDefault();
       const visLen=viewEnd-viewStart;
-      const zoomDir=e.deltaY>0?1:-1; // scroll down=zoom out, up=zoom in
-      const step=Math.max(2,Math.round(visLen*0.15));
-      if(zoomDir>0){// zoom out
-        viewStart=Math.max(0,viewStart-step);
-        viewEnd=Math.min(total,viewEnd+step);
-      }else{// zoom in
-        if(visLen>20){
-          viewStart=Math.min(viewEnd-20,viewStart+step);
-          viewEnd=Math.max(viewStart+20,viewEnd-step);
-        }
-      }
-      render(curData,null);
+      const zoomDir=e.deltaY>0?1:-1;
+      const step=Math.max(1,Math.round(visLen*0.08));
+      if(zoomDir>0){viewStart=Math.max(0,viewStart-step);viewEnd=Math.min(total,viewEnd+step);}
+      else{if(visLen>15){viewStart=Math.min(viewEnd-15,viewStart+step);viewEnd=Math.max(viewStart+15,viewEnd-step);}}
+      scheduleUpdate();
     };
+
     // Drag pan
-    chartEl.onmousedown=(e)=>{isDragging=true;dragStartX=e.clientX;dragStartViewStart=viewStart;chartEl.style.cursor="grabbing";};
-    chartEl.onmousemove=(e)=>{
+    chartEl.onmousedown=(e)=>{isDragging=true;dragStartX=e.clientX;dragStartViewStart=viewStart;chartEl.style.cursor="grabbing";e.preventDefault();};
+    const onMove=(clientX)=>{
       if(!isDragging)return;
-      const dx=e.clientX-dragStartX;
       const visLen=viewEnd-viewStart;
       const pxPerCandle=chartEl.offsetWidth/(visLen||1);
-      const shift=Math.round(-dx/pxPerCandle);
-      const newStart=Math.max(0,Math.min(total-visLen,dragStartViewStart+shift));
-      viewStart=newStart;viewEnd=newStart+visLen;
-      render(curData,null);
+      const shift=Math.round(-(clientX-dragStartX)/pxPerCandle);
+      const ns=Math.max(0,Math.min(total-visLen,dragStartViewStart+shift));
+      if(ns!==viewStart){viewStart=ns;viewEnd=ns+visLen;scheduleUpdate();}
     };
+    chartEl.onmousemove=(e)=>onMove(e.clientX);
     chartEl.onmouseup=chartEl.onmouseleave=()=>{if(isDragging){isDragging=false;chartEl.style.cursor="grab";}};
-    // Touch support
+
+    // Touch
     chartEl.ontouchstart=(e)=>{isDragging=true;dragStartX=e.touches[0].clientX;dragStartViewStart=viewStart;};
-    chartEl.ontouchmove=(e)=>{
-      if(!isDragging)return;e.preventDefault();
-      const dx=e.touches[0].clientX-dragStartX;
-      const visLen=viewEnd-viewStart;
-      const pxPerCandle=chartEl.offsetWidth/(visLen||1);
-      const shift=Math.round(-dx/pxPerCandle);
-      const newStart=Math.max(0,Math.min(total-visLen,dragStartViewStart+shift));
-      viewStart=newStart;viewEnd=newStart+visLen;
-      render(curData,null);
-    };
+    chartEl.ontouchmove=(e)=>{e.preventDefault();onMove(e.touches[0].clientX);};
     chartEl.ontouchend=()=>{isDragging=false;};
   }
 }
@@ -548,35 +558,33 @@ function renderAiResults(ai,data){
     h+=`<div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.12em;margin:16px 0 12px">예상 패턴 (${ai.detectedPatterns.length}개 감지)</div>`;
     const ohlcv=data?.ohlcv||[];
     const visData=ohlcv.slice(viewStart,viewEnd);
+    const _num=v=>{const n=parseFloat(String(v).replace(/[^0-9.\-]/g,''));return isFinite(n)?n:null;};
     ai.detectedPatterns.forEach((p,pi)=>{
       const dc=p.direction==="bullish"?"#4ECCA3":p.direction==="bearish"?"#E85D75":"#C9A96E";
-      const cp=data?.currentPrice||visData[visData.length-1]?.close||0;
-      const pctUp=cp&&p.targetUp?((p.targetUp/cp-1)*100).toFixed(1):null;
-      const pctDn=cp&&p.targetDown?((1-p.targetDown/cp)*100).toFixed(1):null;
+      const cp=_num(data?.currentPrice)||visData[visData.length-1]?.close||0;
+      const tUp=_num(p.targetUp),tDn=_num(p.targetDown),slv=_num(p.stopLoss);
+      const pctUp=cp&&tUp?((tUp/cp-1)*100).toFixed(1):null;
+      const pctDn=cp&&tDn?((1-tDn/cp)*100).toFixed(1):null;
       h+=`<div class="card" style="border-left:3px solid ${dc};padding:20px;margin-bottom:14px">
-        <!-- Header -->
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
           <div>
-            <div style="font-size:16px;font-weight:700;color:#F0ECE3">${p.name}</div>
+            <div style="font-size:16px;font-weight:700;color:#F0ECE3">${p.name||"패턴"}</div>
             <div class="mono" style="font-size:10px;color:#666;margin-top:2px">${p.nameEn||""}</div>
           </div>
           <div style="display:flex;gap:5px;align-items:center">
             <span class="badge" style="background:${dc}12;color:${dc};border:1px solid ${dc}25">${p.direction==="bullish"?"강세":p.direction==="bearish"?"약세":"중립"}</span>
-            <span class="badge" style="background:#C9A96E12;color:#C9A96E;border:1px solid #C9A96E25">신뢰도 ${p.confidence}%</span>
+            <span class="badge" style="background:#C9A96E12;color:#C9A96E;border:1px solid #C9A96E25">신뢰도 ${p.confidence||"?"}%</span>
           </div>
         </div>
-        <!-- Pattern Chart with Overlay -->
-        <div class="chart-box" style="margin-bottom:14px;padding:8px 6px 4px">${svgPatternChart(visData,p,cp,data?.currency,pi)}</div>
-        <!-- Probability Bar -->
+        <div class="chart-box" style="margin-bottom:14px;padding:8px 6px 4px">${visData.length>5?svgPatternChart(visData,p,cp,data?.currency,pi):'<div class="mono" style="text-align:center;padding:20px;color:#555;font-size:10px">차트 데이터 부족</div>'}</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <span class="mono" style="font-size:9px;color:#4ECCA3;width:50px">상승 ${p.bullProb}%</span>
+          <span class="mono" style="font-size:9px;color:#4ECCA3;width:50px">상승 ${p.bullProb||"?"}%</span>
           <div style="flex:1;height:8px;border-radius:4px;overflow:hidden;background:#1a1a24;display:flex">
-            <div style="width:${p.bullProb}%;background:linear-gradient(90deg,#2D7A5F,#4ECCA3)"></div>
-            <div style="width:${p.bearProb}%;background:linear-gradient(90deg,#E85D75,#9B3A4A)"></div>
+            <div style="width:${_num(p.bullProb)||50}%;background:linear-gradient(90deg,#2D7A5F,#4ECCA3)"></div>
+            <div style="width:${_num(p.bearProb)||50}%;background:linear-gradient(90deg,#E85D75,#9B3A4A)"></div>
           </div>
-          <span class="mono" style="font-size:9px;color:#E85D75;width:50px;text-align:right">하락 ${p.bearProb}%</span>
+          <span class="mono" style="font-size:9px;color:#E85D75;width:50px;text-align:right">하락 ${p.bearProb||"?"}%</span>
         </div>
-        <!-- Metrics Grid -->
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">
           <div style="background:rgba(240,236,227,0.04);border:1px solid rgba(240,236,227,0.1);border-radius:6px;padding:10px;text-align:center">
             <div class="mono" style="font-size:8px;color:#88847d;margin-bottom:3px">진입가</div>
@@ -584,20 +592,19 @@ function renderAiResults(ai,data){
           </div>
           <div style="background:rgba(78,204,163,0.06);border:1px solid rgba(78,204,163,0.15);border-radius:6px;padding:10px;text-align:center">
             <div class="mono" style="font-size:8px;color:#4ECCA3;margin-bottom:3px">▲ 목표가</div>
-            <div class="mono" style="font-size:13px;color:#4ECCA3;font-weight:700">${p.targetUp?cs+fp(p.targetUp):"-"}</div>
+            <div class="mono" style="font-size:13px;color:#4ECCA3;font-weight:700">${tUp?cs+fp(tUp):"-"}</div>
             ${pctUp?`<div class="mono" style="font-size:10px;color:#4ECCA3;opacity:0.7;margin-top:2px">+${pctUp}%</div>`:""}
           </div>
           <div style="background:rgba(232,93,117,0.06);border:1px solid rgba(232,93,117,0.15);border-radius:6px;padding:10px;text-align:center">
             <div class="mono" style="font-size:8px;color:#E85D75;margin-bottom:3px">▼ 하락 예상</div>
-            <div class="mono" style="font-size:13px;color:#E85D75;font-weight:700">${p.targetDown?cs+fp(p.targetDown):"-"}</div>
+            <div class="mono" style="font-size:13px;color:#E85D75;font-weight:700">${tDn?cs+fp(tDn):"-"}</div>
             ${pctDn?`<div class="mono" style="font-size:10px;color:#E85D75;opacity:0.7;margin-top:2px">-${pctDn}%</div>`:""}
           </div>
           <div style="background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.15);border-radius:6px;padding:10px;text-align:center">
             <div class="mono" style="font-size:8px;color:#C9A96E;margin-bottom:3px">◈ 손절가</div>
-            <div class="mono" style="font-size:13px;color:#C9A96E;font-weight:700">${p.stopLoss?cs+fp(p.stopLoss):"-"}</div>
+            <div class="mono" style="font-size:13px;color:#C9A96E;font-weight:700">${slv?cs+fp(slv):"-"}</div>
           </div>
         </div>
-        <!-- Reasoning -->
         <p class="noto" style="font-size:12px;color:#aaa;line-height:1.7;margin:0">${p.reasoning||""}</p>
         ${p.pctFromLow?`<div class="mono" style="font-size:10px;color:#888;margin-top:8px">저점 대비: ${p.pctFromLow} · 목표까지: ${p.pctToTarget||"-"}</div>`:""}
       </div>`;
@@ -614,120 +621,128 @@ function renderAiResults(ai,data){
 
 // ═══════ PATTERN CHART (individual per pattern) ═══════
 function svgPatternChart(data,pat,cp,cur,idx){
-  if(!data||!data.length)return"";
-  const W=780,H=280,P={t:20,r:80,b:30,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  try{
+  if(!data||data.length<5)return`<div class="mono" style="text-align:center;padding:20px;color:#555;font-size:10px">차트 데이터 부족</div>`;
+
+  // Ensure all values are numbers (strip currency symbols, commas)
+  const num=v=>{if(v==null)return null;const n=parseFloat(String(v).replace(/[^0-9.\-]/g,''));return isFinite(n)&&n>0?n:null;};
+  const tUp=num(pat.targetUp), tDn=num(pat.targetDown), sl=num(pat.stopLoss);
+  const kp=(pat.keyPrices||[]).map(num).filter(v=>v!==null);
+  cp=num(cp)||data[data.length-1].close;
+
+  const W=900,H=260,P={t:22,r:92,b:28,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const dc=pat.direction==="bullish"?"#4ECCA3":pat.direction==="bearish"?"#E85D75":"#C9A96E";
   const cs=cur==="KRW"?"₩":"$";
-  const fm=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?(v/1000).toFixed(1)+"K":v.toFixed(v<10?4:2);
+  const fm=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?(v/1000).toFixed(1)+"K":Number(v).toFixed(v<10?4:2);
 
-  // Price range
-  const aP=data.flatMap(d=>[d.high,d.low]);
-  if(cp)aP.push(cp);
-  if(pat.targetUp)aP.push(pat.targetUp);
-  if(pat.targetDown)aP.push(pat.targetDown);
-  if(pat.stopLoss)aP.push(pat.stopLoss);
-  if(pat.keyPrices)pat.keyPrices.forEach(p=>aP.push(p));
-  const mn=Math.min(...aP)*.993,mx=Math.max(...aP)*1.007;
+  // Build price range from OHLCV + targets
+  const prices=data.flatMap(d=>[d.high,d.low]);
+  prices.push(cp);
+  if(tUp)prices.push(tUp);
+  if(tDn)prices.push(tDn);
+  if(sl)prices.push(sl);
+  kp.forEach(v=>prices.push(v));
+  const validP=prices.filter(v=>isFinite(v)&&v>0);
+  if(!validP.length)return`<div class="mono" style="text-align:center;padding:20px;color:#555;font-size:10px">가격 데이터 오류</div>`;
+
+  const mn=Math.min(...validP)*0.993, mx=Math.max(...validP)*1.007;
+  const rng=mx-mn||1;
   const tx=i=>P.l+(i/(data.length-1||1))*cw;
-  const ty=p=>P.t+(1-(p-mn)/(mx-mn||1))*ch;
-  const bw=Math.max(1,Math.min(6,cw/data.length*.5));
+  const ty=p=>P.t+(1-(p-mn)/rng)*ch;
+  const bw=Math.max(1.5,Math.min(6,cw/data.length*0.5));
 
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:300px">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
 
   // Grid
-  for(let i=0;i<=4;i++){const p=mn+(mx-mn)*(i/4);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".03"/><text x="${W-P.r+6}" y="${ty(p)+3}" fill="#555" font-size="7.5" font-family="DM Mono,monospace">${fm(p)}</text>`;}
+  for(let i=0;i<=4;i++){const p=mn+rng*(i/4);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".03"/><text x="${W-P.r+6}" y="${ty(p)+3}" fill="#555" font-size="7.5" font-family="DM Mono,monospace">${fm(p)}</text>`;}
 
-  // Candles (dimmed as background)
+  // Candles (dimmed background)
   data.forEach((d,i)=>{
+    if(!d||!isFinite(d.close))return;
     const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75";
-    const bt=ty(Math.max(d.open,d.close)),bb=ty(Math.min(d.open,d.close));
-    s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width=".8" opacity=".4"/>`;
-    s+=`<rect x="${x-bw/2}" y="${bt}" width="${bw}" height="${Math.max(bb-bt,1)}" fill="${cl}" opacity=".5" rx=".5"/>`;
+    const top=ty(Math.max(d.open,d.close)),bot=ty(Math.min(d.open,d.close));
+    s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width=".8" opacity=".35"/>`;
+    s+=`<rect x="${x-bw/2}" y="${top}" width="${bw}" height="${Math.max(bot-top,0.5)}" fill="${cl}" opacity=".45" rx=".5"/>`;
   });
 
-  // ★ Pattern Shape Overlay
-  const visLen=viewEnd-viewStart;
-  const si=pat.startIdx!=null?Math.max(0,pat.startIdx-viewStart):Math.max(0,data.length-60);
-  const ei=pat.endIdx!=null?Math.min(data.length-1,pat.endIdx-viewStart):data.length-1;
+  // ★ Pattern shape overlay
+  const patStart=Math.max(0,Math.min(data.length-1,num(pat.startIdx)||Math.floor(data.length*0.5)));
+  const patEnd=Math.max(patStart+1,Math.min(data.length-1,num(pat.endIdx)||data.length-1));
 
-  if(pat.keyPrices&&pat.keyPrices.length>=2){
+  if(kp.length>=2){
     // Draw pattern shape through key prices
-    const kLen=pat.keyPrices.length;
-    const kPts=pat.keyPrices.map((kp,ki)=>{
-      const kx=tx(si+Math.round((ei-si)*ki/(kLen-1||1)));
-      return [kx,ty(kp)];
+    const pts=kp.map((price,ki)=>{
+      const xi=patStart+Math.round((patEnd-patStart)*ki/(kp.length-1||1));
+      return [tx(Math.min(xi,data.length-1)),ty(price)];
     });
     // Shaded zone
-    const zoneTop=Math.min(...pat.keyPrices),zoneBot=Math.max(...pat.keyPrices);
-    s+=`<rect x="${tx(si)}" y="${ty(zoneBot)}" width="${tx(ei)-tx(si)}" height="${ty(zoneTop)-ty(zoneBot)}" fill="${dc}" opacity=".05" rx="4"/>`;
-    // Pattern line (thick, with glow)
-    const pathD=kPts.map((pt,i)=>`${i===0?"M":"L"}${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(" ");
-    s+=`<path d="${pathD}" fill="none" stroke="${dc}" stroke-width="3" opacity=".2" stroke-linecap="round" stroke-linejoin="round"/>`;
-    s+=`<path d="${pathD}" fill="none" stroke="${dc}" stroke-width="2" opacity=".7" stroke-linecap="round" stroke-linejoin="round"/>`;
-    // Key price dots
-    kPts.forEach((pt,ki)=>{
-      s+=`<circle cx="${pt[0]}" cy="${pt[1]}" r="4" fill="${dc}" opacity=".8"/>`;
-      s+=`<circle cx="${pt[0]}" cy="${pt[1]}" r="6" fill="none" stroke="${dc}" opacity=".3" stroke-width="1"/>`;
+    const zTop=ty(Math.max(...kp)), zBot=ty(Math.min(...kp));
+    s+=`<rect x="${tx(patStart)}" y="${zTop}" width="${Math.abs(tx(patEnd)-tx(patStart))||10}" height="${Math.abs(zBot-zTop)||10}" fill="${dc}" opacity=".06" rx="4"/>`;
+    // Pattern line with glow
+    const d=pts.map((p,i)=>`${i===0?"M":"L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+    s+=`<path d="${d}" fill="none" stroke="${dc}" stroke-width="3" opacity=".15" stroke-linecap="round" stroke-linejoin="round"/>`;
+    s+=`<path d="${d}" fill="none" stroke="${dc}" stroke-width="2" opacity=".65" stroke-linecap="round" stroke-linejoin="round"/>`;
+    // Dots
+    pts.forEach(p=>{
+      s+=`<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="${dc}" opacity=".7"/>`;
+      s+=`<circle cx="${p[0]}" cy="${p[1]}" r="6.5" fill="none" stroke="${dc}" opacity=".25" stroke-width=".8"/>`;
     });
   } else {
-    // Fallback: draw simple neckline between support levels
-    if(pat.targetDown&&pat.stopLoss){
-      const neckY=ty(Math.max(pat.targetDown,pat.stopLoss));
-      s+=`<line x1="${tx(si)}" y1="${neckY}" x2="${tx(ei)}" y2="${neckY}" stroke="${dc}" stroke-width="1.5" stroke-dasharray="6,3" opacity=".5"/>`;
+    // Fallback: horizontal neckline
+    const neckP=tDn||sl||cp;
+    if(neckP){
+      s+=`<line x1="${tx(patStart)}" y1="${ty(neckP)}" x2="${tx(patEnd)}" y2="${ty(neckP)}" stroke="${dc}" stroke-width="1.5" stroke-dasharray="6,3" opacity=".45"/>`;
     }
   }
 
   // Current price line
-  if(cp){
-    s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1" opacity=".5" stroke-dasharray="4,3"/>`;
-    s+=`<rect x="${W-P.r+2}" y="${ty(cp)-8}" width="72" height="16" rx="3" fill="rgba(201,169,110,.2)" stroke="#C9A96E40"/>`;
-    s+=`<text x="${W-P.r+8}" y="${ty(cp)+3}" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">${fm(cp)}</text>`;
-  }
+  s+=`<line x1="${P.l}" y1="${ty(cp)}" x2="${W-P.r}" y2="${ty(cp)}" stroke="#C9A96E" stroke-width="1" opacity=".45" stroke-dasharray="4,3"/>`;
+  s+=`<rect x="${W-P.r+2}" y="${ty(cp)-8}" width="84" height="16" rx="3" fill="rgba(201,169,110,.2)" stroke="#C9A96E40"/>`;
+  s+=`<text x="${W-P.r+8}" y="${ty(cp)+3}" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;
 
-  // Target line + arrow
-  if(pat.targetUp&&pat.targetUp>mn&&pat.targetUp<mx){
-    const tY=ty(pat.targetUp);
-    s+=`<line x1="${P.l}" y1="${tY}" x2="${W-P.r}" y2="${tY}" stroke="#4ECCA3" stroke-width="1" stroke-dasharray="3,3" opacity=".6"/>`;
-    s+=`<rect x="${W-P.r+2}" y="${tY-8}" width="72" height="16" rx="3" fill="rgba(78,204,163,.15)" stroke="#4ECCA330"/>`;
-    s+=`<text x="${W-P.r+8}" y="${tY+3}" fill="#4ECCA3" font-size="8" font-weight="600" font-family="DM Mono,monospace">${fm(pat.targetUp)}</text>`;
-    // Arrow from current to target
-    if(cp){
-      const arX=tx(data.length-1)+12;
-      s+=`<line x1="${arX}" y1="${ty(cp)}" x2="${arX}" y2="${tY}" stroke="#4ECCA3" stroke-width="1.5" opacity=".5" marker-end="url(#arrowUp${idx||0})"/>`;
-      // Percentage label on arrow
-      const midY=(ty(cp)+tY)/2;
-      const pct=((pat.targetUp/cp-1)*100).toFixed(1);
-      s+=`<rect x="${arX+4}" y="${midY-8}" width="${pct.length*7+20}" height="16" rx="3" fill="rgba(78,204,163,.2)"/>`;
-      s+=`<text x="${arX+10}" y="${midY+3}" fill="#4ECCA3" font-size="9" font-weight="700" font-family="DM Mono,monospace">+${pct}%</text>`;
+  // Target up line + arrow + percentage
+  if(tUp&&tUp>mn&&tUp<mx){
+    s+=`<line x1="${P.l}" y1="${ty(tUp)}" x2="${W-P.r}" y2="${ty(tUp)}" stroke="#4ECCA3" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
+    s+=`<rect x="${W-P.r+2}" y="${ty(tUp)-8}" width="84" height="16" rx="3" fill="rgba(78,204,163,.12)" stroke="#4ECCA325"/>`;
+    s+=`<text x="${W-P.r+8}" y="${ty(tUp)+3}" fill="#4ECCA3" font-size="8" font-weight="600" font-family="DM Mono,monospace">▲${cs}${fm(tUp)}</text>`;
+    // Arrow + pct
+    const arX=tx(data.length-1)+14;
+    if(ty(cp)>ty(tUp)+10){
+      s+=`<line x1="${arX}" y1="${ty(cp)-4}" x2="${arX}" y2="${ty(tUp)+4}" stroke="#4ECCA3" stroke-width="2" opacity=".5"/>`;
+      s+=`<polygon points="${arX-4},${ty(tUp)+8} ${arX+4},${ty(tUp)+8} ${arX},${ty(tUp)+2}" fill="#4ECCA3" opacity=".5"/>`;
+      const midY=(ty(cp)+ty(tUp))/2;
+      const pct=((tUp/cp-1)*100).toFixed(1);
+      s+=`<rect x="${arX+6}" y="${midY-9}" width="${pct.length*7+22}" height="18" rx="4" fill="rgba(78,204,163,.18)"/>`;
+      s+=`<text x="${arX+12}" y="${midY+3}" fill="#4ECCA3" font-size="10" font-weight="700" font-family="DM Mono,monospace">+${pct}%</text>`;
     }
   }
 
   // Target down line
-  if(pat.targetDown&&pat.targetDown>mn&&pat.targetDown<mx){
-    const tY=ty(pat.targetDown);
-    s+=`<line x1="${P.l}" y1="${tY}" x2="${W-P.r}" y2="${tY}" stroke="#E85D75" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>`;
-    s+=`<rect x="${W-P.r+2}" y="${tY-8}" width="72" height="16" rx="3" fill="rgba(232,93,117,.12)" stroke="#E85D7530"/>`;
-    s+=`<text x="${W-P.r+8}" y="${tY+3}" fill="#E85D75" font-size="8" font-weight="600" font-family="DM Mono,monospace">${fm(pat.targetDown)}</text>`;
+  if(tDn&&tDn>mn&&tDn<mx){
+    s+=`<line x1="${P.l}" y1="${ty(tDn)}" x2="${W-P.r}" y2="${ty(tDn)}" stroke="#E85D75" stroke-width="1" stroke-dasharray="3,3" opacity=".45"/>`;
+    s+=`<rect x="${W-P.r+2}" y="${ty(tDn)-8}" width="84" height="16" rx="3" fill="rgba(232,93,117,.1)" stroke="#E85D7525"/>`;
+    s+=`<text x="${W-P.r+8}" y="${ty(tDn)+3}" fill="#E85D75" font-size="8" font-weight="600" font-family="DM Mono,monospace">▼${cs}${fm(tDn)}</text>`;
   }
 
   // Stop loss line
-  if(pat.stopLoss&&pat.stopLoss>mn&&pat.stopLoss<mx){
-    const slY=ty(pat.stopLoss);
-    s+=`<line x1="${tx(Math.max(0,data.length-40))}" y1="${slY}" x2="${W-P.r}" y2="${slY}" stroke="#C9A96E" stroke-width="1" stroke-dasharray="2,3" opacity=".4"/>`;
-    s+=`<text x="${tx(Math.max(0,data.length-40))-4}" y="${slY+3}" fill="#C9A96E" font-size="7.5" font-family="DM Mono,monospace" text-anchor="end">SL</text>`;
+  if(sl&&sl>mn&&sl<mx){
+    s+=`<line x1="${tx(Math.max(0,data.length-50))}" y1="${ty(sl)}" x2="${W-P.r}" y2="${ty(sl)}" stroke="#C9A96E" stroke-width="1" stroke-dasharray="2,3" opacity=".35"/>`;
+    s+=`<text x="${tx(Math.max(0,data.length-50))-4}" y="${ty(sl)+3}" fill="#C9A96E" font-size="7.5" font-family="DM Mono,monospace" text-anchor="end">SL ${fm(sl)}</text>`;
   }
 
-  // Arrow marker definition
-  s+=`<defs><marker id="arrowUp${idx||0}" viewBox="0 0 10 10" refX="5" refY="10" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,10 L5,0 L10,10" fill="#4ECCA3" opacity=".6"/></marker></defs>`;
-
-  // Pattern name label
-  s+=`<text x="${P.l+4}" y="14" fill="${dc}" font-size="9" font-weight="600" font-family="DM Mono,monospace">${pat.name} (${pat.confidence}%)</text>`;
+  // Pattern name
+  s+=`<text x="${P.l+4}" y="14" fill="${dc}" font-size="9" font-weight="600" font-family="DM Mono,monospace">${pat.name||""} (${pat.confidence||"?"}%)</text>`;
 
   // Date labels
-  data.filter((_,i)=>i%Math.max(1,Math.floor(data.length/6))===0).forEach(d=>{const i=data.indexOf(d);s+=`<text x="${tx(i)}" y="${H-P.b+14}" fill="#444" font-size="7" font-family="DM Mono,monospace" text-anchor="middle">${(d.date||"").slice(5)}</text>`;});
+  const step=Math.max(1,Math.floor(data.length/7));
+  data.filter((_,i)=>i%step===0).forEach((d,_,arr)=>{const i=data.indexOf(d);s+=`<text x="${tx(i)}" y="${H-P.b+14}" fill="#444" font-size="7" font-family="DM Mono,monospace" text-anchor="middle">${(d.date||"").slice(5,10)}</text>`;});
 
   s+=`</svg>`;
   return s;
+  }catch(err){
+    console.warn("svgPatternChart error:",err);
+    return`<div class="mono" style="text-align:center;padding:20px;color:#E85D75;font-size:10px">차트 렌더링 오류: ${err.message||err}</div>`;
+  }
 }
 
 // ═══════ CHART SVG ═══════
@@ -840,13 +855,13 @@ function svgChart(data,cp,cur,ai,stockName){
 function svgRSI(data){
   const cls=data.map(d=>d.close);if(cls.length<15)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI: 15봉 이상 필요</div>`;
   const n=14,rs=[];for(let e=n;e<=cls.length;e++){let g=0,l=0;for(let i=1;i<=n;i++){const d=cls[e-n+i]-cls[e-n+i-1];d>0?g+=d:l+=Math.abs(d);}let ag=g/n,al=l/n;for(let i=n+1;i<e;i++){const d=cls[i]-cls[i-1];ag=(ag*(n-1)+(d>0?d:0))/n;al=(al*(n-1)+(d<0?Math.abs(d):0))/n;}rs.push(al===0?100:+(100-100/(1+ag/al)).toFixed(1));}
-  const W=380,H=110,P={t:18,r:36,b:16,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const W=900,H=100,P={t:18,r:92,b:12,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const tx=i=>P.l+(i/(rs.length-1||1))*cw,ty=v=>P.t+(1-v/100)*ch;
   const lv=rs[rs.length-1],rc=lv>70?"#E85D75":lv<30?"#4ECCA3":"#C9A96E";
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:120px">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:110px">`;
   s+=`<text x="${P.l+2}" y="12" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">RSI(14)</text><text x="${W-P.r}" y="12" fill="${rc}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${lv}</text>`;
   s+=`<rect x="${P.l}" y="${ty(100)}" width="${cw}" height="${ty(70)-ty(100)}" fill="rgba(78,204,163,.03)"/><rect x="${P.l}" y="${ty(30)}" width="${cw}" height="${ty(0)-ty(30)}" fill="rgba(232,93,117,.03)"/>`;
-  [30,50,70].forEach(v=>{s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#fff" stroke-opacity="${v===50?".05":".07"}" stroke-dasharray="3,4"/><text x="${W-P.r+3}" y="${ty(v)+3}" fill="${v>=70?"#E85D75":v<=30?"#4ECCA3":"#555"}" font-size="7" font-family="DM Mono,monospace">${v}</text>`;});
+  [30,50,70].forEach(v=>{s+=`<line x1="${P.l}" y1="${ty(v)}" x2="${W-P.r}" y2="${ty(v)}" stroke="#fff" stroke-opacity="${v===50?".05":".07"}" stroke-dasharray="3,4"/><text x="${W-P.r+6}" y="${ty(v)+3}" fill="${v>=70?"#E85D75":v<=30?"#4ECCA3":"#555"}" font-size="7" font-family="DM Mono,monospace">${v}</text>`;});
   s+=`<polyline points="${rs.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" fill="none" stroke="${rc}" stroke-width="1.3" stroke-linecap="round"/><circle cx="${tx(rs.length-1)}" cy="${ty(lv)}" r="2.5" fill="${rc}"/></svg>`;
   return s;
 }
@@ -859,18 +874,20 @@ function svgMACD(data){
   const slR=ema(ml.slice(26),9),sl=Array(34).fill(null).concat(slR);
   const hl=ml.map((v,i)=>sl[i]!=null?v-sl[i]:null);
   const st=26,m=ml.slice(st),sg=sl.slice(st),hi=hl.slice(st);
-  const W=380,H=110,P={t:18,r:36,b:16,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const W=900,H=100,P={t:18,r:92,b:12,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const aV=[...m,...sg.filter(v=>v!=null),...hi.filter(v=>v!=null)];
   const vM=Math.max(...aV.map(Math.abs))*1.1||1;
   const tx=i=>P.l+(i/(m.length-1||1))*cw,ty=v=>P.t+ch/2-(v/vM)*(ch/2);
   const bw=Math.max(1,Math.min(5,cw/m.length*.65));
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:120px">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:110px">`;
   s+=`<text x="${P.l+2}" y="12" fill="#C39BD3" font-size="8" font-weight="600" font-family="DM Mono,monospace">MACD(12,26,9)</text><text x="${W-P.r}" y="12" fill="${hi[hi.length-1]>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="end">${m[m.length-1]?.toFixed(2)||"-"}</text>`;
   s+=`<line x1="${P.l}" y1="${ty(0)}" x2="${W-P.r}" y2="${ty(0)}" stroke="#fff" stroke-opacity=".06"/>`;
   hi.forEach((v,i)=>{if(v==null)return;const x=tx(i),y0=ty(0),y1=ty(v);s+=`<rect x="${x-bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.abs(y1-y0)||1}" fill="${v>=0?"#4ECCA3":"#E85D75"}" opacity=".45" rx=".5"/>`;});
   s+=`<polyline points="${m.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" fill="none" stroke="#85C1E9" stroke-width="1.2"/>`;
   const sP=sg.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);
   if(sP.length>1)s+=`<polyline points="${sP.join(" ")}" fill="none" stroke="#E8A87C" stroke-width="1.2" stroke-dasharray="3,2"/>`;
+  s+=`<line x1="${W-P.r-110}" y1="${H-6}" x2="${W-P.r-98}" y2="${H-6}" stroke="#85C1E9" stroke-width="1.5"/><text x="${W-P.r-94}" y="${H-3}" fill="#85C1E9" font-size="7" font-family="DM Mono,monospace">MACD</text>`;
+  s+=`<line x1="${W-P.r-60}" y1="${H-6}" x2="${W-P.r-48}" y2="${H-6}" stroke="#E8A87C" stroke-width="1.5" stroke-dasharray="3,2"/><text x="${W-P.r-44}" y="${H-3}" fill="#E8A87C" font-size="7" font-family="DM Mono,monospace">Signal</text>`;
   s+=`</svg>`;
   return s;
 }
