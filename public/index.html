@@ -103,19 +103,18 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
       <button class="src-btn" data-s="naver" onclick="setSrc('naver')">네이버</button>
       <button class="src-btn" data-s="coingecko" onclick="setSrc('coingecko')">Crypto</button>
     </div>
-    <div class="tf-bar" id="tfBar">
-      <button class="tf-btn" data-t="60m" onclick="setTf('60m')">1H</button>
-      <button class="tf-btn on" data-t="1d" onclick="setTf('1d')">1D</button>
-      <button class="tf-btn" data-t="1wk" onclick="setTf('1wk')">1W</button>
-      <button class="tf-btn" data-t="1mo" onclick="setTf('1mo')">1M</button>
+    <div class="tf-bar" id="tfBar" style="flex-wrap:wrap">
+      <button class="tf-btn" data-t="1m" onclick="setTf('1m')">1분</button>
+      <button class="tf-btn" data-t="5m" onclick="setTf('5m')">5분</button>
+      <button class="tf-btn" data-t="10m" onclick="setTf('10m')">10분</button>
+      <button class="tf-btn" data-t="30m" onclick="setTf('30m')">30분</button>
+      <button class="tf-btn" data-t="60m" onclick="setTf('60m')">1시간</button>
+      <button class="tf-btn" data-t="4h" onclick="setTf('4h')">4시간</button>
+      <button class="tf-btn on" data-t="1d" onclick="setTf('1d')">일봉</button>
+      <button class="tf-btn" data-t="1wk" onclick="setTf('1wk')">주봉</button>
+      <button class="tf-btn" data-t="1mo" onclick="setTf('1mo')">월봉</button>
     </div>
     <button class="pill" id="addWlBtn" onclick="addToWatchlist()" style="display:none;border-color:#C9A96E40;color:#C9A96E">+ 워치리스트</button>
-    <div class="tf-bar" id="zoomBar">
-      <button class="tf-btn" data-z="60" onclick="setZoom(60)">60봉</button>
-      <button class="tf-btn" data-z="120" onclick="setZoom(120)">120</button>
-      <button class="tf-btn on" data-z="260" onclick="setZoom(260)">260</button>
-      <button class="tf-btn" data-z="9999" onclick="setZoom(9999)">전체</button>
-    </div>
   </div>
   <div id="analyzeOut"></div>
   <div id="loadEl" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p id="loadMsg" class="noto" style="color:#666;font-size:12px;margin-top:14px"></p></div>
@@ -161,7 +160,8 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 <script>
 // ═══════ STATE ═══════
 let src="yahoo",tf="1d",curData=null,curSym=null,selSym=null;
-let candleCount=260; // default visible candles
+let viewStart=0,viewEnd=260; // visible candle range (indices into ohlcv)
+let isDragging=false,dragStartX=0,dragStartViewStart=0;
 let watchlist=JSON.parse(localStorage.getItem("wl")||"[]");
 
 // ═══════ TABS ═══════
@@ -177,7 +177,8 @@ function switchTab(t){
 // ═══════ CONTROLS ═══════
 function setSrc(s){src=s;document.querySelectorAll("#srcBar .src-btn").forEach(b=>b.classList.toggle("on",b.dataset.s===s));}
 function setTf(t){tf=t;document.querySelectorAll("#tfBar .tf-btn").forEach(b=>b.classList.toggle("on",b.dataset.t===t));if(curData)fetchData();}
-function setZoom(n){candleCount=n;document.querySelectorAll("#zoomBar .tf-btn").forEach(b=>b.classList.toggle("on",+b.dataset.z===n));if(curData)render(curData,null);}
+function resetView(totalLen){viewStart=Math.max(0,totalLen-260);viewEnd=totalLen;}
+function reRender(){if(curData)render(curData,null);}
 function qk(s,sr){document.getElementById("symInput").value=s;selSym={symbol:s,source:sr};setSrc(sr);hideDrop();fetchData();}
 
 // ═══════ AUTOCOMPLETE ═══════
@@ -216,7 +217,8 @@ async function fetchData(){
     const r=await(await fetch(`/api/stock?symbol=${encodeURIComponent(sym)}&source=${sr}&interval=${tf}`)).json();
     if(r.error)throw new Error(r.error);if(!r.ohlcv?.length)throw new Error("데이터 없음. 티커 확인.");
     curData=r;
-    render(r,null); // render chart without AI
+    resetView(r.ohlcv.length);
+    render(r,null);
     document.getElementById("addWlBtn").style.display="inline-block";
   }catch(e){err.style.display="block";document.getElementById("errMsg").textContent=e.message;
   }finally{btn.disabled=false;btn.textContent="분석";ld.style.display="none";}
@@ -395,7 +397,7 @@ JSON으로만 응답 (모든 텍스트 한국어):
 // ═══════ RENDER ═══════
 function render(data,ai){
   const allData=data.ohlcv;
-  const o=allData.slice(-candleCount); // zoom: only show selected range
+  const o=allData.slice(viewStart,viewEnd); // interactive zoom range
   const cp=data.currentPrice||o[o.length-1].close,pv=o.length>1?o[o.length-2].close:cp;
   const ch=((cp-pv)/pv*100).toFixed(2),cs=data.currency==="KRW"?"₩":"$",fp=v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
   const cls=o.map(d=>d.close),h52=Math.max(...o.map(d=>d.high)),l52=Math.min(...o.map(d=>d.low));
@@ -413,7 +415,8 @@ function render(data,ai){
     <div style="display:flex;gap:6px;margin-top:3px"><span class="mono" style="font-size:11px;color:#888">${stockCode}</span><span class="badge" style="background:rgba(78,204,163,0.08);color:#4ECCA3;border:1px solid rgba(78,204,163,0.15)">● ${data.source}</span><span class="badge" style="background:rgba(201,169,110,0.08);color:#C9A96E;border:1px solid rgba(201,169,110,0.15)">${o.length}봉·${tf}</span><span class="mono" style="font-size:8px;color:#555">${new Date(data.fetchedAt).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})}</span></div></div>
     <div style="text-align:right"><div class="mono" style="font-size:28px;font-weight:700">${cs}${fp(cp)}</div><div class="mono" style="font-size:13px;margin-top:2px;color:${ch>=0?"#4ECCA3":"#E85D75"}">${ch>=0?"▲":"▼"} ${Math.abs(ch)}%</div></div>
   </div>
-  <div class="chart-box">${svgChart(o,cp,data.currency,ai,stockLabel)}</div>
+  <div id="mainChartWrap" class="chart-box" style="cursor:grab;user-select:none">${svgChart(o,cp,data.currency,ai,stockLabel)}</div>
+  <div class="mono" style="font-size:8px;color:#444;text-align:center;margin:-12px 0 14px">마우스 휠: 줌 · 클릭&드래그: 이동 · 표시: ${o.length}봉 / 전체 ${allData.length}봉</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
     <div class="chart-box" style="margin-bottom:0">${svgRSI(o)}</div>
     <div class="chart-box" style="margin-bottom:0">${svgMACD(o)}</div>
@@ -432,6 +435,55 @@ function render(data,ai){
 
   h+=`</div>`;
   document.getElementById("analyzeOut").innerHTML=h;
+
+  // ── Bind mouse wheel + drag events to chart ──
+  const chartEl=document.getElementById("mainChartWrap");
+  if(chartEl&&curData){
+    const total=curData.ohlcv.length;
+    // Wheel zoom
+    chartEl.onwheel=(e)=>{
+      e.preventDefault();
+      const visLen=viewEnd-viewStart;
+      const zoomDir=e.deltaY>0?1:-1; // scroll down=zoom out, up=zoom in
+      const step=Math.max(2,Math.round(visLen*0.15));
+      if(zoomDir>0){// zoom out
+        viewStart=Math.max(0,viewStart-step);
+        viewEnd=Math.min(total,viewEnd+step);
+      }else{// zoom in
+        if(visLen>20){
+          viewStart=Math.min(viewEnd-20,viewStart+step);
+          viewEnd=Math.max(viewStart+20,viewEnd-step);
+        }
+      }
+      render(curData,null);
+    };
+    // Drag pan
+    chartEl.onmousedown=(e)=>{isDragging=true;dragStartX=e.clientX;dragStartViewStart=viewStart;chartEl.style.cursor="grabbing";};
+    chartEl.onmousemove=(e)=>{
+      if(!isDragging)return;
+      const dx=e.clientX-dragStartX;
+      const visLen=viewEnd-viewStart;
+      const pxPerCandle=chartEl.offsetWidth/(visLen||1);
+      const shift=Math.round(-dx/pxPerCandle);
+      const newStart=Math.max(0,Math.min(total-visLen,dragStartViewStart+shift));
+      viewStart=newStart;viewEnd=newStart+visLen;
+      render(curData,null);
+    };
+    chartEl.onmouseup=chartEl.onmouseleave=()=>{if(isDragging){isDragging=false;chartEl.style.cursor="grab";}};
+    // Touch support
+    chartEl.ontouchstart=(e)=>{isDragging=true;dragStartX=e.touches[0].clientX;dragStartViewStart=viewStart;};
+    chartEl.ontouchmove=(e)=>{
+      if(!isDragging)return;e.preventDefault();
+      const dx=e.touches[0].clientX-dragStartX;
+      const visLen=viewEnd-viewStart;
+      const pxPerCandle=chartEl.offsetWidth/(visLen||1);
+      const shift=Math.round(-dx/pxPerCandle);
+      const newStart=Math.max(0,Math.min(total-visLen,dragStartViewStart+shift));
+      viewStart=newStart;viewEnd=newStart+visLen;
+      render(curData,null);
+    };
+    chartEl.ontouchend=()=>{isDragging=false;};
+  }
 }
 
 // ═══════ RENDER AI RESULTS ═══════
@@ -495,7 +547,7 @@ function renderAiResults(ai,data){
   if(ai?.detectedPatterns?.length){
     h+=`<div class="mono" style="font-size:10px;color:#C9A96E;letter-spacing:0.12em;margin:16px 0 12px">예상 패턴 (${ai.detectedPatterns.length}개 감지)</div>`;
     const ohlcv=data?.ohlcv||[];
-    const visData=ohlcv.slice(-candleCount);
+    const visData=ohlcv.slice(viewStart,viewEnd);
     ai.detectedPatterns.forEach((p,pi)=>{
       const dc=p.direction==="bullish"?"#4ECCA3":p.direction==="bearish"?"#E85D75":"#C9A96E";
       const cp=data?.currentPrice||visData[visData.length-1]?.close||0;
@@ -594,8 +646,9 @@ function svgPatternChart(data,pat,cp,cur,idx){
   });
 
   // ★ Pattern Shape Overlay
-  const si=pat.startIdx!=null?Math.max(0,pat.startIdx-(data.length>candleCount?data.length-candleCount:0)):Math.max(0,data.length-60);
-  const ei=pat.endIdx!=null?Math.min(data.length-1,pat.endIdx-(data.length>candleCount?data.length-candleCount:0)):data.length-1;
+  const visLen=viewEnd-viewStart;
+  const si=pat.startIdx!=null?Math.max(0,pat.startIdx-viewStart):Math.max(0,data.length-60);
+  const ei=pat.endIdx!=null?Math.min(data.length-1,pat.endIdx-viewStart):data.length-1;
 
   if(pat.keyPrices&&pat.keyPrices.length>=2){
     // Draw pattern shape through key prices
@@ -725,6 +778,40 @@ function svgChart(data,cp,cur,ai,stockName){
     s+=`<polygon points="${uPts.join(" ")} ${lPts.join(" ")}" fill="#C39BD3" opacity=".04"/>`;
     s+=`<polyline points="${uPts.join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
     s+=`<polyline points="${lPts.reverse().join(" ")}" fill="none" stroke="#C39BD3" stroke-width=".7" opacity=".25" stroke-dasharray="3,3"/>`;
+  }
+
+  // ★ Auto Trendlines (linear regression of swing highs/lows)
+  if(data.length>=20){
+    const swH=[],swL=[];
+    for(let i=3;i<data.length-3;i++){
+      const win=data.slice(i-3,i+4);
+      if(data[i].high>=Math.max(...win.map(d=>d.high)))swH.push({i,p:data[i].high});
+      if(data[i].low<=Math.min(...win.map(d=>d.low)))swL.push({i,p:data[i].low});
+    }
+    const linReg=(pts)=>{
+      if(pts.length<2)return null;
+      const n=pts.length;let sx=0,sy=0,sxy=0,sx2=0;
+      pts.forEach(p=>{sx+=p.i;sy+=p.p;sxy+=p.i*p.p;sx2+=p.i*p.i;});
+      const det=n*sx2-sx*sx;if(Math.abs(det)<0.001)return null;
+      const slope=(n*sxy-sx*sy)/det,intercept=(sy-slope*sx)/n;
+      return {slope,intercept,eval:(x)=>slope*x+intercept};
+    };
+    const cutoff=Math.floor(data.length*0.4);
+    const recentH=swH.filter(p=>p.i>=cutoff),recentL=swL.filter(p=>p.i>=cutoff);
+    const regH=linReg(recentH);
+    if(regH&&Math.abs(regH.slope)>0.0001){
+      const y1=ty(regH.eval(cutoff)),y2=ty(regH.eval(data.length-1));
+      const col=regH.slope>0?"#4ECCA3":"#E85D75";
+      s+=`<line x1="${tx(cutoff)}" y1="${y1}" x2="${tx(data.length-1)}" y2="${y2}" stroke="${col}" stroke-width="1.5" opacity=".35" stroke-dasharray="8,4"/>`;
+      s+=`<text x="${tx(data.length-1)+4}" y="${y2+3}" fill="${col}" font-size="7" font-family="DM Mono,monospace" opacity=".5">상단추세</text>`;
+    }
+    const regL=linReg(recentL);
+    if(regL&&Math.abs(regL.slope)>0.0001){
+      const y1=ty(regL.eval(cutoff)),y2=ty(regL.eval(data.length-1));
+      const col=regL.slope>0?"#4ECCA3":"#E85D75";
+      s+=`<line x1="${tx(cutoff)}" y1="${y1}" x2="${tx(data.length-1)}" y2="${y2}" stroke="${col}" stroke-width="1.5" opacity=".35" stroke-dasharray="8,4"/>`;
+      s+=`<text x="${tx(data.length-1)+4}" y="${y2+3}" fill="${col}" font-size="7" font-family="DM Mono,monospace" opacity=".5">하단추세</text>`;
+    }
   }
 
   // Candles
