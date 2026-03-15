@@ -142,6 +142,11 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
     <button id="scanCat_kosdaq" onclick="toggleScanCat('kosdaq')" class="pill" style="border-color:#85C1E930;color:#85C1E9;padding:5px 12px;font-size:11px">코스닥 <span id="scanCnt_kosdaq">500</span></button>
     <button id="scanCat_us" onclick="toggleScanCat('us')" class="pill" style="border-color:#C39BD330;color:#C39BD3;padding:5px 12px;font-size:11px">미국 80</button>
     <button id="scanCat_crypto" onclick="toggleScanCat('crypto')" class="pill" style="border-color:#7DCEA030;color:#7DCEA0;padding:5px 12px;font-size:11px">암호화폐 20</button>
+    <span style="border-left:1px solid #1a1a24;height:20px;margin:0 4px"></span>
+    <select id="scanDays" onchange="saveScanDays()" style="background:#0e0e14;color:#C9A96E;border:1px solid #C9A96E30;border-radius:6px;padding:4px 8px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer">
+      <option value="5">5일</option><option value="10" selected>10일</option><option value="20">20일</option><option value="30">30일</option>
+      <option value="60">60일</option><option value="90">90일</option><option value="180">180일</option><option value="365">365일</option>
+    </select>
     <span id="scanTotal" class="mono" style="font-size:10px;color:#555"></span>
   </div>
   <!-- Edit panel (hidden) -->
@@ -155,7 +160,7 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   <div id="scanEmpty" style="text-align:center;padding:60px 0">
     <div style="font-size:48px;opacity:.1;margin-bottom:12px">★</div>
     <p class="noto" style="color:#555;font-size:13px;line-height:1.8">한국 + 미국 + 암호화폐 주요 종목에서<br>★ 강력 매수 시그널(3+합류)을 스캔합니다</p>
-    <p class="mono" style="color:#444;font-size:10px;margin-top:8px">최근 10거래일 이내 발생한 신호만 표시</p>
+    <p class="mono" style="color:#444;font-size:10px;margin-top:8px">기간을 선택하여 스캔 범위를 조절하세요</p>
   </div>
 </div>
 
@@ -2079,6 +2084,9 @@ let scanCats=JSON.parse(localStorage.getItem("scanCats")||'{"kospi":true,"kosdaq
 let scanCustom=JSON.parse(localStorage.getItem("scanCustom")||'[]');
 let scanExclude=JSON.parse(localStorage.getItem("scanExclude")||'[]');
 function saveScanSettings(){localStorage.setItem("scanCats",JSON.stringify(scanCats));localStorage.setItem("scanCustom",JSON.stringify(scanCustom));localStorage.setItem("scanExclude",JSON.stringify(scanExclude));}
+function saveScanDays(){const v=document.getElementById("scanDays").value;localStorage.setItem("scanDays",v);}
+function getScanDays(){return parseInt(localStorage.getItem("scanDays")||"10");}
+function restoreScanDays(){const el=document.getElementById("scanDays");if(el)el.value=getScanDays();}
 function getScanUniverse(){
   let list=[];
   if(scanCats.kospi)list.push(..._U.kospi.map(x=>({symbol:x.s,name:x.n,source:"naver",cat:"kospi"})));
@@ -2118,7 +2126,7 @@ function renderScanEditList(){
 }
 
 function loadScanCache(){
-  updateScanUI();
+  updateScanUI();restoreScanDays();
   const cached=localStorage.getItem("scanResults");
   if(cached){
     try{
@@ -2175,7 +2183,7 @@ async function runScan(){
     bar.style.width=p+"%";
 
     try{
-      const resp=await fetch("/api/scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbols:batch})});
+      const resp=await fetch("/api/scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbols:batch,days:getScanDays()})});
       const data=await resp.json();
       if(data.results)allResults.push(...data.results);
     }catch(e){/* batch failed, continue */}
@@ -2187,7 +2195,7 @@ async function runScan(){
   // Sort by signal count desc, then by daysAgo asc
   allResults.sort((a,b)=>(b.bestSignal.count-a.bestSignal.count)||(a.bestSignal.daysAgo-b.bestSignal.daysAgo));
 
-  const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length};
+  const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length,scanDays:getScanDays()};
   localStorage.setItem("scanResults",JSON.stringify(result));
   renderScanResults(result);
 
@@ -2221,12 +2229,12 @@ function renderScanResults(data){
   if(data.scannedAt){
     const d=new Date(data.scannedAt);
     const ago=Math.round((Date.now()-d.getTime())/3600000);
-    timeEl.textContent=`마지막 스캔: ${d.toLocaleString("ko-KR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:false})} (${ago}시간 전) · ${data.totalScanned||0}종목 스캔`;
+    timeEl.textContent=`마지막 스캔: ${d.toLocaleString("ko-KR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:false})} (${ago}시간 전) · ${data.totalScanned||0}종목 · ${data.scanDays||10}일 기간`;
   }
 
   if(!data.results||!data.results.length){
     empty.style.display="block";
-    empty.querySelector("p").textContent="최근 10일 이내 ★ 강력 매수 시그널이 감지된 종목이 없습니다.";
+    empty.querySelector("p").textContent=`최근 ${getScanDays()}일 이내 ★ 강력 매수 시그널이 감지된 종목이 없습니다.`;
     el.innerHTML="";
     return;
   }
