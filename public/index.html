@@ -1551,30 +1551,23 @@ function svgChart(data,cp,cur,ai,stockName){
         }
       }
 
-      // ═══ SELL signals (2+ only) ═══
-      if(sig.sells.length>=2){
+      // ═══ SELL signals (3+ strong confluence only) ═══
+      if(sig.sells.length>=3){
         const n=sig.sells.length;
         const yB=ty(d.high);
         if(!isFinite(yB))return;
         const y=yB-6;
 
-        if(n>=3){
-          s+=`<circle cx="${x}" cy="${y-20}" r="18" fill="#E85D75" opacity=".15"/>`;
-          s+=`<circle cx="${x}" cy="${y-20}" r="11" fill="#E85D75" opacity=".1"/>`;
-          s+=`<polygon points="${x},${y-6} ${x-6},${y-16} ${x-11},${y-16} ${x-7},${y-23} ${x-9},${y-33} ${x},${y-27} ${x+9},${y-33} ${x+7},${y-23} ${x+11},${y-16} ${x+6},${y-16}" fill="#E85D75" stroke="#fff" stroke-width=".6" stroke-opacity=".4"/>`;
-          s+=`<rect x="${x-28}" y="${y-52}" width="56" height="16" rx="4" fill="rgba(232,93,117,.25)" stroke="#E85D7550"/>`;
-          s+=`<text x="${x}" y="${y-41}" fill="#E85D75" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="middle">★매도 ${n}</text>`;
-        } else {
-          s+=`<circle cx="${x}" cy="${y-14}" r="12" fill="#E85D75" opacity=".1"/>`;
-          s+=`<polygon points="${x},${y-4} ${x-8},${y-22} ${x+8},${y-22}" fill="#E85D75" opacity=".85" stroke="#E85D75" stroke-width=".8"/>`;
-          s+=`<rect x="${x-22}" y="${y-38}" width="44" height="14" rx="3" fill="rgba(232,93,117,.2)"/>`;
-          s+=`<text x="${x}" y="${y-28}" fill="#E85D75" font-size="7.5" font-weight="600" font-family="DM Mono,monospace" text-anchor="middle">${sig.sells.join("+")}</text>`;
-        }
+        s+=`<circle cx="${x}" cy="${y-20}" r="18" fill="#E85D75" opacity=".15"/>`;
+        s+=`<circle cx="${x}" cy="${y-20}" r="11" fill="#E85D75" opacity=".1"/>`;
+        s+=`<polygon points="${x},${y-6} ${x-6},${y-16} ${x-11},${y-16} ${x-7},${y-23} ${x-9},${y-33} ${x},${y-27} ${x+9},${y-33} ${x+7},${y-23} ${x+11},${y-16} ${x+6},${y-16}" fill="#E85D75" stroke="#fff" stroke-width=".6" stroke-opacity=".4"/>`;
+        s+=`<rect x="${x-28}" y="${y-52}" width="56" height="16" rx="4" fill="rgba(232,93,117,.25)" stroke="#E85D7550"/>`;
+        s+=`<text x="${x}" y="${y-41}" fill="#E85D75" font-size="9" font-weight="700" font-family="DM Mono,monospace" text-anchor="middle">★매도 ${n}</text>`;
       }
     });
 
     // Signal legend
-    s+=`<text x="${P.l+4}" y="${H-16}" fill="#888" font-size="7" font-family="DM Mono,monospace" opacity=".5">▲매수 ▼매도 (2+합류+캔들확인) GC DC RSI MACD BB MA↑↓ ★=3+강력합류</text>`;
+    s+=`<text x="${P.l+4}" y="${H-16}" fill="#888" font-size="7" font-family="DM Mono,monospace" opacity=".5">▲매수(2+합류) ★매도(3+강력만) | GC DC RSI MACD BB MA↑↓</text>`;
   }
 
   // Current price
