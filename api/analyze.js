@@ -21,6 +21,18 @@ export default async function handler(req, res) {
 
   const cleanKey = rawKey.replace(/[\r\n\t]/g, '').replace(/^["'\s]+/, '').replace(/["'\s]+$/, '').trim();
 
+  // ★ Password verification
+  const analyzePassword = process.env.ANALYZE_PASSWORD;
+  if (analyzePassword) {
+    const { password } = req.body || {};
+    if (!password || password !== analyzePassword) {
+      return res.status(403).json({
+        error: "비밀번호가 올바르지 않습니다.",
+        authFail: true
+      });
+    }
+  }
+
   const keyDebug = {
     version: "v4-grok",
     cleanLen: cleanKey.length,
