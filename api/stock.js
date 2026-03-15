@@ -15,8 +15,19 @@ export default async function handler(req, res) {
 
     // ── Yahoo Finance (default, no key needed) ──
     if (!source || source === "yahoo") {
-      const range = interval === "60m" ? "5d" : interval === "1wk" ? "5y" : interval === "1mo" ? "10y" : "2y";
-      const int = interval || "1d";
+      const rangeMap = {
+        "1m": "1d", "5m": "5d", "10m": "5d", "15m": "5d", "30m": "10d",
+        "60m": "30d", "4h": "60d",
+        "1d": "2y", "1wk": "5y", "1mo": "10y"
+      };
+      // Yahoo doesn't support 10m or 4h directly — use closest
+      const intMap = {
+        "1m": "1m", "5m": "5m", "10m": "15m", "15m": "15m", "30m": "30m",
+        "60m": "60m", "4h": "60m",
+        "1d": "1d", "1wk": "1wk", "1mo": "1mo"
+      };
+      const range = rangeMap[interval] || "2y";
+      const int = intMap[interval] || interval || "1d";
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${int}&includePrePost=false`;
       const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
       const json = await resp.json();
@@ -30,14 +41,34 @@ export default async function handler(req, res) {
       const quote = result.indicators?.quote?.[0] || {};
       const meta = result.meta || {};
 
-      const ohlcv = timestamps.map((ts, i) => ({
-        date: new Date(ts * 1000).toISOString().split("T")[0],
+      const isIntraday = ["1m","5m","10m","15m","30m","60m","4h"].includes(interval);
+      let ohlcv = timestamps.map((ts, i) => ({
+        date: isIntraday
+          ? new Date(ts * 1000).toISOString().replace("T"," ").slice(0,16)
+          : new Date(ts * 1000).toISOString().split("T")[0],
         open: quote.open?.[i] ?? 0,
         high: quote.high?.[i] ?? 0,
         low: quote.low?.[i] ?? 0,
         close: quote.close?.[i] ?? 0,
         volume: quote.volume?.[i] ?? 0
       })).filter(d => d.close > 0);
+
+      // Aggregate 60m → 4h candles
+      if (interval === "4h" && ohlcv.length > 0) {
+        const agg = [];
+        for (let i = 0; i < ohlcv.length; i += 4) {
+          const chunk = ohlcv.slice(i, i + 4);
+          agg.push({
+            date: chunk[0].date,
+            open: chunk[0].open,
+            high: Math.max(...chunk.map(c => c.high)),
+            low: Math.min(...chunk.map(c => c.low)),
+            close: chunk[chunk.length - 1].close,
+            volume: chunk.reduce((s, c) => s + c.volume, 0)
+          });
+        }
+        ohlcv = agg;
+      }
 
       data = {
         source: "yahoo",
