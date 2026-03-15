@@ -2268,15 +2268,19 @@ function renderScanResults(data){
   }
   empty.style.display="none";
 
-  el.innerHTML=`<div class="mono" style="font-size:10px;color:#4ECCA3;margin-bottom:12px">★ ${filtered.length}개 종목에서 강력 매수 시그널 감지 (최근 ${days}일)</div>`+
+  el.innerHTML=`<div class="mono" style="font-size:10px;color:#4ECCA3;margin-bottom:12px">★ ${filtered.length}개 종목에서 매수 시그널 감지 (최근 ${days}일)</div>`+
   filtered.map(r=>{
     const sig=r.bestSignal;
     const cs=r.currency==="KRW"?"₩":"$";
     const fp=v=>v>=10000?(v/10000).toFixed(1)+"만":Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
     const chCol=r.change>=0?"#4ECCA3":"#E85D75";
     const dayLabel=sig.daysAgo===0?"오늘":sig.daysAgo===1?"어제":`${sig.daysAgo}일 전`;
+    const isStrong=sig.count>=3;
+    const sigIcon=isStrong?"★":"▲";
+    const sigCol=isStrong?"#4ECCA3":"#C9A96E";
+    const borderCol=isStrong?"#4ECCA3":"#C9A96E40";
 
-    return`<div class="card" style="border-left:3px solid #4ECCA3;padding:16px;margin-bottom:8px;cursor:pointer" onclick="switchTab('analyze');document.getElementById('symInput').value='${r.name} (${r.symbol})';selSym={symbol:'${r.symbol}',source:'${r.source}',name:'${r.name}'};setSrc('${r.source}');fetchData();">
+    return`<div class="card" style="border-left:3px solid ${borderCol};padding:16px;margin-bottom:8px;cursor:pointer" onclick="switchTab('analyze');document.getElementById('symInput').value='${r.name} (${r.symbol})';selSym={symbol:'${r.symbol}',source:'${r.source}',name:'${r.name}'};setSrc('${r.source}');fetchData();">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="display:flex;align-items:center;gap:14px">
           <div>
@@ -2291,8 +2295,8 @@ function renderScanResults(data){
         </div>
         <div style="text-align:right">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-            <span style="font-size:16px;color:#4ECCA3">★${sig.count}</span>
-            <span class="badge" style="background:rgba(78,204,163,.12);color:#4ECCA3;border:1px solid rgba(78,204,163,.2)">${sig.signals.join("+")}</span>
+            <span style="font-size:${isStrong?'16':'14'}px;color:${sigCol}">${sigIcon}${sig.count}</span>
+            <span class="badge" style="background:rgba(${isStrong?'78,204,163':'201,169,110'},.12);color:${sigCol};border:1px solid ${sigCol}30">${sig.signals.join("+")}</span>
           </div>
           <div class="mono" style="font-size:9px;color:#888">${sig.date} (${dayLabel})</div>
         </div>
