@@ -138,8 +138,8 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   </div>
   <!-- Category filters -->
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-    <button id="scanCat_kospi" onclick="toggleScanCat('kospi')" class="pill" style="border-color:#E8A87C30;color:#E8A87C;padding:5px 12px;font-size:11px">코스피 100</button>
-    <button id="scanCat_kosdaq" onclick="toggleScanCat('kosdaq')" class="pill" style="border-color:#85C1E930;color:#85C1E9;padding:5px 12px;font-size:11px">코스닥 60</button>
+    <button id="scanCat_kospi" onclick="toggleScanCat('kospi')" class="pill" style="border-color:#E8A87C30;color:#E8A87C;padding:5px 12px;font-size:11px">코스피 <span id="scanCnt_kospi">500</span></button>
+    <button id="scanCat_kosdaq" onclick="toggleScanCat('kosdaq')" class="pill" style="border-color:#85C1E930;color:#85C1E9;padding:5px 12px;font-size:11px">코스닥 <span id="scanCnt_kosdaq">500</span></button>
     <button id="scanCat_us" onclick="toggleScanCat('us')" class="pill" style="border-color:#C39BD330;color:#C39BD3;padding:5px 12px;font-size:11px">미국 80</button>
     <button id="scanCat_crypto" onclick="toggleScanCat('crypto')" class="pill" style="border-color:#7DCEA030;color:#7DCEA0;padding:5px 12px;font-size:11px">암호화폐 20</button>
     <span id="scanTotal" class="mono" style="font-size:10px;color:#555"></span>
@@ -155,7 +155,7 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   <div id="scanEmpty" style="text-align:center;padding:60px 0">
     <div style="font-size:48px;opacity:.1;margin-bottom:12px">★</div>
     <p class="noto" style="color:#555;font-size:13px;line-height:1.8">한국 + 미국 + 암호화폐 주요 종목에서<br>★ 강력 매수 시그널(3+합류)을 스캔합니다</p>
-    <p class="mono" style="color:#444;font-size:10px;margin-top:8px">최근 5거래일 이내 발생한 신호만 표시</p>
+    <p class="mono" style="color:#444;font-size:10px;margin-top:8px">최근 10거래일 이내 발생한 신호만 표시</p>
   </div>
 </div>
 
@@ -2029,28 +2029,8 @@ function svgOBV(data){
 }
 
 // ═══════ SIGNAL SCANNER ═══════
-// ═══════ STOCK UNIVERSE (categorized) ═══════
-const _U={
-kospi:[
-{s:"005930",n:"삼성전자"},{s:"000660",n:"SK하이닉스"},{s:"373220",n:"LG에너지솔루션"},{s:"207940",n:"삼성바이오로직스"},{s:"005380",n:"현대차"},{s:"000270",n:"기아"},{s:"068270",n:"셀트리온"},{s:"035420",n:"NAVER"},{s:"035720",n:"카카오"},{s:"006400",n:"삼성SDI"},
-{s:"051910",n:"LG화학"},{s:"105560",n:"KB금융"},{s:"055550",n:"신한지주"},{s:"012450",n:"한화에어로스페이스"},{s:"042660",n:"한화오션"},{s:"003490",n:"대한항공"},{s:"009150",n:"삼성전기"},{s:"066570",n:"LG전자"},{s:"259960",n:"크래프톤"},{s:"352820",n:"하이브"},
-{s:"012330",n:"현대모비스"},{s:"015760",n:"한국전력"},{s:"034020",n:"두산에너빌리티"},{s:"329180",n:"현대중공업"},{s:"096770",n:"SK이노베이션"},{s:"003670",n:"포스코퓨처엠"},{s:"000810",n:"삼성화재"},{s:"032830",n:"삼성생명"},{s:"010130",n:"고려아연"},{s:"034730",n:"SK"},
-{s:"030200",n:"KT"},{s:"017670",n:"SK텔레콤"},{s:"010950",n:"S-Oil"},{s:"028260",n:"삼성물산"},{s:"003550",n:"LG"},{s:"086790",n:"하나금융지주"},{s:"316140",n:"우리금융지주"},{s:"011200",n:"HMM"},{s:"018260",n:"삼성에스디에스"},{s:"036570",n:"엔씨소프트"},
-{s:"004020",n:"현대제철"},{s:"090430",n:"아모레퍼시픽"},{s:"051900",n:"LG생활건강"},{s:"009540",n:"한국조선해양"},{s:"011170",n:"롯데케미칼"},{s:"000720",n:"현대건설"},{s:"047050",n:"포스코인터내셔널"},{s:"010140",n:"삼성중공업"},{s:"138040",n:"메리츠금융지주"},{s:"161390",n:"한국타이어"},
-{s:"024110",n:"기업은행"},{s:"326030",n:"SK바이오팜"},{s:"032640",n:"LG유플러스"},{s:"097950",n:"CJ제일제당"},{s:"011070",n:"LG이노텍"},{s:"036460",n:"한국가스공사"},{s:"033780",n:"KT&G"},{s:"078930",n:"GS"},{s:"267250",n:"HD현대"},{s:"004170",n:"신세계"},
-{s:"006260",n:"LS"},{s:"005830",n:"DB손해보험"},{s:"139480",n:"이마트"},{s:"021240",n:"코웨이"},{s:"047810",n:"한국항공우주"},{s:"000100",n:"유한양행"},{s:"000880",n:"한화"},{s:"005490",n:"포스코홀딩스"},{s:"010620",n:"현대미포조선"},{s:"271560",n:"오리온"},
-{s:"035250",n:"강원랜드"},{s:"034220",n:"LG디스플레이"},{s:"251270",n:"넷마블"},{s:"128940",n:"한미약품"},{s:"014680",n:"한솔케미칼"},{s:"079550",n:"LIG넥스원"},{s:"004370",n:"농심"},{s:"000120",n:"CJ대한통운"},{s:"192820",n:"코스맥스"},{s:"112610",n:"씨에스윈드"},
-{s:"020150",n:"일진머티리얼즈"},{s:"006280",n:"녹십자"},{s:"383220",n:"F&F"},{s:"272210",n:"한화시스템"},{s:"302440",n:"SK바이오사이언스"},{s:"402340",n:"SK스퀘어"},{s:"377300",n:"카카오페이"},{s:"000080",n:"하이트진로"},{s:"007310",n:"오뚜기"},{s:"010120",n:"LS일렉트릭"},
-{s:"039490",n:"키움증권"},{s:"307950",n:"현대오토에버"},{s:"003690",n:"코리안리"},{s:"298020",n:"효성티앤씨"},{s:"001120",n:"LX인터내셔널"},{s:"069620",n:"대웅제약"},{s:"081660",n:"휠라홀딩스"},{s:"003230",n:"삼양식품"},{s:"069500",n:"KODEX200"},{s:"241560",n:"두산밥캣"}
-],
-kosdaq:[
-{s:"247540",n:"에코프로비엠"},{s:"086520",n:"에코프로"},{s:"042700",n:"한미반도체"},{s:"065350",n:"신성델타테크"},{s:"293490",n:"카카오게임즈"},{s:"196170",n:"알테오젠"},{s:"028300",n:"HLB"},{s:"145020",n:"휴젤"},{s:"257720",n:"실리콘투"},{s:"403870",n:"HPSP"},
-{s:"377480",n:"SOOP"},{s:"067310",n:"하나마이크론"},{s:"041510",n:"에스엠"},{s:"263750",n:"펄어비스"},{s:"357780",n:"솔브레인"},{s:"095340",n:"ISC"},{s:"078340",n:"컴투스"},{s:"112040",n:"위메이드"},{s:"240810",n:"원익IPS"},{s:"058470",n:"리노공업"},
-{s:"039030",n:"이오테크닉스"},{s:"214370",n:"케어젠"},{s:"108320",n:"LX세미콘"},{s:"053800",n:"안랩"},{s:"340570",n:"티앤엘"},{s:"141080",n:"레고켐바이오"},{s:"033100",n:"제룡전기"},{s:"131970",n:"테스나"},{s:"178920",n:"PI첨단소재"},{s:"253450",n:"스튜디오드래곤"},
-{s:"298380",n:"ABL바이오"},{s:"086900",n:"메디톡스"},{s:"095660",n:"네오위즈"},{s:"099190",n:"아이센스"},{s:"137310",n:"에스디바이오센서"},{s:"194480",n:"데브시스터즈"},{s:"336260",n:"두산퓨얼셀"},{s:"122870",n:"와이지엔터"},{s:"200710",n:"에이디테크놀로지"},{s:"323410",n:"카카오뱅크"},
-{s:"348210",n:"넥스틴"},{s:"036930",n:"주성엔지니어링"},{s:"035760",n:"CJ ENM"},{s:"090460",n:"비에이치"},{s:"078600",n:"대주전자재료"},{s:"046890",n:"서울반도체"},{s:"083310",n:"엘오티베큠"},{s:"018290",n:"브이티"},{s:"096530",n:"씨젠"},{s:"056190",n:"에스에프에이"},
-{s:"067160",n:"아프리카TV"},{s:"085670",n:"뉴프렉스"},{s:"048260",n:"오스템임플란트"},{s:"082920",n:"비츠로셀"},{s:"277810",n:"레인보우로보틱스"},{s:"094360",n:"칩스앤미디어"},{s:"222800",n:"심텍"},{s:"069080",n:"웹젠"},{s:"217190",n:"카페24"},{s:"114840",n:"아이패밀리에스씨"}
-],
+// ═══════ STOCK UNIVERSE (dynamic KOSPI/KOSDAQ + hardcoded US/crypto) ═══════
+const _U={kospi:[],kosdaq:[],
 us:[
 {s:"AAPL",n:"Apple"},{s:"MSFT",n:"Microsoft"},{s:"NVDA",n:"NVIDIA"},{s:"GOOGL",n:"Alphabet"},{s:"AMZN",n:"Amazon"},{s:"META",n:"Meta"},{s:"TSLA",n:"Tesla"},{s:"BRK-B",n:"Berkshire"},{s:"AVGO",n:"Broadcom"},{s:"JPM",n:"JP Morgan"},
 {s:"LLY",n:"Eli Lilly"},{s:"V",n:"Visa"},{s:"UNH",n:"UnitedHealth"},{s:"MA",n:"Mastercard"},{s:"XOM",n:"ExxonMobil"},{s:"COST",n:"Costco"},{s:"HD",n:"Home Depot"},{s:"PG",n:"P&G"},{s:"ABBV",n:"AbbVie"},{s:"WMT",n:"Walmart"},
@@ -2065,6 +2045,36 @@ crypto:[
 {s:"BTC-USD",n:"Bitcoin"},{s:"ETH-USD",n:"Ethereum"},{s:"SOL-USD",n:"Solana"},{s:"BNB-USD",n:"BNB"},{s:"XRP-USD",n:"Ripple"},{s:"ADA-USD",n:"Cardano"},{s:"DOGE-USD",n:"Dogecoin"},{s:"AVAX-USD",n:"Avalanche"},{s:"DOT-USD",n:"Polkadot"},{s:"LINK-USD",n:"Chainlink"},
 {s:"UNI-USD",n:"Uniswap"},{s:"ATOM-USD",n:"Cosmos"},{s:"LTC-USD",n:"Litecoin"},{s:"NEAR-USD",n:"Near"},{s:"APT-USD",n:"Aptos"},{s:"OP-USD",n:"Optimism"},{s:"ARB-USD",n:"Arbitrum"},{s:"SUI-USD",n:"Sui"},{s:"PEPE-USD",n:"Pepe"},{s:"MATIC-USD",n:"Polygon"}
 ]};
+
+// Dynamic KR stock list loader (fetches from Naver, caches 24h)
+async function loadKRStocks(){
+  const cacheKey="krStockList";
+  const cached=localStorage.getItem(cacheKey);
+  if(cached){
+    try{
+      const d=JSON.parse(cached);
+      if(Date.now()-new Date(d.fetchedAt).getTime()<24*3600*1000){
+        _U.kospi=d.kospi||[];_U.kosdaq=d.kosdaq||[];
+        updateScanUI();return;
+      }
+    }catch(e){}
+  }
+  try{
+    const [kpResp,kdResp]=await Promise.all([
+      fetch("/api/universe?market=kospi&count=500"),
+      fetch("/api/universe?market=kosdaq&count=500")
+    ]);
+    const kp=await kpResp.json(),kd=await kdResp.json();
+    _U.kospi=kp.stocks||[];_U.kosdaq=kd.stocks||[];
+    localStorage.setItem(cacheKey,JSON.stringify({kospi:_U.kospi,kosdaq:_U.kosdaq,fetchedAt:new Date().toISOString()}));
+    updateScanUI();
+  }catch(e){
+    // Fallback: use cached if available, or empty
+    if(cached){try{const d=JSON.parse(cached);_U.kospi=d.kospi||[];_U.kosdaq=d.kosdaq||[];updateScanUI();}catch(e2){}}
+  }
+}
+// Load on startup
+loadKRStocks();
 let scanCats=JSON.parse(localStorage.getItem("scanCats")||'{"kospi":true,"kosdaq":true,"us":true,"crypto":true}');
 let scanCustom=JSON.parse(localStorage.getItem("scanCustom")||'[]');
 let scanExclude=JSON.parse(localStorage.getItem("scanExclude")||'[]');
@@ -2081,6 +2091,9 @@ function getScanUniverse(){
 function toggleScanCat(cat){scanCats[cat]=!scanCats[cat];saveScanSettings();updateScanUI();}
 function updateScanUI(){
   ["kospi","kosdaq","us","crypto"].forEach(c=>{const btn=document.getElementById("scanCat_"+c);if(btn){btn.style.opacity=scanCats[c]?"1":".4";btn.style.background=scanCats[c]?"rgba(201,169,110,.1)":"transparent";}});
+  const cntKp=document.getElementById("scanCnt_kospi"),cntKd=document.getElementById("scanCnt_kosdaq");
+  if(cntKp)cntKp.textContent=_U.kospi.length||"...";
+  if(cntKd)cntKd.textContent=_U.kosdaq.length||"...";
   const el=document.getElementById("scanTotal");if(el)el.textContent=`${getScanUniverse().length}종목 대상`;
 }
 function addCustomStock(){
@@ -2213,7 +2226,7 @@ function renderScanResults(data){
 
   if(!data.results||!data.results.length){
     empty.style.display="block";
-    empty.querySelector("p").textContent="최근 5일 이내 ★ 강력 매수 시그널이 감지된 종목이 없습니다.";
+    empty.querySelector("p").textContent="최근 10일 이내 ★ 강력 매수 시그널이 감지된 종목이 없습니다.";
     el.innerHTML="";
     return;
   }
