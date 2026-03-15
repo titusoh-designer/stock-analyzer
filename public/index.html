@@ -74,6 +74,7 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 <!-- Tabs -->
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('analyze')">◈ 종목 분석</button>
+  <button class="tab-btn" onclick="switchTab('scanner')">★ 시그널 스캐너</button>
   <button class="tab-btn" onclick="switchTab('watchlist')">◇ 워치리스트</button>
   <button class="tab-btn" onclick="switchTab('patterns')">◆ 패턴 학습</button>
 </div>
@@ -123,6 +124,27 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 </div>
 
 <!-- ═══════ TAB: Watchlist ═══════ -->
+<!-- ═══════ TAB: Signal Scanner ═══════ -->
+<div id="tabScanner" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <span class="mono" style="font-size:12px;color:#C9A96E;letter-spacing:0.1em">★ 별매수 시그널 스캐너</span>
+      <div id="scanTime" class="mono" style="font-size:9px;color:#555;margin-top:4px"></div>
+    </div>
+    <button onclick="runScan()" id="scanBtn" class="pill" style="border-color:#C9A96E40;color:#C9A96E;padding:8px 16px">🔍 스캔 시작</button>
+  </div>
+  <div id="scanProgress" style="display:none;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="mono" style="font-size:10px;color:#888" id="scanStatus">스캔 중...</span><span class="mono" style="font-size:10px;color:#C9A96E" id="scanPct">0%</span></div>
+    <div style="height:4px;border-radius:2px;background:#1a1a24;overflow:hidden"><div id="scanBar" style="width:0%;height:100%;background:#C9A96E;border-radius:2px;transition:width .3s"></div></div>
+  </div>
+  <div id="scanResults"></div>
+  <div id="scanEmpty" style="text-align:center;padding:60px 0">
+    <div style="font-size:48px;opacity:.1;margin-bottom:12px">★</div>
+    <p class="noto" style="color:#555;font-size:13px;line-height:1.8">한국 + 미국 주요 종목에서<br>★ 강력 매수 시그널(3+합류)을 스캔합니다</p>
+    <p class="mono" style="color:#444;font-size:10px;margin-top:8px">최근 5거래일 이내 발생한 신호만 표시</p>
+  </div>
+</div>
+
 <div id="tabWatchlist" style="display:none">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:10px">
@@ -167,12 +189,14 @@ let watchlist=JSON.parse(localStorage.getItem("wl")||"[]");
 
 // ═══════ TABS ═══════
 function switchTab(t){
-  document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",i===(t==="analyze"?0:t==="watchlist"?1:2)));
+  document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",i===(t==="analyze"?0:t==="scanner"?1:t==="watchlist"?2:3)));
   document.getElementById("tabAnalyze").style.display=t==="analyze"?"block":"none";
+  document.getElementById("tabScanner").style.display=t==="scanner"?"block":"none";
   document.getElementById("tabWatchlist").style.display=t==="watchlist"?"block":"none";
   document.getElementById("tabPatterns").style.display=t==="patterns"?"block":"none";
   if(t==="watchlist")renderWatchlist();
   if(t==="patterns")renderPatterns();
+  if(t==="scanner")loadScanCache();
 }
 
 // ═══════ CONTROLS ═══════
@@ -1988,6 +2012,183 @@ function svgOBV(data){
 
   s+=`</svg>`;
   return s;
+}
+
+// ═══════ SIGNAL SCANNER ═══════
+const SCAN_UNIVERSE=[
+  // Korean Top
+  {symbol:"005930",name:"삼성전자",source:"naver"},{symbol:"000660",name:"SK하이닉스",source:"naver"},
+  {symbol:"373220",name:"LG에너지솔루션",source:"naver"},{symbol:"207940",name:"삼성바이오",source:"naver"},
+  {symbol:"005380",name:"현대차",source:"naver"},{symbol:"000270",name:"기아",source:"naver"},
+  {symbol:"068270",name:"셀트리온",source:"naver"},{symbol:"035420",name:"네이버",source:"naver"},
+  {symbol:"035720",name:"카카오",source:"naver"},{symbol:"006400",name:"삼성SDI",source:"naver"},
+  {symbol:"051910",name:"LG화학",source:"naver"},{symbol:"105560",name:"KB금융",source:"naver"},
+  {symbol:"055550",name:"신한지주",source:"naver"},{symbol:"012450",name:"한화에어로",source:"naver"},
+  {symbol:"042660",name:"한화오션",source:"naver"},{symbol:"003490",name:"대한항공",source:"naver"},
+  {symbol:"009150",name:"삼성전기",source:"naver"},{symbol:"066570",name:"LG전자",source:"naver"},
+  {symbol:"259960",name:"크래프톤",source:"naver"},{symbol:"352820",name:"하이브",source:"naver"},
+  {symbol:"247540",name:"에코프로비엠",source:"naver"},{symbol:"086520",name:"에코프로",source:"naver"},
+  {symbol:"042700",name:"한미반도체",source:"naver"},{symbol:"012330",name:"현대모비스",source:"naver"},
+  {symbol:"015760",name:"한국전력",source:"naver"},{symbol:"034020",name:"두산에너빌",source:"naver"},
+  {symbol:"329180",name:"현대중공업",source:"naver"},{symbol:"009540",name:"한국조선해양",source:"naver"},
+  {symbol:"096770",name:"SK이노베이션",source:"naver"},{symbol:"065350",name:"신성델타테크",source:"naver"},
+  // US Top
+  {symbol:"AAPL",name:"Apple",source:"yahoo"},{symbol:"MSFT",name:"Microsoft",source:"yahoo"},
+  {symbol:"NVDA",name:"NVIDIA",source:"yahoo"},{symbol:"GOOGL",name:"Alphabet",source:"yahoo"},
+  {symbol:"AMZN",name:"Amazon",source:"yahoo"},{symbol:"TSLA",name:"Tesla",source:"yahoo"},
+  {symbol:"META",name:"Meta",source:"yahoo"},{symbol:"AMD",name:"AMD",source:"yahoo"},
+  {symbol:"NFLX",name:"Netflix",source:"yahoo"},{symbol:"PLTR",name:"Palantir",source:"yahoo"},
+  {symbol:"COIN",name:"Coinbase",source:"yahoo"},{symbol:"SOFI",name:"SoFi",source:"yahoo"},
+  {symbol:"BA",name:"Boeing",source:"yahoo"},{symbol:"DIS",name:"Disney",source:"yahoo"},
+  {symbol:"JPM",name:"JP Morgan",source:"yahoo"},{symbol:"V",name:"Visa",source:"yahoo"},
+  {symbol:"WMT",name:"Walmart",source:"yahoo"},{symbol:"KO",name:"Coca-Cola",source:"yahoo"},
+  {symbol:"INTC",name:"Intel",source:"yahoo"},{symbol:"UBER",name:"Uber",source:"yahoo"}
+];
+
+function loadScanCache(){
+  const cached=localStorage.getItem("scanResults");
+  if(cached){
+    try{
+      const data=JSON.parse(cached);
+      if(data.scannedAt)renderScanResults(data);
+    }catch(e){}
+  }
+  checkAutoScan();
+}
+
+function checkAutoScan(){
+  const cached=localStorage.getItem("scanResults");
+  if(cached){
+    try{
+      const data=JSON.parse(cached);
+      const scanDate=new Date(data.scannedAt);
+      // Get today's 7AM KST (= 22:00 UTC previous day)
+      const now=new Date();
+      const kstNow=new Date(now.getTime()+9*3600*1000); // KST
+      const todayKST7am=new Date(kstNow);
+      todayKST7am.setHours(7,0,0,0);
+      const todayKST7amUTC=new Date(todayKST7am.getTime()-9*3600*1000);
+      // If scanned after today's 7AM KST → still fresh
+      if(scanDate>todayKST7amUTC)return;
+      // If it's before 7AM KST today → use yesterday's scan
+      if(kstNow.getHours()<7)return;
+    }catch(e){}
+  }
+  // No cache, or stale → auto scan
+  runScan();
+}
+
+async function runScan(){
+  const btn=document.getElementById("scanBtn");
+  const prog=document.getElementById("scanProgress");
+  const empty=document.getElementById("scanEmpty");
+  const status=document.getElementById("scanStatus");
+  const pct=document.getElementById("scanPct");
+  const bar=document.getElementById("scanBar");
+  btn.disabled=true;btn.textContent="스캔 중...";
+  prog.style.display="block";empty.style.display="none";
+  document.getElementById("scanResults").innerHTML="";
+
+  const allResults=[];
+  const batchSize=6;
+  const totalBatches=Math.ceil(SCAN_UNIVERSE.length/batchSize);
+
+  for(let b=0;b<totalBatches;b++){
+    const batch=SCAN_UNIVERSE.slice(b*batchSize,(b+1)*batchSize);
+    status.textContent=`스캔 중... ${batch.map(s=>s.name).join(", ")}`;
+    const p=Math.round((b+1)/totalBatches*100);
+    pct.textContent=p+"%";
+    bar.style.width=p+"%";
+
+    try{
+      const resp=await fetch("/api/scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbols:batch})});
+      const data=await resp.json();
+      if(data.results)allResults.push(...data.results);
+    }catch(e){/* batch failed, continue */}
+
+    // Small delay between batches
+    if(b<totalBatches-1)await new Promise(r=>setTimeout(r,500));
+  }
+
+  // Sort by signal count desc, then by daysAgo asc
+  allResults.sort((a,b)=>(b.bestSignal.count-a.bestSignal.count)||(a.bestSignal.daysAgo-b.bestSignal.daysAgo));
+
+  const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:SCAN_UNIVERSE.length};
+  localStorage.setItem("scanResults",JSON.stringify(result));
+  renderScanResults(result);
+
+  prog.style.display="none";
+  btn.disabled=false;btn.textContent="🔍 스캔 시작";
+}
+
+function miniChartSvg(mini,change){
+  if(!mini||mini.length<5)return"";
+  const W=120,H=40,P=2;
+  const cls=mini.map(d=>d.c).filter(v=>v>0);
+  if(cls.length<5)return"";
+  const mn=Math.min(...cls),mx=Math.max(...cls),rng=mx-mn||1;
+  const tx=i=>P+(i/(cls.length-1))*(W-P*2);
+  const ty=v=>P+(1-(v-mn)/rng)*(H-P*2);
+  const col=change>=0?"#4ECCA3":"#E85D75";
+  const pts=cls.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`);
+  // Area fill
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:120px;height:40px">`;
+  s+=`<polygon points="${pts.join(" ")} ${tx(cls.length-1).toFixed(1)},${H-P} ${P},${H-P}" fill="${col}" opacity=".1"/>`;
+  s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.5" opacity=".7"/>`;
+  s+=`</svg>`;
+  return s;
+}
+
+function renderScanResults(data){
+  const el=document.getElementById("scanResults");
+  const empty=document.getElementById("scanEmpty");
+  const timeEl=document.getElementById("scanTime");
+
+  if(data.scannedAt){
+    const d=new Date(data.scannedAt);
+    const ago=Math.round((Date.now()-d.getTime())/3600000);
+    timeEl.textContent=`마지막 스캔: ${d.toLocaleString("ko-KR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:false})} (${ago}시간 전) · ${data.totalScanned||0}종목 스캔`;
+  }
+
+  if(!data.results||!data.results.length){
+    empty.style.display="block";
+    empty.querySelector("p").textContent="최근 5일 이내 ★ 강력 매수 시그널이 감지된 종목이 없습니다.";
+    el.innerHTML="";
+    return;
+  }
+  empty.style.display="none";
+
+  el.innerHTML=`<div class="mono" style="font-size:10px;color:#4ECCA3;margin-bottom:12px">★ ${data.results.length}개 종목에서 강력 매수 시그널 감지</div>`+
+  data.results.map(r=>{
+    const sig=r.bestSignal;
+    const cs=r.currency==="KRW"?"₩":"$";
+    const fp=v=>v>=10000?(v/10000).toFixed(1)+"만":Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
+    const chCol=r.change>=0?"#4ECCA3":"#E85D75";
+    const dayLabel=sig.daysAgo===0?"오늘":sig.daysAgo===1?"어제":`${sig.daysAgo}일 전`;
+
+    return`<div class="card" style="border-left:3px solid #4ECCA3;padding:16px;margin-bottom:8px;cursor:pointer" onclick="switchTab('analyze');document.getElementById('symInput').value='${r.name} (${r.symbol})';selSym={symbol:'${r.symbol}',source:'${r.source}',name:'${r.name}'};setSrc('${r.source}');fetchData();">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#F0ECE3">${r.name}</div>
+            <div class="mono" style="font-size:10px;color:#666;margin-top:2px">${r.symbol} · ${r.source}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="mono" style="font-size:15px;font-weight:700;color:#F0ECE3">${cs}${fp(r.currentPrice)}</div>
+            <div class="mono" style="font-size:10px;color:${chCol}">${r.change>=0?"+":""}${r.change}%</div>
+          </div>
+          <div>${miniChartSvg(r.mini,r.change)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <span style="font-size:16px;color:#4ECCA3">★${sig.count}</span>
+            <span class="badge" style="background:rgba(78,204,163,.12);color:#4ECCA3;border:1px solid rgba(78,204,163,.2)">${sig.signals.join("+")}</span>
+          </div>
+          <div class="mono" style="font-size:9px;color:#888">${sig.date} (${dayLabel})</div>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
 }
 
 // ═══════ WATCHLIST ═══════
