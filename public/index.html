@@ -1536,7 +1536,7 @@ function svgChart(data,cp,cur,ai,stockName){
     }
     return arr.slice(viewStart,viewStart+data.length);
   };
-  const _maSlices=[{v:_cmaSlice(20),c:"#4ECCA3",w:1.2},{v:_cmaSlice(100),c:"#C9A96E",w:1.5},{v:_cmaSlice(440),c:"#F0ECE3",w:1.8}];
+  const _maSlices=[{v:_cmaSlice(20),c:"#4ECCA3",w:1.2},{v:_cmaSlice(100),c:"#C9A96E",w:2},{v:_cmaSlice(440),c:"#F0ECE3",w:2.8}];
   _maSlices.forEach(m=>m.v.forEach(v=>{if(v!=null)aP.push(v);}));
   if(!aP.length)aP.push(1);
   const mn=Math.min(...aP)*.994,mx=Math.max(...aP)*1.006;
