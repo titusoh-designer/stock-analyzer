@@ -203,6 +203,7 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 let src="yahoo",tf="1d",curData=null,curSym=null,selSym=null;
 let viewStart=0,viewEnd=260;
 let showIchimoku=false;
+let autoRefreshTimer=null;
 let isDragging=false,dragStartX=0,dragStartViewStart=0;
 let watchlist=JSON.parse(localStorage.getItem("wl")||"[]");
 
@@ -477,6 +478,20 @@ async function fetchData(){
     document.getElementById("addWlBtn").style.display="inline-block";
   }catch(e){err.style.display="block";document.getElementById("errMsg").textContent=e.message;
   }finally{btn.disabled=false;btn.textContent="분석";ld.style.display="none";}
+
+  // Auto-refresh for intraday timeframes
+  if(autoRefreshTimer)clearInterval(autoRefreshTimer);
+  autoRefreshTimer=null;
+  const intradayTfs=["1m","5m","10m","30m","60m","4h"];
+  if(intradayTfs.includes(tf)&&curData){
+    const refreshMs=tf==="1m"?30000:tf==="5m"?60000:tf==="10m"?60000:tf==="30m"?120000:300000;
+    autoRefreshTimer=setInterval(async()=>{
+      try{
+        const r=await(await fetch(`/api/stock?symbol=${encodeURIComponent(curSym.symbol)}&source=${curSym.source}&interval=${tf}`)).json();
+        if(r.ohlcv?.length){curData=r;const vs=viewEnd-viewStart;viewEnd=r.ohlcv.length;viewStart=Math.max(0,viewEnd-vs);render(r,null);}
+      }catch(e){}
+    },refreshMs);
+  }
 }
 
 // ═══════ AI PATTERN ANALYSIS (manual trigger) ═══════
@@ -941,10 +956,38 @@ function render(data,ai){
     };
     chartEl.onmouseup=()=>{if(isDragging){isDragging=false;}};
 
-    // Touch
-    chartEl.ontouchstart=(e)=>{isDragging=true;dragStartX=e.touches[0].clientX;dragStartViewStart=viewStart;};
-    chartEl.ontouchmove=(e)=>{e.preventDefault();onMove(e.touches[0].clientX);};
-    chartEl.ontouchend=()=>{isDragging=false;};
+    // Touch (drag + pinch zoom)
+    let touchStartDist=0,touchStartRange=0;
+    chartEl.ontouchstart=(e)=>{
+      if(e.touches.length===2){
+        // Pinch zoom start
+        const dx=e.touches[0].clientX-e.touches[1].clientX;
+        const dy=e.touches[0].clientY-e.touches[1].clientY;
+        touchStartDist=Math.sqrt(dx*dx+dy*dy);
+        touchStartRange=viewEnd-viewStart;
+      } else if(e.touches.length===1){
+        isDragging=true;dragStartX=e.touches[0].clientX;dragStartViewStart=viewStart;
+      }
+    };
+    chartEl.ontouchmove=(e)=>{
+      e.preventDefault();
+      if(e.touches.length===2&&touchStartDist>0){
+        // Pinch zoom
+        const dx=e.touches[0].clientX-e.touches[1].clientX;
+        const dy=e.touches[0].clientY-e.touches[1].clientY;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        const scale=touchStartDist/dist;
+        const newRange=Math.max(15,Math.min(d.length,Math.round(touchStartRange*scale)));
+        const mid=Math.round((viewStart+viewEnd)/2);
+        viewStart=Math.max(0,mid-Math.round(newRange/2));
+        viewEnd=Math.min(d.length,viewStart+newRange);
+        if(viewEnd-viewStart<15)viewStart=Math.max(0,viewEnd-15);
+        updateChartView(d);
+      } else if(e.touches.length===1&&isDragging){
+        onMove(e.touches[0].clientX);
+      }
+    };
+    chartEl.ontouchend=()=>{isDragging=false;touchStartDist=0;};
   }
 }
 
@@ -1731,8 +1774,9 @@ function svgChart(data,cp,cur,ai,stockName){
   // MA Legend
   [{c:"#E8A87C",l:"5"},{c:"#85C1E9",l:"20"},{c:"#C39BD3",l:"100"},{c:"#7DCEA0",l:"250"}].forEach((m,i)=>{const x=W-P.r-180+i*46;s+=`<line x1="${x}" y1="12" x2="${x+10}" y2="12" stroke="${m.c}" stroke-width="1.5"/><text x="${x+14}" y="15" fill="${m.c}" font-size="7" font-family="DM Mono,monospace">MA${m.l}</text>`;});
 
-  // Data badge + Stock name
+  // Data badge + Stock name + Live indicator
   s+=`<text x="${P.l+4}" y="${H-6}" fill="#4ECCA3" font-size="7.5" font-family="DM Mono,monospace">● ${curData?.source||"api"} ${data.length}봉</text>`;
+  if(autoRefreshTimer){s+=`<circle cx="${P.l+88}" cy="${H-9}" r="3" fill="#4ECCA3"><animate attributeName="opacity" values="1;.3;1" dur="2s" repeatCount="indefinite"/></circle><text x="${P.l+95}" y="${H-6}" fill="#4ECCA3" font-size="7" font-family="DM Mono,monospace">LIVE</text>`;}
   if(stockName){
     s+=`<text x="${W-P.r}" y="${H-6}" fill="#666" font-size="8" font-family="DM Mono,monospace" text-anchor="end">${stockName}</text>`;
     s+=`<text x="${W/2}" y="16" fill="#F0ECE3" font-size="12" font-weight="700" font-family="Outfit,sans-serif" text-anchor="middle" opacity=".25">${stockName}</text>`;
