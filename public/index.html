@@ -496,30 +496,33 @@ async function fetchData(){
       // ★ Korean stocks: Naver realtime polling (3 seconds)
       const code=curSym.symbol.replace(/[^0-9]/g,"");
       if(liveEl){liveEl.style.display="inline-flex";liveEl.textContent="● LIVE 3초";}
+      // Save original last candle for reference
+      const origLast=curData.ohlcv.length?{...curData.ohlcv[curData.ohlcv.length-1]}:null;
       autoRefreshTimer=setInterval(async()=>{
         try{
           const r=await(await fetch(`/api/realtime?code=${code}`)).json();
-          if(!r.price||!curData?.ohlcv?.length)return;
+          if(!r.price||!curData?.ohlcv?.length||!origLast)return;
+          // Sanity check: price must be within ±30% of original close
+          const pct=Math.abs(r.price-origLast.close)/origLast.close;
+          if(pct>0.3)return; // reject wild values
           const last=curData.ohlcv[curData.ohlcv.length-1];
-          // Only update close with realtime price
           last.close=r.price;
-          // High/Low: only expand if price breaks existing range (works for all TFs)
-          if(r.price>last.high)last.high=r.price;
-          if(r.price<last.low)last.low=r.price;
+          // High/Low: expand from original, not from previously polluted value
+          last.high=Math.max(origLast.high,r.price);
+          last.low=Math.min(origLast.low,r.price);
           // Volume: only update for daily timeframe
-          if(tf==="1d"&&r.volume)last.volume=r.volume;
+          if(tf==="1d"&&r.volume&&r.volume>origLast.volume)last.volume=r.volume;
           curData.currentPrice=r.price;
-          // Re-render chart without resetting view
+          // Re-render chart
           const d=curData.ohlcv.slice(viewStart,viewEnd);
           const chartEl=document.getElementById("mainChartWrap");
           if(chartEl)chartEl.innerHTML=svgChart(d,r.price,curData.currency,window._lastAI,curSym.name);
-          // Update price in header
+          // Update price display
+          const prev=curData.previousClose||origLast.close;
+          const chg=prev?((r.price-prev)/prev*100).toFixed(2):0;
+          const cc=chg>=0?"#4ECCA3":"#E85D75";
           const infoEl=document.getElementById("chartInfoText");
-          if(infoEl){
-            const chg=curData.previousClose?((r.price-curData.previousClose)/curData.previousClose*100).toFixed(2):0;
-            const cc=chg>=0?"#4ECCA3":"#E85D75";
-            infoEl.innerHTML=`<span style="color:#F0ECE3;font-size:18px;font-weight:700">${r.price.toLocaleString()}</span> <span style="color:${cc};font-size:13px">${chg>=0?"+":""}${chg}%</span> <span style="color:#555;font-size:10px">${r.marketOpen?"장중":"장외"}</span>`;
-          }
+          if(infoEl)infoEl.innerHTML=`<span style="color:#F0ECE3;font-size:18px;font-weight:700">${r.price.toLocaleString()}</span> <span style="color:${cc};font-size:13px">${chg>=0?"+":""}${chg}%</span> <span style="color:#555;font-size:10px">${r.marketOpen?"장중":"장외"}</span>`;
         }catch(e){}
       },3000);
     } else if(isIntraday){
