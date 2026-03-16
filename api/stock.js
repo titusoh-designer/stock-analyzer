@@ -211,41 +211,73 @@ export default async function handler(req, res) {
       let rawOhlcv = [];
       
       if (isIntraday) {
-        // ★ Naver minute API uses requestType=2 with count parameter
-        const countMap = {"1m":500,"5m":500,"10m":500,"15m":500,"30m":500,"60m":500,"4h":500};
-        const cnt = countMap[interval] || 500;
-        const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=2&count=${cnt}&timeframe=minute`;
-        const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
-        const buf = await resp.arrayBuffer();
-        let text;
-        try { text = new TextDecoder('euc-kr').decode(buf); }
-        catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
+        // ★ Try multiple Naver minute API formats
+        const attempts = [
+          // Format 1: requestType=2 + count + timeframe=minute
+          `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=2&count=500&timeframe=minute`,
+          // Format 2: requestType=2 with naver domain
+          `https://fchart.stock.naver.com/siseJson.naver?symbol=${code}&requestType=2&count=500&timeframe=minute`,
+          // Format 3: requestType=1 with recent dates
+          `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${new Date(Date.now()-7*86400000).toISOString().slice(0,10).replace(/-/g,"")}&endTime=${new Date().toISOString().slice(0,10).replace(/-/g,"")}&timeframe=minute`,
+        ];
 
-        // Parse — minute data returns rows like: ['날짜시간', '시가', '고가', '저가', '종가', '거래량']
-        const rowRegex = /\[([^\]]+)\]/g;
-        let rmatch;
-        while ((rmatch = rowRegex.exec(text)) !== null) {
-          const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
-          if (vals.length >= 6 && +vals[4] > 0) {
-            const ds = vals[0];
-            // Try various date formats: 14 digits, 12 digits, 8 digits
-            let dateStr = null;
-            if (/^\d{14}$/.test(ds)) {
-              dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
-            } else if (/^\d{12}$/.test(ds)) {
-              dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
-            } else if (/^\d{8}$/.test(ds)) {
-              dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8);
-            } else continue;
-            rawOhlcv.push({
-              date: dateStr, open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5]
-            });
-          }
+        let debugInfo = [];
+        for (const url of attempts) {
+          try {
+            const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+            const buf = await resp.arrayBuffer();
+            let text;
+            try { text = new TextDecoder('euc-kr').decode(buf); }
+            catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
+
+            const rowRegex = /\[([^\]]+)\]/g;
+            let rmatch;
+            while ((rmatch = rowRegex.exec(text)) !== null) {
+              const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
+              if (vals.length >= 6 && +vals[4] > 0) {
+                const ds = vals[0];
+                let dateStr = null;
+                if (/^\d{14}$/.test(ds)) dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
+                else if (/^\d{12}$/.test(ds)) dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
+                else if (/^\d{8}$/.test(ds)) dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" 00:00";
+                else continue;
+                rawOhlcv.push({ date: dateStr, open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5] });
+              }
+            }
+            debugInfo.push({ url: url.slice(0,80), rows: rawOhlcv.length, textLen: text.length, sample: text.slice(0,200) });
+            if (rawOhlcv.length > 0) break; // found working format
+          } catch(e) { debugInfo.push({ url: url.slice(0,80), error: e.message }); }
         }
 
-        // Sort chronologically (Naver may return newest first)
+        // If Naver minute failed, fallback to Yahoo .KS/.KQ
+        if (rawOhlcv.length === 0) {
+          const rangeMap = {"1m":"7d","5m":"60d","10m":"60d","15m":"60d","30m":"60d","60m":"6mo","4h":"6mo"};
+          const intMap = {"1m":"1m","5m":"5m","10m":"15m","15m":"15m","30m":"30m","60m":"60m","4h":"60m"};
+          for (const suffix of [".KS", ".KQ"]) {
+            try {
+              const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=${rangeMap[interval]||"5d"}&interval=${intMap[interval]||"5m"}&includePrePost=false`;
+              const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+              const yJson = await yResp.json();
+              if (yJson.chart?.error) continue;
+              const yResult = yJson.chart?.result?.[0];
+              if (!yResult?.timestamp?.length) continue;
+              const yTs = yResult.timestamp;
+              const yQ = yResult.indicators?.quote?.[0] || {};
+              rawOhlcv = yTs.map((ts, i) => ({
+                date: new Date(ts * 1000).toISOString().replace("T"," ").slice(0,16),
+                open: yQ.open?.[i] ?? 0, high: yQ.high?.[i] ?? 0,
+                low: yQ.low?.[i] ?? 0, close: yQ.close?.[i] ?? 0,
+                volume: yQ.volume?.[i] ?? 0
+              })).filter(d => d.close > 0);
+              if (rawOhlcv.length > 3) break;
+            } catch(e) { continue; }
+          }
+          debugInfo.push({ source: "yahoo_fallback", rows: rawOhlcv.length });
+        }
+
         rawOhlcv.sort((a, b) => a.date.localeCompare(b.date));
 
+        if (!rawOhlcv.length) throw new Error("분봉 데이터 없음. debug: " + JSON.stringify(debugInfo).slice(0,500));
       } else {
         // Daily/Weekly/Monthly — use requestType=1 with date range
         const tfMap = {"1d":"day","1wk":"week","1mo":"month"};
@@ -294,7 +326,7 @@ export default async function handler(req, res) {
         }
       }
 
-      if (!ohlcv.length) throw new Error("네이버 데이터 없음 — 종목코드를 확인하세요 (분봉: " + rawOhlcv.length + "건 파싱)");
+      if (!ohlcv.length) throw new Error("네이버 데이터 없음 — 파싱 " + rawOhlcv.length + "건");
 
       data = {
         source: "naver",
