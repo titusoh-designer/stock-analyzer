@@ -1524,6 +1524,20 @@ function svgChart(data,cp,cur,ai,stockName){
   const aP=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);if(cp&&isFinite(cp))aP.push(cp);
   (ai?.supports||[]).forEach(s=>aP.push(s));(ai?.resistances||[]).forEach(r=>aP.push(r));
   (ai?.detectedPatterns||[]).forEach(p=>{if(p.targetUp)aP.push(p.targetUp);if(p.targetDown)aP.push(p.targetDown);});
+  // Include MA values in price range so they're visible on chart
+  const fullOhlcv=curData?.ohlcv||data;
+  const fullCls=fullOhlcv.map(d=>d.close||0);
+  const _cmaSlice=(n)=>{
+    const arr=[];
+    for(let j=0;j<fullCls.length;j++){
+      if(j<n-1){arr.push(null);continue;}
+      const sum=fullCls.slice(j-n+1,j+1).reduce((a,b)=>a+b,0);
+      const v=sum/n;arr.push(isFinite(v)&&v>0?v:null);
+    }
+    return arr.slice(viewStart,viewStart+data.length);
+  };
+  const _maSlices=[{v:_cmaSlice(20),c:"#4ECCA3",w:1.2},{v:_cmaSlice(100),c:"#C9A96E",w:1.5},{v:_cmaSlice(440),c:"#F0ECE3",w:1.8}];
+  _maSlices.forEach(m=>m.v.forEach(v=>{if(v!=null)aP.push(v);}));
   if(!aP.length)aP.push(1);
   const mn=Math.min(...aP)*.994,mx=Math.max(...aP)*1.006;
   const tx=i=>P.l+(i/(data.length-1||1))*cw,ty=p=>P.t+(1-(p-mn)/(mx-mn||1))*ch;
@@ -1555,9 +1569,8 @@ function svgChart(data,cp,cur,ai,stockName){
     s+=`<text x="${P.l+20}" y="${P.t+18+i*20}" fill="${c}" font-size="8.5" font-weight="500" font-family="DM Mono,monospace">${labelText}</text>`;
   });
 
-  // MAs: 일봉20일(녹색) / 주봉20일≈MA100(황금색) / 월봉20일≈MA440(하얀색)
-  const cma=(n)=>data.map((_,i)=>{if(i<n-1)return null;const sl=data.slice(i-n+1,i+1);const sum=sl.reduce((s,d)=>s+(d.close||0),0);const v=sum/n;return isFinite(v)&&v>0?v:null;});
-  [{v:cma(20),c:"#4ECCA3",w:1.2,label:"일20"},{v:cma(100),c:"#C9A96E",w:1.5,label:"주20"},{v:cma(440),c:"#F0ECE3",w:1.8,label:"월20"}].forEach(m=>{const pts=m.v.map((v,i)=>v!=null&&isFinite(ty(v))?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);if(pts.length>1)s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${m.c}" stroke-width="${m.w}" opacity=".55"/>`;});
+  // MAs: Draw pre-computed slices (일20/주20/월20)
+  _maSlices.forEach(m=>{const pts=m.v.map((v,i)=>v!=null&&isFinite(ty(v))?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);if(pts.length>1)s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${m.c}" stroke-width="${m.w}" opacity=".55"/>`;});
 
   // Bollinger Bands (filter NaN)
   const bbS=[];for(let i=19;i<data.length;i++){const sl=data.slice(i-19,i+1).map(d=>d.close||0).filter(v=>v>0);if(sl.length<10)continue;const ma=sl.reduce((a,b)=>a+b,0)/sl.length;const std=Math.sqrt(sl.reduce((s,v)=>s+Math.pow(v-ma,2),0)/sl.length);if(isFinite(ma)&&isFinite(std))bbS.push({u:ma+2*std,m:ma,l:ma-2*std,i});}
