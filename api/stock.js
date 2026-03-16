@@ -209,26 +209,36 @@ export default async function handler(req, res) {
       const isIntraday = ["1m","5m","10m","15m","30m","60m","4h"].includes(interval);
       
       if (isIntraday) {
-        // Naver doesn't support intraday — use Yahoo with .KS suffix
-        const yahooSym = code + ".KS";
+        // Naver doesn't support intraday — use Yahoo with .KS/.KQ suffix
+        // Try .KS (KOSPI) first, then .KQ (KOSDAQ)
+        let ohlcv = [];
         const rangeMap = {"1m":"1d","5m":"5d","10m":"5d","15m":"5d","30m":"10d","60m":"30d","4h":"60d"};
         const intMap = {"1m":"1m","5m":"5m","10m":"15m","15m":"15m","30m":"30m","60m":"60m","4h":"60m"};
         const range = rangeMap[interval] || "5d";
         const int = intMap[interval] || "15m";
-        const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=${range}&interval=${int}&includePrePost=false`;
-        const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-        const yJson = await yResp.json();
-        const yResult = yJson.chart?.result?.[0];
-        if (!yResult) throw new Error("Yahoo intraday fallback failed");
-        const yTs = yResult.timestamp || [];
-        const yQ = yResult.indicators?.quote?.[0] || {};
-        const yMeta = yResult.meta || {};
-        let ohlcv = yTs.map((ts, i) => ({
-          date: new Date(ts * 1000).toISOString().replace("T"," ").slice(0,16),
-          open: yQ.open?.[i] ?? 0, high: yQ.high?.[i] ?? 0,
-          low: yQ.low?.[i] ?? 0, close: yQ.close?.[i] ?? 0,
-          volume: yQ.volume?.[i] ?? 0
-        })).filter(d => d.close > 0);
+        let yMeta = {};
+
+        for (const suffix of [".KS", ".KQ"]) {
+          const yahooSym = code + suffix;
+          try {
+            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=${range}&interval=${int}&includePrePost=false`;
+            const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+            const yJson = await yResp.json();
+            const yResult = yJson.chart?.result?.[0];
+            if (!yResult || !yResult.timestamp?.length) continue;
+            const yTs = yResult.timestamp;
+            const yQ = yResult.indicators?.quote?.[0] || {};
+            yMeta = yResult.meta || {};
+            ohlcv = yTs.map((ts, i) => ({
+              date: new Date(ts * 1000).toISOString().replace("T"," ").slice(0,16),
+              open: yQ.open?.[i] ?? 0, high: yQ.high?.[i] ?? 0,
+              low: yQ.low?.[i] ?? 0, close: yQ.close?.[i] ?? 0,
+              volume: yQ.volume?.[i] ?? 0
+            })).filter(d => d.close > 0);
+            if (ohlcv.length > 5) break; // success
+          } catch(e) { continue; }
+        }
+        if (!ohlcv.length) throw new Error("Korean intraday data not available");
         if (interval === "4h") {
           const agg = [];
           for (let i = 0; i < ohlcv.length; i += 4) {
