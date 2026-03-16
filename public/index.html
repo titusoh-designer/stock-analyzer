@@ -498,26 +498,33 @@ async function fetchData(){
       if(liveEl){liveEl.style.display="inline-flex";liveEl.textContent="● LIVE 3초";}
       // Save original last candle for reference
       const origLast=curData.ohlcv.length?{...curData.ohlcv[curData.ohlcv.length-1]}:null;
+      let lastGoodPrice=origLast?.close||0;
       autoRefreshTimer=setInterval(async()=>{
         try{
           const r=await(await fetch(`/api/realtime?code=${code}`)).json();
           if(!r.price||!curData?.ohlcv?.length||!origLast)return;
-          // Sanity check: price must be within ±30% of original close
-          const pct=Math.abs(r.price-origLast.close)/origLast.close;
-          if(pct>0.3)return; // reject wild values
+          // ★ Validation: reject wild values
+          const pctFromOrig=Math.abs(r.price-origLast.close)/origLast.close;
+          if(pctFromOrig>0.3)return; // >30% from original = bad data
+          // ★ Reject if price suddenly jumps back to prevClose (API returning stale data)
+          if(r.prevClose&&r.price===r.prevClose&&lastGoodPrice!==r.prevClose){
+            return; // skip — API returned prev close instead of current price
+          }
+          // ★ Reject sudden >5% swing from last good price (within seconds)
+          if(lastGoodPrice>0){
+            const swingPct=Math.abs(r.price-lastGoodPrice)/lastGoodPrice;
+            if(swingPct>0.05)return; // >5% in 3 seconds = impossible
+          }
+          lastGoodPrice=r.price;
           const last=curData.ohlcv[curData.ohlcv.length-1];
           last.close=r.price;
-          // High/Low: expand from original, not from previously polluted value
           last.high=Math.max(origLast.high,r.price);
           last.low=Math.min(origLast.low,r.price);
-          // Volume: only update for daily timeframe
           if(tf==="1d"&&r.volume&&r.volume>origLast.volume)last.volume=r.volume;
           curData.currentPrice=r.price;
-          // Re-render chart
           const d=curData.ohlcv.slice(viewStart,viewEnd);
           const chartEl=document.getElementById("mainChartWrap");
           if(chartEl)chartEl.innerHTML=svgChart(d,r.price,curData.currency,window._lastAI,curSym.name);
-          // Update price display
           const prev=curData.previousClose||origLast.close;
           const chg=prev?((r.price-prev)/prev*100).toFixed(2):0;
           const cc=chg>=0?"#4ECCA3":"#E85D75";
