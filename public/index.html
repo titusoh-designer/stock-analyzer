@@ -511,7 +511,7 @@ async function fetchData(){
           curData.currentPrice=r.price;
           // Re-render chart without resetting view
           const d=curData.ohlcv.slice(viewStart,viewEnd);
-          const chartEl=document.getElementById("chartWrap");
+          const chartEl=document.getElementById("mainChartWrap");
           if(chartEl)chartEl.innerHTML=svgChart(d,r.price,curData.currency,window._lastAI,curSym.name);
           // Update price in header
           const infoEl=document.getElementById("chartInfoText");
@@ -2421,11 +2421,12 @@ function renderScanResults(data){
     const sigCol=isStrong?"#4ECCA3":"#C9A96E";
     const borderCol=isStrong?"#4ECCA3":"#C9A96E40";
 
-    return`<div class="card" style="border-left:3px solid ${borderCol};padding:16px;margin-bottom:8px;cursor:pointer" onclick="switchTab('analyze');document.getElementById('symInput').value='${r.name} (${r.symbol})';selSym={symbol:'${r.symbol}',source:'${r.source}',name:'${r.name}'};setSrc('${r.source}');fetchData();">
+    const safeName=(r.name||r.symbol||"").replace(/'/g,"\\'");
+    return`<div class="card" style="border-left:3px solid ${borderCol};padding:16px;margin-bottom:8px;cursor:pointer" onclick="switchTab('analyze');document.getElementById('symInput').value='${safeName} (${r.symbol})';selSym={symbol:'${r.symbol}',source:'${r.source}',name:'${safeName}'};setSrc('${r.source}');fetchData();">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="display:flex;align-items:center;gap:14px">
-          <div>
-            <div style="font-size:14px;font-weight:700;color:#F0ECE3">${r.name}</div>
+          <div style="min-width:0">
+            <div style="font-size:14px;font-weight:700;color:#F0ECE3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">${r.name||r.symbol}</div>
             <div class="mono" style="font-size:10px;color:#666;margin-top:2px">${r.symbol} · ${r.source}</div>
           </div>
           <div style="text-align:right">
