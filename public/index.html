@@ -147,8 +147,7 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
     <button id="scanCat_crypto" onclick="toggleScanCat('crypto')" class="pill" style="border-color:#7DCEA030;color:#7DCEA0;padding:5px 12px;font-size:11px">암호화폐 20</button>
     <span style="border-left:1px solid #1a1a24;height:20px;margin:0 4px"></span>
     <select id="scanDays" onchange="saveScanDays();filterScanResults()" style="background:#0e0e14;color:#C9A96E;border:1px solid #C9A96E30;border-radius:6px;padding:4px 8px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer">
-      <option value="5">5일</option><option value="10" selected>10일</option><option value="20">20일</option><option value="30">30일</option>
-      <option value="60">60일</option><option value="90">90일</option><option value="180">180일</option><option value="365">365일</option>
+      <option value="1">1일</option><option value="3">3일</option><option value="5">5일</option><option value="10" selected>10일</option><option value="20">20일</option><option value="30">30일</option><option value="60">60일</option><option value="100">100일</option>
     </select>
     <span id="scanTotal" class="mono" style="font-size:10px;color:#555"></span>
   </div>
@@ -1536,7 +1535,7 @@ function svgChart(data,cp,cur,ai,stockName){
     }
     return arr.slice(viewStart,viewStart+data.length);
   };
-  const _maSlices=[{v:_cmaSlice(20),c:"#4ECCA3",w:1.2},{v:_cmaSlice(100),c:"#C9A96E",w:2},{v:_cmaSlice(440),c:"#F0ECE3",w:2.8}];
+  const _maSlices=[{v:_cmaSlice(20),c:"#4ECCA3",w:1.5},{v:_cmaSlice(100),c:"#C9A96E",w:2.5},{v:_cmaSlice(440),c:"#F0ECE3",w:3.5}];
   _maSlices.forEach(m=>m.v.forEach(v=>{if(v!=null)aP.push(v);}));
   if(!aP.length)aP.push(1);
   const mn=Math.min(...aP)*.994,mx=Math.max(...aP)*1.006;
