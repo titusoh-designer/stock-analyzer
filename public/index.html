@@ -1816,7 +1816,7 @@ function svgChart(data,cp,cur,ai,stockName){
     });
 
     // Signal legend
-    s+=`<text x="${P.l+4}" y="${H-16}" fill="#888" font-size="7" font-family="DM Mono,monospace" opacity=".5">▲매수(2+) ★매도(3+) ◆강한상승예상 △상승예상 | GC DC RSI MACD BB MA↑↓</text>`;
+    s+=`<text x="${P.l+4}" y="${H-16}" fill="#888" font-size="7" font-family="DM Mono,monospace" opacity=".5">▲매수(2+) ★매도(3+) ◆강한상승예상 | GC DC RSI MACD BB MA↑↓</text>`;
 
     // ═══════ 상승예상신호 시스템 ═══════
     if(data.length>=30){
@@ -1831,21 +1831,6 @@ function svgChart(data,cp,cur,ai,stockName){
         if(i<13){atr14.push(null);continue;}
         if(i===13){atr14.push(atrArr.slice(0,14).reduce((a,b)=>a+b,0)/14);continue;}
         atr14.push((atr14[i-1]*13+atrArr[i])/14);
-      }
-
-      // ── Pre-compute OBV ──
-      const obv=[0];
-      for(let i=1;i<cls2.length;i++){
-        if(cls2[i]>cls2[i-1])obv.push(obv[i-1]+vols2[i]);
-        else if(cls2[i]<cls2[i-1])obv.push(obv[i-1]-vols2[i]);
-        else obv.push(obv[i-1]);
-      }
-
-      // ── Pre-compute MA100 (proxy for weekly MA20: 20weeks × 5days = 100) ──
-      const ma100s=[];
-      for(let i=0;i<cls2.length;i++){
-        if(i<99){ma100s.push(null);continue;}
-        ma100s.push(cls2.slice(i-99,i+1).reduce((a,b)=>a+b,0)/100);
       }
 
       // ══ 1. 강한상승예상신호 (5조건 동시 충족) ══
@@ -1899,49 +1884,6 @@ function svgChart(data,cp,cur,ai,stockName){
         s+=`<rect x="${x-38}" y="${y+36}" width="76" height="15" rx="4" fill="rgba(201,169,110,.2)" stroke="#C9A96E50"/>`;
         s+=`<text x="${x}" y="${y+46}" fill="#C9A96E" font-size="7.5" font-weight="700" font-family="DM Mono,monospace" text-anchor="middle">강한상승예상</text>`;
         s+=`<text x="${x}" y="${y+58}" fill="#C9A96E" font-size="6" font-family="DM Mono,monospace" text-anchor="middle" opacity=".6">Vol×${sig.volR} BB${sig.bbPct}%</text>`;
-      });
-
-      // ══ 2. 상승예상신호 (3조건 동시 충족) ══
-      // ① MA20 > MA100 상승돌파 (일봉MA20 > 주봉MA20 근사: MA100≈주봉MA20)
-      // ② RSI > 50
-      // ③ OBV 직전봉 대비 상승
-      const bullSignals=[];
-      for(let i=25;i<data.length;i++){
-        // ① MA20이 MA100을 상승 돌파 (또는 이미 위에 있고 상승 중)
-        if(!ma20s[i]||!ma100s[i]||!ma20s[i-1]||!ma100s[i-1])continue;
-        const maXup=ma20s[i-1]<=ma100s[i-1]&&ma20s[i]>ma100s[i]; // 골든크로스
-        const maAbove=ma20s[i]>ma100s[i]&&ma20s[i]>ma20s[i-1]; // 이미 위+상승중
-        const cond1b=maXup||maAbove;
-
-        // ② RSI > 50
-        if(!rsiS[i])continue;
-        const cond2b=rsiS[i]>50;
-
-        // ③ OBV 직전봉 대비 상승
-        if(i<1)continue;
-        const cond3b=obv[i]>obv[i-1];
-
-        if(cond1b&&cond2b&&cond3b){
-          // 강한상승예상과 겹치면 스킵 (강한 쪽만 표시)
-          if(strongBull.find(s=>Math.abs(s.i-i)<5))continue;
-          if(!bullSignals.find(s=>Math.abs(s.i-i)<10)){
-            bullSignals.push({i,rsi:rsiS[i].toFixed(0),cross:maXup?"XUP":"UP"});
-          }
-        }
-      }
-
-      // Render 상승예상
-      bullSignals.forEach(sig=>{
-        const x=tx(sig.i),d=data[sig.i];
-        if(!d)return;
-        const yB=ty(d.low);if(!isFinite(yB))return;
-        const y=yB+6;
-        // Triangle up + label
-        s+=`<circle cx="${x}" cy="${y+16}" r="14" fill="#85C1E9" opacity=".08"/>`;
-        s+=`<polygon points="${x},${y+4} ${x-7},${y+18} ${x+7},${y+18}" fill="rgba(133,193,233,.4)" stroke="#85C1E9" stroke-width="1"/>`;
-        s+=`<rect x="${x-28}" y="${y+20}" width="56" height="14" rx="3" fill="rgba(133,193,233,.15)" stroke="#85C1E940"/>`;
-        s+=`<text x="${x}" y="${y+30}" fill="#85C1E9" font-size="7" font-weight="600" font-family="DM Mono,monospace" text-anchor="middle">상승예상</text>`;
-        s+=`<text x="${x}" y="${y+42}" fill="#85C1E9" font-size="6" font-family="DM Mono,monospace" text-anchor="middle" opacity=".5">RSI${sig.rsi} ${sig.cross}</text>`;
       });
     }
   }
