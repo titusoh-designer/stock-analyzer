@@ -208,76 +208,72 @@ export default async function handler(req, res) {
       const code = symbol.replace(/[^0-9]/g, "");
       const isIntraday = ["1m","5m","10m","15m","30m","60m","4h"].includes(interval);
       
-      if (isIntraday) {
-        // Naver doesn't support intraday — use Yahoo with .KS/.KQ suffix
-        let ohlcv = [];
-        // Yahoo supports these ranges for KRX stocks (same as US)
-        const rangeMap = {"1m":"1d","5m":"5d","10m":"10d","15m":"10d","30m":"30d","60m":"60d","4h":"60d"};
-        const intMap = {"1m":"1m","5m":"5m","10m":"15m","15m":"15m","30m":"30m","60m":"60m","4h":"60m"};
-        const range = rangeMap[interval] || "5d";
-        const int = intMap[interval] || "5m";
-        let yMeta = {};
-
-        for (const suffix of [".KS", ".KQ"]) {
-          const yahooSym = code + suffix;
-          try {
-            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=${range}&interval=${int}&includePrePost=false`;
-            const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-            const yJson = await yResp.json();
-            if (yJson.chart?.error) continue;
-            const yResult = yJson.chart?.result?.[0];
-            if (!yResult || !yResult.timestamp?.length) continue;
-            const yTs = yResult.timestamp;
-            const yQ = yResult.indicators?.quote?.[0] || {};
-            yMeta = yResult.meta || {};
-            ohlcv = yTs.map((ts, i) => ({
-              date: new Date(ts * 1000).toISOString().replace("T"," ").slice(0,16),
-              open: yQ.open?.[i] ?? 0, high: yQ.high?.[i] ?? 0,
-              low: yQ.low?.[i] ?? 0, close: yQ.close?.[i] ?? 0,
-              volume: yQ.volume?.[i] ?? 0
-            })).filter(d => d.close > 0);
-            if (ohlcv.length > 3) break;
-          } catch(e) { continue; }
-        }
-        if (!ohlcv.length) throw new Error("Korean intraday data not available for this interval");
-        if (interval === "4h") {
-          const agg = [];
-          for (let i = 0; i < ohlcv.length; i += 4) {
-            const chunk = ohlcv.slice(i, i + 4);
-            agg.push({ date: chunk[0].date, open: chunk[0].open, high: Math.max(...chunk.map(c=>c.high)), low: Math.min(...chunk.map(c=>c.low)), close: chunk[chunk.length-1].close, volume: chunk.reduce((s,c)=>s+c.volume,0) });
-          }
-          ohlcv = agg;
-        }
-        data = {
-          source: "naver", symbol: code, currency: "KRW",
-          currentPrice: yMeta.regularMarketPrice || ohlcv[ohlcv.length-1]?.close,
-          exchange: yMeta.exchangeName || "KRX",
-          name: yMeta.longName || yMeta.shortName || code,
-          ohlcv, interval, fetchedAt: new Date().toISOString()
-        };
-      } else {
-      // Daily/Weekly/Monthly — use Naver
-      const tf = interval === "1wk" ? "week" : interval === "1mo" ? "month" : "day";
+      // Naver supports: day, week, month, minute
+      const tfMap = {"1d":"day","1wk":"week","1mo":"month"};
+      const tf = isIntraday ? "minute" : (tfMap[interval] || "day");
+      
+      // Date range
       const end = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      const startDate = new Date(Date.now() - (tf === "week" ? 1460 : tf === "month" ? 3650 : 600) * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
+      let daysBack = 600; // default for daily
+      if (tf === "week") daysBack = 1460;
+      else if (tf === "month") daysBack = 3650;
+      else if (tf === "minute") {
+        // Days of 1min data to fetch — targeting 200+ candles per interval
+        // KRX: 390 minutes/day
+        const daysMap = {"1m":3,"5m":7,"10m":10,"15m":15,"30m":20,"60m":40,"4h":80};
+        daysBack = daysMap[interval] || 7;
+      }
+      const startDate = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
+
       const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${end}&timeframe=${tf}`;
-      const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-      // Decode as EUC-KR (Naver encoding)
+      const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
       const buf = await resp.arrayBuffer();
       let text;
       try { text = new TextDecoder('euc-kr').decode(buf); }
       catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
 
-      // Parse Naver's pseudo-JSON response
-      const rows = text.match(/\[.*?\]/g) || [];
-      const ohlcv = rows.map(row => {
-        const vals = row.replace(/[\[\]'"\s]/g, "").split(",");
-        if (vals.length < 6) return null;
-        return {
-          date: vals[0].replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3"),
-          open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5]
-        };
-      }).filter(Boolean);
+      // Parse Naver response — handles both quotes and spaces
+      const rowRegex = /\[([^\]]+)\]/g;
+      let rmatch;
+      let rawOhlcv = [];
+      while ((rmatch = rowRegex.exec(text)) !== null) {
+        const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
+        if (vals.length >= 6 && /^\d{8,12}$/.test(vals[0]) && +vals[4] > 0) {
+          const ds = vals[0];
+          let dateStr;
+          if (ds.length === 12) {
+            // Minute data: 202503141030 → 2025-03-14 10:30
+            dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
+          } else if (ds.length === 8) {
+            dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8);
+          } else continue;
+          rawOhlcv.push({
+            date: dateStr, open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5]
+          });
+        }
+      }
+
+      let ohlcv = rawOhlcv;
+
+      // Aggregate minute data into desired interval
+      if (isIntraday && interval !== "1m" && rawOhlcv.length > 0) {
+        const mins = {"5m":5,"10m":10,"15m":15,"30m":30,"60m":60,"4h":240}[interval] || 5;
+        ohlcv = [];
+        for (let i = 0; i < rawOhlcv.length; i += mins) {
+          const chunk = rawOhlcv.slice(i, i + mins);
+          if (!chunk.length) continue;
+          ohlcv.push({
+            date: chunk[0].date,
+            open: chunk[0].open,
+            high: Math.max(...chunk.map(c => c.high)),
+            low: Math.min(...chunk.map(c => c.low)),
+            close: chunk[chunk.length - 1].close,
+            volume: chunk.reduce((s, c) => s + c.volume, 0)
+          });
+        }
+      }
+
+      if (!ohlcv.length) throw new Error("네이버 데이터 없음 — 종목코드를 확인하세요");
 
       data = {
         source: "naver",
@@ -289,7 +285,6 @@ export default async function handler(req, res) {
         interval: interval || "1d",
         fetchedAt: new Date().toISOString()
       };
-      } // close else (daily/weekly/monthly)
     }
 
     else {
