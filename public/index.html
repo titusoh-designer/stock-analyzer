@@ -857,7 +857,7 @@ function render(data,ai){
   const ch=((cp-pv)/pv*100).toFixed(2),cs=data.currency==="KRW"?"₩":"$",fp=v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
   const cls=o.map(d=>d.close),h52=Math.max(...o.map(d=>d.high)),l52=Math.min(...o.map(d=>d.low));
   const rsi=calcRSI(cls),macd=calcMACD(cls),bb=calcBB(cls),stoch=calcStoch(o);
-  const ma5=calcMA(cls,5),ma20=calcMA(cls,20),ma100=calcMA(cls,100),ma250=calcMA(cls,250);
+  const ma5=calcMA(cls,5),ma20=calcMA(cls,20),ma100=calcMA(cls,100),ma250=calcMA(cls,250),ma440=calcMA(cls,440);
   const rc=rsi>70?"#E85D75":rsi<30?"#4ECCA3":"#C9A96E",mc=macd.h>0?"#4ECCA3":macd.h<0?"#E85D75":"#C9A96E";
 
   const stockFullName = data.name || curSym?.name || data.symbol;
@@ -885,7 +885,7 @@ function render(data,ai){
     <div id="obvChartWrap" class="chart-box" style="margin-bottom:0">${svgOBV(o)}</div>
   </div>
   <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(95px,1fr))">
-    ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"MA20",v:ma20?fp(ma20):"-",c:"#85C1E9"},{l:"MA100",v:ma100?fp(ma100):"-",c:"#C39BD3"},{l:"MA250",v:ma250?fp(ma250):"-",c:"#7DCEA0"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
+    ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"일20",v:ma20?fp(ma20):"-",c:"#4ECCA3"},{l:"주20",v:ma100?fp(ma100):"-",c:"#C9A96E"},{l:"월20",v:ma440?fp(ma440):"-",c:"#F0ECE3"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
   </div>`;
 
   // AI Analysis Button + Result Area
@@ -1555,10 +1555,9 @@ function svgChart(data,cp,cur,ai,stockName){
     s+=`<text x="${P.l+20}" y="${P.t+18+i*20}" fill="${c}" font-size="8.5" font-weight="500" font-family="DM Mono,monospace">${labelText}</text>`;
   });
 
-  // MAs
-  // MAs (filter NaN)
+  // MAs: 일봉20일(녹색) / 주봉20일≈MA100(황금색) / 월봉20일≈MA440(하얀색)
   const cma=(n)=>data.map((_,i)=>{if(i<n-1)return null;const sl=data.slice(i-n+1,i+1);const sum=sl.reduce((s,d)=>s+(d.close||0),0);const v=sum/n;return isFinite(v)&&v>0?v:null;});
-  [{v:cma(5),c:"#E8A87C",w:1},{v:cma(20),c:"#85C1E9",w:1.2},{v:cma(100),c:"#C39BD3",w:1.5},{v:cma(250),c:"#7DCEA0",w:1.8}].forEach(m=>{const pts=m.v.map((v,i)=>v!=null&&isFinite(ty(v))?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);if(pts.length>1)s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${m.c}" stroke-width="${m.w}" opacity=".5"/>`;});
+  [{v:cma(20),c:"#4ECCA3",w:1.2,label:"일20"},{v:cma(100),c:"#C9A96E",w:1.5,label:"주20"},{v:cma(440),c:"#F0ECE3",w:1.8,label:"월20"}].forEach(m=>{const pts=m.v.map((v,i)=>v!=null&&isFinite(ty(v))?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);if(pts.length>1)s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${m.c}" stroke-width="${m.w}" opacity=".55"/>`;});
 
   // Bollinger Bands (filter NaN)
   const bbS=[];for(let i=19;i<data.length;i++){const sl=data.slice(i-19,i+1).map(d=>d.close||0).filter(v=>v>0);if(sl.length<10)continue;const ma=sl.reduce((a,b)=>a+b,0)/sl.length;const std=Math.sqrt(sl.reduce((s,v)=>s+Math.pow(v-ma,2),0)/sl.length);if(isFinite(ma)&&isFinite(std))bbS.push({u:ma+2*std,m:ma,l:ma-2*std,i});}
@@ -1895,7 +1894,7 @@ function svgChart(data,cp,cur,ai,stockName){
   data.filter((_,i)=>i%Math.max(1,Math.floor(data.length/8))===0).forEach(d=>{const i=data.indexOf(d);s+=`<text x="${tx(i)}" y="${H-P.b+16}" fill="#444" font-size="7.5" font-family="DM Mono,monospace" text-anchor="middle">${(d.date||"").slice(5)}</text>`;});
 
   // MA Legend
-  [{c:"#E8A87C",l:"5"},{c:"#85C1E9",l:"20"},{c:"#C39BD3",l:"100"},{c:"#7DCEA0",l:"250"}].forEach((m,i)=>{const x=W-P.r-180+i*46;s+=`<line x1="${x}" y1="12" x2="${x+10}" y2="12" stroke="${m.c}" stroke-width="1.5"/><text x="${x+14}" y="15" fill="${m.c}" font-size="7" font-family="DM Mono,monospace">MA${m.l}</text>`;});
+  [{c:"#4ECCA3",l:"일20"},{c:"#C9A96E",l:"주20"},{c:"#F0ECE3",l:"월20"}].forEach((m,i)=>{const x=W-P.r-150+i*52;s+=`<line x1="${x}" y1="12" x2="${x+12}" y2="12" stroke="${m.c}" stroke-width="1.8"/><text x="${x+16}" y="15" fill="${m.c}" font-size="7.5" font-family="DM Mono,monospace">${m.l}</text>`;});
 
   // Data badge + Stock name + Live indicator
   s+=`<text x="${P.l+4}" y="${H-6}" fill="#4ECCA3" font-size="7.5" font-family="DM Mono,monospace">● ${curData?.source||"api"} ${data.length}봉</text>`;
