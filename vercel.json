@@ -6,6 +6,9 @@
     "api/scan.js": {
       "maxDuration": 60
     },
+    "api/realtime.js": {
+      "maxDuration": 10
+    },
     "api/universe.js": {
       "maxDuration": 30
     }
