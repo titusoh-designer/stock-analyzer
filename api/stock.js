@@ -210,11 +210,11 @@ export default async function handler(req, res) {
       
       if (isIntraday) {
         // Naver doesn't support intraday — use Yahoo with .KS/.KQ suffix
-        // Korean stocks on Yahoo need shorter ranges than US stocks
         let ohlcv = [];
-        const rangeMap = {"1m":"1d","5m":"1d","10m":"2d","15m":"5d","30m":"5d","60m":"10d","4h":"30d"};
+        // Yahoo supports these ranges for KRX stocks (same as US)
+        const rangeMap = {"1m":"1d","5m":"5d","10m":"10d","15m":"10d","30m":"30d","60m":"60d","4h":"60d"};
         const intMap = {"1m":"1m","5m":"5m","10m":"15m","15m":"15m","30m":"30m","60m":"60m","4h":"60m"};
-        const range = rangeMap[interval] || "1d";
+        const range = rangeMap[interval] || "5d";
         const int = intMap[interval] || "5m";
         let yMeta = {};
 
@@ -238,44 +238,6 @@ export default async function handler(req, res) {
             })).filter(d => d.close > 0);
             if (ohlcv.length > 3) break;
           } catch(e) { continue; }
-        }
-        // Fallback: if 5m failed, try with 1m data and aggregate
-        if (ohlcv.length <= 3 && int !== "1m") {
-          for (const suffix of [".KS", ".KQ"]) {
-            try {
-              const fbUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=1d&interval=1m&includePrePost=false`;
-              const fbResp = await fetch(fbUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-              const fbJson = await fbResp.json();
-              if (fbJson.chart?.error) continue;
-              const fbResult = fbJson.chart?.result?.[0];
-              if (!fbResult?.timestamp?.length) continue;
-              const fbTs = fbResult.timestamp;
-              const fbQ = fbResult.indicators?.quote?.[0] || {};
-              yMeta = fbResult.meta || {};
-              const raw1m = fbTs.map((ts, i) => ({
-                date: new Date(ts * 1000).toISOString().replace("T"," ").slice(0,16),
-                open: fbQ.open?.[i] ?? 0, high: fbQ.high?.[i] ?? 0,
-                low: fbQ.low?.[i] ?? 0, close: fbQ.close?.[i] ?? 0,
-                volume: fbQ.volume?.[i] ?? 0
-              })).filter(d => d.close > 0);
-              // Aggregate 1m bars into desired interval
-              const mins = {"5m":5,"10m":10,"15m":15,"30m":30,"60m":60,"4h":240}[interval] || 5;
-              ohlcv = [];
-              for (let j = 0; j < raw1m.length; j += mins) {
-                const chunk = raw1m.slice(j, j + mins);
-                if (!chunk.length) continue;
-                ohlcv.push({
-                  date: chunk[0].date,
-                  open: chunk[0].open,
-                  high: Math.max(...chunk.map(c => c.high)),
-                  low: Math.min(...chunk.map(c => c.low)),
-                  close: chunk[chunk.length - 1].close,
-                  volume: chunk.reduce((s, c) => s + c.volume, 0)
-                });
-              }
-              if (ohlcv.length > 3) break;
-            } catch(e) { continue; }
-          }
         }
         if (!ohlcv.length) throw new Error("Korean intraday data not available for this interval");
         if (interval === "4h") {
