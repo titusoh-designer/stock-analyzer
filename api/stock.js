@@ -208,54 +208,75 @@ export default async function handler(req, res) {
       const code = symbol.replace(/[^0-9]/g, "");
       const isIntraday = ["1m","5m","10m","15m","30m","60m","4h"].includes(interval);
       
-      // Naver supports: day, week, month, minute
-      const tfMap = {"1d":"day","1wk":"week","1mo":"month"};
-      const tf = isIntraday ? "minute" : (tfMap[interval] || "day");
-      
-      // Date range
-      const end = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      let daysBack = 600; // default for daily
-      if (tf === "week") daysBack = 1460;
-      else if (tf === "month") daysBack = 3650;
-      else if (tf === "minute") {
-        // Days of 1min data to fetch — targeting 200+ candles per interval
-        // KRX: 390 minutes/day
-        const daysMap = {"1m":3,"5m":7,"10m":10,"15m":15,"30m":20,"60m":40,"4h":80};
-        daysBack = daysMap[interval] || 7;
-      }
-      const startDate = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
-
-      const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${end}&timeframe=${tf}`;
-      const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
-      const buf = await resp.arrayBuffer();
-      let text;
-      try { text = new TextDecoder('euc-kr').decode(buf); }
-      catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
-
-      // Parse Naver response — handles both quotes and spaces
-      const rowRegex = /\[([^\]]+)\]/g;
-      let rmatch;
       let rawOhlcv = [];
-      while ((rmatch = rowRegex.exec(text)) !== null) {
-        const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
-        if (vals.length >= 6 && /^\d{8,12}$/.test(vals[0]) && +vals[4] > 0) {
-          const ds = vals[0];
-          let dateStr;
-          if (ds.length === 12) {
-            // Minute data: 202503141030 → 2025-03-14 10:30
-            dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
-          } else if (ds.length === 8) {
-            dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8);
-          } else continue;
-          rawOhlcv.push({
-            date: dateStr, open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5]
-          });
+      
+      if (isIntraday) {
+        // ★ Naver minute API uses requestType=2 with count parameter
+        const countMap = {"1m":500,"5m":500,"10m":500,"15m":500,"30m":500,"60m":500,"4h":500};
+        const cnt = countMap[interval] || 500;
+        const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=2&count=${cnt}&timeframe=minute`;
+        const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+        const buf = await resp.arrayBuffer();
+        let text;
+        try { text = new TextDecoder('euc-kr').decode(buf); }
+        catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
+
+        // Parse — minute data returns rows like: ['날짜시간', '시가', '고가', '저가', '종가', '거래량']
+        const rowRegex = /\[([^\]]+)\]/g;
+        let rmatch;
+        while ((rmatch = rowRegex.exec(text)) !== null) {
+          const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
+          if (vals.length >= 6 && +vals[4] > 0) {
+            const ds = vals[0];
+            // Try various date formats: 14 digits, 12 digits, 8 digits
+            let dateStr = null;
+            if (/^\d{14}$/.test(ds)) {
+              dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
+            } else if (/^\d{12}$/.test(ds)) {
+              dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
+            } else if (/^\d{8}$/.test(ds)) {
+              dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8);
+            } else continue;
+            rawOhlcv.push({
+              date: dateStr, open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5]
+            });
+          }
+        }
+
+        // Sort chronologically (Naver may return newest first)
+        rawOhlcv.sort((a, b) => a.date.localeCompare(b.date));
+
+      } else {
+        // Daily/Weekly/Monthly — use requestType=1 with date range
+        const tfMap = {"1d":"day","1wk":"week","1mo":"month"};
+        const tf = tfMap[interval] || "day";
+        const end = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        let daysBack = 600;
+        if (tf === "week") daysBack = 1460;
+        else if (tf === "month") daysBack = 3650;
+        const startDate = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
+        const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${end}&timeframe=${tf}`;
+        const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+        const buf = await resp.arrayBuffer();
+        let text;
+        try { text = new TextDecoder('euc-kr').decode(buf); }
+        catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
+
+        const rowRegex = /\[([^\]]+)\]/g;
+        let rmatch;
+        while ((rmatch = rowRegex.exec(text)) !== null) {
+          const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
+          if (vals.length >= 6 && /^\d{8}$/.test(vals[0]) && +vals[4] > 0) {
+            rawOhlcv.push({
+              date: vals[0].slice(0,4)+"-"+vals[0].slice(4,6)+"-"+vals[0].slice(6,8),
+              open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5]
+            });
+          }
         }
       }
 
-      let ohlcv = rawOhlcv;
-
       // Aggregate minute data into desired interval
+      let ohlcv = rawOhlcv;
       if (isIntraday && interval !== "1m" && rawOhlcv.length > 0) {
         const mins = {"5m":5,"10m":10,"15m":15,"30m":30,"60m":60,"4h":240}[interval] || 5;
         ohlcv = [];
@@ -273,7 +294,7 @@ export default async function handler(req, res) {
         }
       }
 
-      if (!ohlcv.length) throw new Error("네이버 데이터 없음 — 종목코드를 확인하세요");
+      if (!ohlcv.length) throw new Error("네이버 데이터 없음 — 종목코드를 확인하세요 (분봉: " + rawOhlcv.length + "건 파싱)");
 
       data = {
         source: "naver",
