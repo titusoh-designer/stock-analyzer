@@ -141,8 +141,8 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   </div>
   <!-- Category filters -->
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-    <button id="scanCat_kospi" onclick="toggleScanCat('kospi')" class="pill" style="border-color:#E8A87C30;color:#E8A87C;padding:5px 12px;font-size:11px">코스피 <span id="scanCnt_kospi">1000</span></button>
-    <button id="scanCat_kosdaq" onclick="toggleScanCat('kosdaq')" class="pill" style="border-color:#85C1E930;color:#85C1E9;padding:5px 12px;font-size:11px">코스닥 <span id="scanCnt_kosdaq">1000</span></button>
+    <button id="scanCat_kospi" onclick="toggleScanCat('kospi')" class="pill" style="border-color:#E8A87C30;color:#E8A87C;padding:5px 12px;font-size:11px">코스피 <span id="scanCnt_kospi">500</span></button>
+    <button id="scanCat_kosdaq" onclick="toggleScanCat('kosdaq')" class="pill" style="border-color:#85C1E930;color:#85C1E9;padding:5px 12px;font-size:11px">코스닥 <span id="scanCnt_kosdaq">500</span></button>
     <button id="scanCat_us" onclick="toggleScanCat('us')" class="pill" style="border-color:#C39BD330;color:#C39BD3;padding:5px 12px;font-size:11px">미국 300</button>
     <button id="scanCat_crypto" onclick="toggleScanCat('crypto')" class="pill" style="border-color:#7DCEA030;color:#7DCEA0;padding:5px 12px;font-size:11px">암호화폐 20</button>
     <span style="border-left:1px solid #1a1a24;height:20px;margin:0 4px"></span>
@@ -2150,8 +2150,8 @@ async function loadKRStocks(){
   }
   try{
     const [kpResp,kdResp]=await Promise.all([
-      fetch("/api/universe?market=kospi&count=1000"),
-      fetch("/api/universe?market=kosdaq&count=1000")
+      fetch("/api/universe?market=kospi&count=500"),
+      fetch("/api/universe?market=kosdaq&count=500")
     ]);
     const kp=await kpResp.json(),kd=await kdResp.json();
     if(kp.stocks?.length>50&&kd.stocks?.length>50){
