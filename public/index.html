@@ -500,12 +500,14 @@ async function fetchData(){
         try{
           const r=await(await fetch(`/api/realtime?code=${code}`)).json();
           if(!r.price||!curData?.ohlcv?.length)return;
-          // Update last candle with realtime data
           const last=curData.ohlcv[curData.ohlcv.length-1];
-          if(r.high&&r.high>last.high)last.high=r.high;
-          if(r.low&&r.low<last.low)last.low=r.low;
+          // Only update close with realtime price
           last.close=r.price;
-          if(r.volume)last.volume=r.volume;
+          // High/Low: only expand if price breaks existing range (works for all TFs)
+          if(r.price>last.high)last.high=r.price;
+          if(r.price<last.low)last.low=r.price;
+          // Volume: only update for daily timeframe
+          if(tf==="1d"&&r.volume)last.volume=r.volume;
           curData.currentPrice=r.price;
           // Re-render chart without resetting view
           const d=curData.ohlcv.slice(viewStart,viewEnd);
