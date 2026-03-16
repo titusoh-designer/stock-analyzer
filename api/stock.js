@@ -207,104 +207,75 @@ export default async function handler(req, res) {
     else if (source === "naver") {
       const code = symbol.replace(/[^0-9]/g, "");
       const isIntraday = ["1m","5m","10m","15m","30m","60m","4h"].includes(interval);
-      
       let rawOhlcv = [];
-      
-      if (isIntraday) {
-        // ★ Try multiple Naver minute API formats
-        const attempts = [
-          // Format 1: requestType=2 + count + timeframe=minute
-          `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=2&count=500&timeframe=minute`,
-          // Format 2: requestType=2 with naver domain
-          `https://fchart.stock.naver.com/siseJson.naver?symbol=${code}&requestType=2&count=500&timeframe=minute`,
-          // Format 3: requestType=1 with recent dates
-          `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${new Date(Date.now()-7*86400000).toISOString().slice(0,10).replace(/-/g,"")}&endTime=${new Date().toISOString().slice(0,10).replace(/-/g,"")}&timeframe=minute`,
-        ];
 
-        let debugInfo = [];
-        for (const url of attempts) {
+      if (isIntraday) {
+        // ★ Yahoo .KS/.KQ is most reliable for Korean intraday from Vercel
+        const rangeMap = {"1m":"7d","5m":"60d","10m":"60d","15m":"60d","30m":"60d","60m":"6mo","4h":"6mo"};
+        const intMap = {"1m":"1m","5m":"5m","10m":"15m","15m":"15m","30m":"30m","60m":"60m","4h":"60m"};
+        for (const suffix of [".KS", ".KQ"]) {
           try {
+            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=${rangeMap[interval]||"5d"}&interval=${intMap[interval]||"5m"}&includePrePost=false`;
+            const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+            const yJson = await yResp.json();
+            if (yJson.chart?.error) continue;
+            const yR = yJson.chart?.result?.[0];
+            if (!yR?.timestamp?.length) continue;
+            const yQ = yR.indicators?.quote?.[0] || {};
+            rawOhlcv = yR.timestamp.map((ts, i) => ({
+              date: new Date(ts * 1000).toISOString().replace("T"," ").slice(0,16),
+              open: yQ.open?.[i]??0, high: yQ.high?.[i]??0, low: yQ.low?.[i]??0, close: yQ.close?.[i]??0, volume: yQ.volume?.[i]??0
+            })).filter(d => d.close > 0);
+            if (rawOhlcv.length > 5) break;
+          } catch(e) { continue; }
+        }
+        rawOhlcv.sort((a, b) => a.date.localeCompare(b.date));
+
+      } else {
+        // Daily/Weekly/Monthly — try Yahoo first (more reliable), then fchart fallback
+        const yRange = interval === "1wk" ? "5y" : interval === "1mo" ? "10y" : "2y";
+        const yInt = interval === "1wk" ? "1wk" : interval === "1mo" ? "1mo" : "1d";
+        for (const suffix of [".KS", ".KQ"]) {
+          try {
+            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=${yRange}&interval=${yInt}&includePrePost=false`;
+            const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+            const yJson = await yResp.json();
+            if (yJson.chart?.error) continue;
+            const yR = yJson.chart?.result?.[0];
+            if (!yR?.timestamp?.length) continue;
+            const yQ = yR.indicators?.quote?.[0] || {};
+            rawOhlcv = yR.timestamp.map((ts, i) => ({
+              date: new Date(ts * 1000).toISOString().split("T")[0],
+              open: yQ.open?.[i]??0, high: yQ.high?.[i]??0, low: yQ.low?.[i]??0, close: yQ.close?.[i]??0, volume: yQ.volume?.[i]??0
+            })).filter(d => d.close > 0);
+            if (rawOhlcv.length > 5) break;
+          } catch(e) { continue; }
+        }
+
+        // Fallback: fchart (may still work for some)
+        if (rawOhlcv.length < 5) {
+          try {
+            const tfMap = {"1d":"day","1wk":"week","1mo":"month"};
+            const tf = tfMap[interval] || "day";
+            const end = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+            const daysBack = tf === "week" ? 1460 : tf === "month" ? 3650 : 600;
+            const startDate = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
+            const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${end}&timeframe=${tf}`;
             const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
             const buf = await resp.arrayBuffer();
             let text;
-            try { text = new TextDecoder('euc-kr').decode(buf); }
-            catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
-
+            try { text = new TextDecoder('euc-kr').decode(buf); } catch(e2) { text = new TextDecoder('utf-8',{fatal:false}).decode(buf); }
             const rowRegex = /\[([^\]]+)\]/g;
             let rmatch;
             while ((rmatch = rowRegex.exec(text)) !== null) {
               const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
-              if (vals.length >= 6 && +vals[4] > 0) {
-                const ds = vals[0];
-                let dateStr = null;
-                if (/^\d{14}$/.test(ds)) dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
-                else if (/^\d{12}$/.test(ds)) dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" "+ds.slice(8,10)+":"+ds.slice(10,12);
-                else if (/^\d{8}$/.test(ds)) dateStr = ds.slice(0,4)+"-"+ds.slice(4,6)+"-"+ds.slice(6,8)+" 00:00";
-                else continue;
-                rawOhlcv.push({ date: dateStr, open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5] });
+              if (vals.length >= 6 && /^\d{8}$/.test(vals[0]) && +vals[4] > 0) {
+                rawOhlcv.push({ date: vals[0].slice(0,4)+"-"+vals[0].slice(4,6)+"-"+vals[0].slice(6,8), open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5] });
               }
             }
-            debugInfo.push({ url: url.slice(0,80), rows: rawOhlcv.length, textLen: text.length, sample: text.slice(0,200) });
-            if (rawOhlcv.length > 0) break; // found working format
-          } catch(e) { debugInfo.push({ url: url.slice(0,80), error: e.message }); }
+          } catch(e) {}
         }
-
-        // If Naver minute failed, fallback to Yahoo .KS/.KQ
-        if (rawOhlcv.length === 0) {
-          const rangeMap = {"1m":"7d","5m":"60d","10m":"60d","15m":"60d","30m":"60d","60m":"6mo","4h":"6mo"};
-          const intMap = {"1m":"1m","5m":"5m","10m":"15m","15m":"15m","30m":"30m","60m":"60m","4h":"60m"};
-          for (const suffix of [".KS", ".KQ"]) {
-            try {
-              const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=${rangeMap[interval]||"5d"}&interval=${intMap[interval]||"5m"}&includePrePost=false`;
-              const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-              const yJson = await yResp.json();
-              if (yJson.chart?.error) continue;
-              const yResult = yJson.chart?.result?.[0];
-              if (!yResult?.timestamp?.length) continue;
-              const yTs = yResult.timestamp;
-              const yQ = yResult.indicators?.quote?.[0] || {};
-              rawOhlcv = yTs.map((ts, i) => ({
-                date: new Date(ts * 1000).toISOString().replace("T"," ").slice(0,16),
-                open: yQ.open?.[i] ?? 0, high: yQ.high?.[i] ?? 0,
-                low: yQ.low?.[i] ?? 0, close: yQ.close?.[i] ?? 0,
-                volume: yQ.volume?.[i] ?? 0
-              })).filter(d => d.close > 0);
-              if (rawOhlcv.length > 3) break;
-            } catch(e) { continue; }
-          }
-          debugInfo.push({ source: "yahoo_fallback", rows: rawOhlcv.length });
-        }
-
         rawOhlcv.sort((a, b) => a.date.localeCompare(b.date));
-
-        if (!rawOhlcv.length) throw new Error("분봉 데이터 없음. debug: " + JSON.stringify(debugInfo).slice(0,500));
-      } else {
-        // Daily/Weekly/Monthly — use requestType=1 with date range
-        const tfMap = {"1d":"day","1wk":"week","1mo":"month"};
-        const tf = tfMap[interval] || "day";
-        const end = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-        let daysBack = 600;
-        if (tf === "week") daysBack = 1460;
-        else if (tf === "month") daysBack = 3650;
-        const startDate = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
-        const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${end}&timeframe=${tf}`;
-        const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
-        const buf = await resp.arrayBuffer();
-        let text;
-        try { text = new TextDecoder('euc-kr').decode(buf); }
-        catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buf); }
-
-        const rowRegex = /\[([^\]]+)\]/g;
-        let rmatch;
-        while ((rmatch = rowRegex.exec(text)) !== null) {
-          const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
-          if (vals.length >= 6 && /^\d{8}$/.test(vals[0]) && +vals[4] > 0) {
-            rawOhlcv.push({
-              date: vals[0].slice(0,4)+"-"+vals[0].slice(4,6)+"-"+vals[0].slice(6,8),
-              open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5]
-            });
-          }
-        }
       }
 
       // Aggregate minute data into desired interval
@@ -315,29 +286,13 @@ export default async function handler(req, res) {
         for (let i = 0; i < rawOhlcv.length; i += mins) {
           const chunk = rawOhlcv.slice(i, i + mins);
           if (!chunk.length) continue;
-          ohlcv.push({
-            date: chunk[0].date,
-            open: chunk[0].open,
-            high: Math.max(...chunk.map(c => c.high)),
-            low: Math.min(...chunk.map(c => c.low)),
-            close: chunk[chunk.length - 1].close,
-            volume: chunk.reduce((s, c) => s + c.volume, 0)
-          });
+          ohlcv.push({ date: chunk[0].date, open: chunk[0].open, high: Math.max(...chunk.map(c=>c.high)), low: Math.min(...chunk.map(c=>c.low)), close: chunk[chunk.length-1].close, volume: chunk.reduce((s,c)=>s+c.volume,0) });
         }
       }
 
-      if (!ohlcv.length) throw new Error("네이버 데이터 없음 — 파싱 " + rawOhlcv.length + "건");
+      if (!ohlcv.length) throw new Error("데이터 없음 — 종목코드 확인 (raw: "+rawOhlcv.length+"건)");
 
-      data = {
-        source: "naver",
-        symbol: code,
-        currency: "KRW",
-        currentPrice: ohlcv[ohlcv.length - 1]?.close,
-        name: code,
-        ohlcv,
-        interval: interval || "1d",
-        fetchedAt: new Date().toISOString()
-      };
+      data = { source: "naver", symbol: code, currency: "KRW", currentPrice: ohlcv[ohlcv.length-1]?.close, name: code, ohlcv, interval: interval||"1d", fetchedAt: new Date().toISOString() };
     }
 
     else {

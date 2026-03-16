@@ -25,29 +25,30 @@ export default async function handler(req, res) {
 
       if (source === "naver") {
         const code = ticker.replace(/\.(KS|KQ)$/, "");
-        const startDate = new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
-        const endDate = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-        const url = `https://fchart.stock.naver.com/siseJson.nhn?symbol=${code}&requestType=1&startTime=${startDate}&endTime=${endDate}&timeframe=day`;
-        const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
-        const buffer = await resp.arrayBuffer();
-        let text;
-        try { text = new TextDecoder('euc-kr').decode(buffer); }
-        catch(e) { text = new TextDecoder('utf-8', {fatal:false}).decode(buffer); }
-        // Naver uses single quotes: ['20240315', '69800', ...]
-        // Parse all bracket rows, strip quotes/spaces
-        const rowRegex = /\[([^\]]+)\]/g;
-        let rmatch;
-        while ((rmatch = rowRegex.exec(text)) !== null) {
-          const vals = rmatch[1].replace(/['"\s]/g, "").split(",").map(v => v.trim());
-          if (vals.length >= 6 && /^\d{8}$/.test(vals[0]) && +vals[4] > 0) {
-            ohlcv.push({
-              date: vals[0].slice(0,4)+"-"+vals[0].slice(4,6)+"-"+vals[0].slice(6),
-              open: +vals[1], high: +vals[2], low: +vals[3], close: +vals[4], volume: +vals[5]
-            });
-          }
+        // Use Yahoo .KS/.KQ for Korean stocks (fchart blocked from Vercel)
+        for (const suffix of [".KS", ".KQ"]) {
+          try {
+            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=1y&interval=1d&includePrePost=false`;
+            const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+            const yJson = await yResp.json();
+            if (yJson.chart?.error) continue;
+            const yR = yJson.chart?.result?.[0];
+            if (!yR?.timestamp?.length) continue;
+            const yQ = yR.indicators?.quote?.[0] || {};
+            const yMeta = yR.meta || {};
+            ohlcv = yR.timestamp.map((ts, i) => ({
+              date: new Date(ts * 1000).toISOString().split("T")[0],
+              open: yQ.open?.[i]??0, high: yQ.high?.[i]??0, low: yQ.low?.[i]??0, close: yQ.close?.[i]??0, volume: yQ.volume?.[i]??0
+            })).filter(d => d.close > 0);
+            if (ohlcv.length > 30) {
+              name = yMeta.longName || yMeta.shortName || name;
+              currentPrice = yMeta.regularMarketPrice || ohlcv[ohlcv.length-1].close;
+              break;
+            }
+          } catch(e) { continue; }
         }
         currency = "KRW";
-        if (ohlcv.length) currentPrice = ohlcv[ohlcv.length - 1].close;
+        if (!currentPrice && ohlcv.length) currentPrice = ohlcv[ohlcv.length - 1].close;
       } else {
         const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1d&includePrePost=false`;
         const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
