@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const rangeMap = {
       "1m": "7d", "5m": "60d", "10m": "60d", "15m": "60d", "30m": "60d",
       "60m": "6mo", "4h": "6mo",
-      "1d": "2y", "1wk": "5y", "1mo": "10y"
+      "1d": "5y", "1wk": "10y", "1mo": "max"
     };
     const intMap = {
       "1m": "1m", "5m": "5m", "10m": "15m", "15m": "15m", "30m": "30m",
