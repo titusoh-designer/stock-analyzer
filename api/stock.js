@@ -292,7 +292,17 @@ export default async function handler(req, res) {
 
       if (!ohlcv.length) throw new Error("데이터 없음 — 종목코드 확인 (raw: "+rawOhlcv.length+"건)");
 
-      data = { source: "naver", symbol: code, currency: "KRW", currentPrice: ohlcv[ohlcv.length-1]?.close, name: code, ohlcv, interval: interval||"1d", fetchedAt: new Date().toISOString() };
+      // Get Korean stock name from Naver mobile API
+      let stockName = code;
+      try {
+        const nResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/basic`, {
+          headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" }
+        });
+        const nJson = await nResp.json();
+        if (nJson?.stockName) stockName = nJson.stockName;
+      } catch(e) {}
+
+      data = { source: "naver", symbol: code, currency: "KRW", currentPrice: ohlcv[ohlcv.length-1]?.close, name: stockName, ohlcv, interval: interval||"1d", fetchedAt: new Date().toISOString() };
     }
 
     else {

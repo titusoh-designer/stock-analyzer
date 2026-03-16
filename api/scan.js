@@ -41,7 +41,8 @@ export default async function handler(req, res) {
               open: yQ.open?.[i]??0, high: yQ.high?.[i]??0, low: yQ.low?.[i]??0, close: yQ.close?.[i]??0, volume: yQ.volume?.[i]??0
             })).filter(d => d.close > 0);
             if (ohlcv.length > 30) {
-              name = yMeta.longName || yMeta.shortName || name;
+              // Keep original Korean name from request, only use Yahoo if no name provided
+              if (!name || name === ticker) name = yMeta.longName || yMeta.shortName || name;
               currentPrice = yMeta.regularMarketPrice || ohlcv[ohlcv.length-1].close;
               break;
             }
