@@ -206,6 +206,46 @@ export default async function handler(req, res) {
     // ── Naver Finance (Korean stocks) ──
     else if (source === "naver") {
       const code = symbol.replace(/[^0-9]/g, "");
+      const isIntraday = ["1m","5m","10m","15m","30m","60m","4h"].includes(interval);
+      
+      if (isIntraday) {
+        // Naver doesn't support intraday — use Yahoo with .KS suffix
+        const yahooSym = code + ".KS";
+        const rangeMap = {"1m":"1d","5m":"5d","10m":"5d","15m":"5d","30m":"10d","60m":"30d","4h":"60d"};
+        const intMap = {"1m":"1m","5m":"5m","10m":"15m","15m":"15m","30m":"30m","60m":"60m","4h":"60m"};
+        const range = rangeMap[interval] || "5d";
+        const int = intMap[interval] || "15m";
+        const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?range=${range}&interval=${int}&includePrePost=false`;
+        const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+        const yJson = await yResp.json();
+        const yResult = yJson.chart?.result?.[0];
+        if (!yResult) throw new Error("Yahoo intraday fallback failed");
+        const yTs = yResult.timestamp || [];
+        const yQ = yResult.indicators?.quote?.[0] || {};
+        const yMeta = yResult.meta || {};
+        let ohlcv = yTs.map((ts, i) => ({
+          date: new Date(ts * 1000).toISOString().replace("T"," ").slice(0,16),
+          open: yQ.open?.[i] ?? 0, high: yQ.high?.[i] ?? 0,
+          low: yQ.low?.[i] ?? 0, close: yQ.close?.[i] ?? 0,
+          volume: yQ.volume?.[i] ?? 0
+        })).filter(d => d.close > 0);
+        if (interval === "4h") {
+          const agg = [];
+          for (let i = 0; i < ohlcv.length; i += 4) {
+            const chunk = ohlcv.slice(i, i + 4);
+            agg.push({ date: chunk[0].date, open: chunk[0].open, high: Math.max(...chunk.map(c=>c.high)), low: Math.min(...chunk.map(c=>c.low)), close: chunk[chunk.length-1].close, volume: chunk.reduce((s,c)=>s+c.volume,0) });
+          }
+          ohlcv = agg;
+        }
+        data = {
+          source: "naver", symbol: code, currency: "KRW",
+          currentPrice: yMeta.regularMarketPrice || ohlcv[ohlcv.length-1]?.close,
+          exchange: yMeta.exchangeName || "KRX",
+          name: yMeta.longName || yMeta.shortName || code,
+          ohlcv, interval, fetchedAt: new Date().toISOString()
+        };
+      } else {
+      // Daily/Weekly/Monthly — use Naver
       const tf = interval === "1wk" ? "week" : interval === "1mo" ? "month" : "day";
       const end = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const startDate = new Date(Date.now() - (tf === "week" ? 1460 : tf === "month" ? 3650 : 600) * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
@@ -238,6 +278,7 @@ export default async function handler(req, res) {
         interval: interval || "1d",
         fetchedAt: new Date().toISOString()
       };
+      } // close else (daily/weekly/monthly)
     }
 
     else {

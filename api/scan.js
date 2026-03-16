@@ -143,8 +143,11 @@ export default async function handler(req, res) {
       }
 
       if (starSignals.length > 0) {
-        // Mini OHLCV (last 60 bars for mini chart)
-        const mini = ohlcv.slice(-60).map(d => ({ c: d.close, h: d.high, l: d.low }));
+        // Keep only top 10 signals (sorted by count desc, daysAgo asc)
+        starSignals.sort((a, b) => (b.count - a.count) || (a.daysAgo - b.daysAgo));
+        const topSignals = starSignals.slice(0, 10);
+        // Mini chart: last 30 close prices only (reduced for mobile)
+        const mini = ohlcv.slice(-30).map(d => ({ c: Math.round(d.close * 100) / 100 }));
         const change = ohlcv.length >= 2 ? ((cls[cls.length - 1] / cls[cls.length - 2] - 1) * 100).toFixed(2) : 0;
 
         results.push({
@@ -154,8 +157,8 @@ export default async function handler(req, res) {
           currency,
           currentPrice,
           change: +change,
-          starSignals,
-          bestSignal: starSignals.reduce((a, b) => b.count > a.count ? b : a),
+          starSignals: topSignals,
+          bestSignal: topSignals[0],
           mini,
           dataLen: ohlcv.length
         });
