@@ -482,21 +482,55 @@ async function fetchData(){
   }catch(e){err.style.display="block";document.getElementById("errMsg").textContent=e.message;
   }finally{btn.disabled=false;btn.textContent="분석";ld.style.display="none";}
 
-  // Auto-refresh for intraday timeframes
+  // Auto-refresh: Naver realtime (3s) for Korean stocks, Yahoo polling for US
   if(autoRefreshTimer)clearInterval(autoRefreshTimer);
   autoRefreshTimer=null;
   const liveEl=document.getElementById("liveBadge");
   if(liveEl)liveEl.style.display="none";
-  const intradayTfs=["1m","5m","10m","30m","60m","4h"];
-  if(intradayTfs.includes(tf)&&curData){
-    const refreshMs=tf==="1m"?15000:tf==="5m"?30000:tf==="10m"?30000:tf==="30m"?60000:120000;
-    if(liveEl){liveEl.style.display="inline-flex";liveEl.textContent=`● LIVE ${Math.round(refreshMs/1000)}초`;}
-    autoRefreshTimer=setInterval(async()=>{
-      try{
-        const r=await(await fetch(`/api/stock?symbol=${encodeURIComponent(curSym.symbol)}&source=${curSym.source}&interval=${tf}`)).json();
-        if(r.ohlcv?.length){curData=r;const vs=viewEnd-viewStart;viewEnd=r.ohlcv.length;viewStart=Math.max(0,viewEnd-vs);render(r,null);}
-      }catch(e){}
-    },refreshMs);
+
+  if(curData&&curSym){
+    const isKR=curSym.source==="naver";
+    const isIntraday=["1m","5m","10m","30m","60m","4h"].includes(tf);
+
+    if(isKR){
+      // ★ Korean stocks: Naver realtime polling (3 seconds)
+      const code=curSym.symbol.replace(/[^0-9]/g,"");
+      if(liveEl){liveEl.style.display="inline-flex";liveEl.textContent="● LIVE 3초";}
+      autoRefreshTimer=setInterval(async()=>{
+        try{
+          const r=await(await fetch(`/api/realtime?code=${code}`)).json();
+          if(!r.price||!curData?.ohlcv?.length)return;
+          // Update last candle with realtime data
+          const last=curData.ohlcv[curData.ohlcv.length-1];
+          if(r.high&&r.high>last.high)last.high=r.high;
+          if(r.low&&r.low<last.low)last.low=r.low;
+          last.close=r.price;
+          if(r.volume)last.volume=r.volume;
+          curData.currentPrice=r.price;
+          // Re-render chart without resetting view
+          const d=curData.ohlcv.slice(viewStart,viewEnd);
+          const chartEl=document.getElementById("chartWrap");
+          if(chartEl)chartEl.innerHTML=svgChart(d,r.price,curData.currency,window._lastAI,curSym.name);
+          // Update price in header
+          const infoEl=document.getElementById("chartInfoText");
+          if(infoEl){
+            const chg=curData.previousClose?((r.price-curData.previousClose)/curData.previousClose*100).toFixed(2):0;
+            const cc=chg>=0?"#4ECCA3":"#E85D75";
+            infoEl.innerHTML=`<span style="color:#F0ECE3;font-size:18px;font-weight:700">${r.price.toLocaleString()}</span> <span style="color:${cc};font-size:13px">${chg>=0?"+":""}${chg}%</span> <span style="color:#555;font-size:10px">${r.marketOpen?"장중":"장외"}</span>`;
+          }
+        }catch(e){}
+      },3000);
+    } else if(isIntraday){
+      // US/Crypto: Yahoo full data polling (longer interval)
+      const refreshMs=tf==="1m"?15000:tf==="5m"?30000:tf==="10m"?30000:tf==="30m"?60000:120000;
+      if(liveEl){liveEl.style.display="inline-flex";liveEl.textContent=`● LIVE ${Math.round(refreshMs/1000)}초`;}
+      autoRefreshTimer=setInterval(async()=>{
+        try{
+          const r=await(await fetch(`/api/stock?symbol=${encodeURIComponent(curSym.symbol)}&source=${curSym.source}&interval=${tf}`)).json();
+          if(r.ohlcv?.length){curData=r;const vs=viewEnd-viewStart;viewEnd=r.ohlcv.length;viewStart=Math.max(0,viewEnd-vs);render(r,null);}
+        }catch(e){}
+      },refreshMs);
+    }
   }
 }
 
