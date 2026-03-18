@@ -115,108 +115,174 @@ export default async function handler(req, res) {
       fetchedAt: new Date().toISOString()
     };
 
-    // ── Fundamentals (Korean=Naver, US=Yahoo chart meta) ──
+    // ── Fundamentals (Korean=Naver, US=Google Finance scraping) ──
     try {
+      // KRX industry code → sector name mapping
+      const krxSectors = {
+        "278":"반도체","298":"가정용기기와용품","266":"전자제품","274":"디스플레이장비및부품",
+        "281":"IT하드웨어","285":"반도체장비","263":"소프트웨어","267":"무선통신서비스",
+        "271":"자동차","272":"자동차부품","275":"건설","276":"건축자재","277":"화학",
+        "279":"식품","280":"음료","282":"의약품","283":"바이오","284":"의료기기",
+        "286":"은행","287":"증권","288":"보험","289":"부동산","290":"유틸리티",
+        "291":"운송","292":"미디어","293":"엔터테인먼트","294":"호텔레저","295":"유통",
+        "296":"섬유의복","297":"철강","299":"기계","300":"조선","301":"항공우주",
+        "302":"에너지","303":"통신장비","304":"인터넷서비스"
+      };
+      const pn = s => s ? parseFloat(String(s).replace(/[^0-9.\-]/g, "")) : null;
+      const parseMcap = s => {
+        if (!s) return null;
+        const t = s.match(/([\d,]+)조/); const e = s.match(/([\d,]+)억/);
+        return (t ? parseFloat(t[1].replace(/,/g, "")) * 1e12 : 0) + (e ? parseFloat(e[1].replace(/,/g, "")) * 1e8 : 0);
+      };
+
       if (isKR) {
-        // ★ Korean stocks: Naver 3 APIs
         const code = symbol.replace(/[^0-9]/g, "");
 
-        // 1) Integration: PER, PBR, EPS, BPS, 시총, 배당, 섹터
+        // 1) Integration: PER, PBR, EPS, BPS, 시총, 배당, 업종코드, 동종기업
         const intResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/integration`);
         if (intResp.ok) {
-          const intJson = await intResp.json();
+          const ij = await intResp.json();
           const infos = {};
-          (intJson.totalInfos || []).forEach(i => { infos[i.code] = i.value; });
-          const parseNum = s => s ? parseFloat(s.replace(/[^0-9.\-]/g, "")) : null;
-          const parseMcap = s => {
-            if (!s) return null;
-            const t = s.match(/([\d,]+)조/); const e = s.match(/([\d,]+)억/);
-            return (t ? parseFloat(t[1].replace(/,/g, "")) * 1e12 : 0) + (e ? parseFloat(e[1].replace(/,/g, "")) * 1e8 : 0);
-          };
+          (ij.totalInfos || []).forEach(i => { infos[i.code] = i.value; });
 
           data.fundamentals = {
             marketCap: parseMcap(infos.marketValue),
-            per: parseNum(infos.per),
-            forwardPer: parseNum(infos.cnsPer),
-            pbr: parseNum(infos.pbr),
-            eps: parseNum(infos.eps),
-            bps: parseNum(infos.bps),
-            dividendYield: parseNum(infos.dividendYieldRatio) ? parseNum(infos.dividendYieldRatio) / 100 : null,
-            dividend: parseNum(infos.dividend),
-            fiftyTwoWeekHigh: parseNum(infos.highPriceOf52Weeks),
-            fiftyTwoWeekLow: parseNum(infos.lowPriceOf52Weeks),
+            per: pn(infos.per), forwardPer: pn(infos.cnsPer),
+            pbr: pn(infos.pbr), eps: pn(infos.eps), bps: pn(infos.bps),
+            dividendYield: pn(infos.dividendYieldRatio) ? pn(infos.dividendYieldRatio) / 100 : null,
+            dividend: pn(infos.dividend),
+            fiftyTwoWeekHigh: pn(infos.highPriceOf52Weeks),
+            fiftyTwoWeekLow: pn(infos.lowPriceOf52Weeks),
             foreignRate: infos.foreignRate || null
           };
-          data.sector = intJson.sectorName || null;
-          data.industry = intJson.industryName || null;
-          data.businessSummary = intJson.description ? intJson.description.slice(0, 200) : null;
 
-          // Industry compare info (sector averages)
-          if (intJson.industryCompareInfo) {
-            const ic = intJson.industryCompareInfo;
-            data.sectorAvg = {
-              per: parseNum(ic.industryPer),
-              changeRate: ic.industryChangeRate
-            };
-          }
-        }
+          // Sector from industryCode mapping
+          data.sector = krxSectors[ij.industryCode] || null;
+          data.industryCode = ij.industryCode || null;
 
-        // 2) Quarterly: 매출, 영업이익, 당기순이익
-        const qResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/quarter`);
-        if (qResp.ok) {
-          const qJson = await qResp.json();
-          const fi = qJson.financeInfo;
-          if (fi && fi.rowList && fi.trTitleList) {
-            const titles = fi.trTitleList.filter(t => t.isConsensus === "N").slice(-4);
-            const rows = {};
-            fi.rowList.forEach(r => { rows[r.title] = r.columns; });
-            data.quarterly = titles.map(t => ({
-              quarter: t.title.replace(".", ""),
-              revenue: rows["매출액"]?.[t.key]?.value ? parseFloat(rows["매출액"][t.key].value.replace(/,/g, "")) * 1e6 : null,
-              operatingProfit: rows["영업이익"]?.[t.key]?.value ? parseFloat(rows["영업이익"][t.key].value.replace(/,/g, "")) * 1e6 : null,
-              earnings: rows["당기순이익"]?.[t.key]?.value ? parseFloat(rows["당기순이익"][t.key].value.replace(/,/g, "")) * 1e6 : null
+          // Peer companies from industryCompareInfo
+          if (Array.isArray(ij.industryCompareInfo) && ij.industryCompareInfo.length) {
+            data.peers = ij.industryCompareInfo.slice(0, 5).map(p => ({
+              name: p.stockName, code: p.itemCode, price: p.closePrice, change: p.fluctuationsRatio
             }));
           }
         }
 
-        // 3) Annual: 매출, 영업이익, 당기순이익
+        // 2) Annual: Parse ALL rows (ROE, 부채비율, 영업이익률, EPS, PER, PBR...)
         const aResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/annual`);
         if (aResp.ok) {
-          const aJson = await aResp.json();
-          const fi = aJson.financeInfo;
-          if (fi && fi.rowList && fi.trTitleList) {
+          const aj = await aResp.json();
+          const fi = aj.financeInfo;
+          if (fi?.rowList && fi?.trTitleList) {
             const titles = fi.trTitleList.filter(t => t.isConsensus === "N").slice(-3);
             const rows = {};
             fi.rowList.forEach(r => { rows[r.title] = r.columns; });
+            const getVal = (rowName, key) => rows[rowName]?.[key]?.value ? pn(rows[rowName][key].value) : null;
+            const latestKey = titles[titles.length - 1]?.key;
+
             data.annual = titles.map(t => ({
-              year: t.title.replace(".", ""),
-              revenue: rows["매출액"]?.[t.key]?.value ? parseFloat(rows["매출액"][t.key].value.replace(/,/g, "")) * 1e6 : null,
-              operatingProfit: rows["영업이익"]?.[t.key]?.value ? parseFloat(rows["영업이익"][t.key].value.replace(/,/g, "")) * 1e6 : null,
-              earnings: rows["당기순이익"]?.[t.key]?.value ? parseFloat(rows["당기순이익"][t.key].value.replace(/,/g, "")) * 1e6 : null
+              year: t.title.replace(/\./g, ""), revenue: getVal("매출액", t.key),
+              operatingProfit: getVal("영업이익", t.key), earnings: getVal("당기순이익", t.key),
+              opm: getVal("영업이익률", t.key), npm: getVal("순이익률", t.key),
+              roe: getVal("ROE", t.key), debtRatio: getVal("부채비율", t.key),
+              eps: getVal("EPS", t.key), per: getVal("PER", t.key),
+              bps: getVal("BPS", t.key), pbr: getVal("PBR", t.key),
+              dividend: getVal("주당배당금", t.key)
             }));
-            // Calculate operating margin from latest annual
-            if (data.annual.length && data.fundamentals) {
-              const latest = data.annual[data.annual.length - 1];
-              if (latest.revenue && latest.operatingProfit) {
-                data.fundamentals.operatingMargins = latest.operatingProfit / latest.revenue;
-              }
+
+            // Enrich fundamentals from latest annual
+            if (latestKey && data.fundamentals) {
+              const f = data.fundamentals;
+              f.roe = getVal("ROE", latestKey) ? getVal("ROE", latestKey) / 100 : null;
+              f.debtToEquity = getVal("부채비율", latestKey);
+              f.operatingMargins = getVal("영업이익률", latestKey) ? getVal("영업이익률", latestKey) / 100 : null;
+              f.profitMargins = getVal("순이익률", latestKey) ? getVal("순이익률", latestKey) / 100 : null;
+              f.retainedEarnings = getVal("유보율", latestKey);
             }
           }
         }
 
+        // 3) Quarterly: Parse ALL rows
+        const qResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/quarter`);
+        if (qResp.ok) {
+          const qj = await qResp.json();
+          const fi = qj.financeInfo;
+          if (fi?.rowList && fi?.trTitleList) {
+            const titles = fi.trTitleList.filter(t => t.isConsensus === "N").slice(-4);
+            const rows = {};
+            fi.rowList.forEach(r => { rows[r.title] = r.columns; });
+            const getVal = (rowName, key) => rows[rowName]?.[key]?.value ? pn(rows[rowName][key].value) : null;
+
+            data.quarterly = titles.map(t => ({
+              quarter: t.title.replace(/\./g, ""),
+              revenue: getVal("매출액", t.key) ? getVal("매출액", t.key) * 1e6 : null,
+              operatingProfit: getVal("영업이익", t.key) ? getVal("영업이익", t.key) * 1e6 : null,
+              earnings: getVal("당기순이익", t.key) ? getVal("당기순이익", t.key) * 1e6 : null,
+              opm: getVal("영업이익률", t.key), roe: getVal("ROE", t.key),
+              debtRatio: getVal("부채비율", t.key)
+            }));
+          }
+        }
+
       } else {
-        // ★ US/Crypto stocks: Yahoo v8 chart meta (limited but works)
+        // ★ US stocks: Google Finance HTML scraping
         data.fundamentals = {
-          marketCap: null,
-          per: null, pbr: null, eps: null,
-          dividendYield: null,
           fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh || null,
           fiftyTwoWeekLow: meta.fiftyTwoWeekLow || null
         };
-        // Note: Yahoo quoteSummary blocked (401 crumb). Chart meta has limited data.
-        data.sector = null;
-        data.industry = null;
-        data.fundSource = "yahoo-meta-limited";
+        try {
+          // Try NASDAQ first, then NYSE
+          const exchanges = ["NASDAQ", "NYSE", "NYSEARCA"];
+          let gHtml = null;
+          for (const ex of exchanges) {
+            const gResp = await fetch(`https://www.google.com/finance/quote/${encodeURIComponent(symbol)}:${ex}`, {
+              headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+            });
+            if (gResp.ok) { gHtml = await gResp.text(); if (gHtml.length > 10000) break; }
+          }
+          if (gHtml) {
+            // Extract data from Google Finance HTML
+            const extract = (label) => {
+              const re = new RegExp(label + '[^>]*>[^>]*>([^<]+)', 'i');
+              const m = gHtml.match(re); return m ? m[1].trim() : null;
+            };
+            const extractMeta = (prop) => {
+              const re = new RegExp(`"${prop}"\\s*:\\s*"?([^",}]+)`, 'i');
+              const m = gHtml.match(re); return m ? m[1].trim() : null;
+            };
+            // Sector/Industry from structured data
+            const sectorMatch = gHtml.match(/data-topic[^>]*>([^<]+)<\/a>[^<]*<\/div>[^<]*<div[^>]*>([^<]+)/);
+            // PE ratio
+            const peMatch = gHtml.match(/P\/E ratio[^>]*>[^>]*>([^<]+)/i) || gHtml.match(/"PE Ratio[^"]*"[^>]*>[^>]*>([^<]+)/i);
+            // Market cap
+            const mcapMatch = gHtml.match(/Market cap[^>]*>[^>]*>([^<]+)/i);
+            // Dividend yield
+            const divMatch = gHtml.match(/Dividend yield[^>]*>[^>]*>([^<]+)/i);
+            // Description
+            const descMatch = gHtml.match(/data-attrid="description"[^>]*>([^<]{20,200})/i) || gHtml.match(/About[^<]*<[^>]*>([^<]{20,300})/i);
+
+            if (peMatch) data.fundamentals.per = pn(peMatch[1]);
+            if (mcapMatch) {
+              const mv = mcapMatch[1].trim();
+              if (mv.includes("T")) data.fundamentals.marketCap = pn(mv) * 1e12;
+              else if (mv.includes("B")) data.fundamentals.marketCap = pn(mv) * 1e9;
+              else if (mv.includes("M")) data.fundamentals.marketCap = pn(mv) * 1e6;
+            }
+            if (divMatch && divMatch[1].includes("%")) data.fundamentals.dividendYield = pn(divMatch[1]) / 100;
+
+            // Sector from Google (look for industry/sector links)
+            const secMatch = gHtml.match(/\/finance\/markets\/[^"]*sector[^"]*"[^>]*>([^<]+)/i);
+            if (secMatch) data.sector = secMatch[1].trim();
+
+            // Try to get description
+            if (descMatch) data.businessSummary = descMatch[1].trim().slice(0, 200);
+
+            data.fundSource = "google-finance";
+          }
+        } catch(ge) { /* Google scraping failed, use chart meta only */ }
+
+        if (!data.sector) data.sector = null;
+        if (!data.industry) data.industry = null;
       }
     } catch (e) { console.log("[FUND ERROR]", yahooTicker, e.message); }
 
