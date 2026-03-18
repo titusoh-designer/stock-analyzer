@@ -998,32 +998,64 @@ function render(data,ai){
       </div>
     </div>`;
 
-    // Quarterly table
-    if(_q.length){
-      const qcs=data.currency==="KRW"?"억":"M";
-      const qDiv=data.currency==="KRW"?1e8:1e6;
-      h+=`<div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;border-collapse:collapse;font-size:10px;min-width:400px">
-      <tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#888;padding:6px;font-weight:400">분기</th>${_q.map(q=>`<th style="text-align:right;color:#888;padding:6px;font-weight:400">${q.quarter}</th>`).join("")}</tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">매출(${qcs})</td>${_q.map(q=>`<td style="text-align:right;padding:5px 6px;color:#999">${q.revenue!=null?Math.round(q.revenue/qDiv).toLocaleString():"—"}</td>`).join("")}</tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">영업이익(${qcs})</td>${_q.map((q,qi)=>{const v=q.operatingProfit!=null?Math.round(q.operatingProfit/qDiv):q.earnings!=null?Math.round(q.earnings/qDiv):null;const prev=qi>0?(_q[qi-1].operatingProfit!=null?Math.round(_q[qi-1].operatingProfit/qDiv):_q[qi-1].earnings!=null?Math.round(_q[qi-1].earnings/qDiv):null):null;const col=v==null?"#999":v>=0?"#4ECCA3":"#E85D75";const arrow=v!=null&&prev!=null?(v>prev?"<span style='color:#4ECCA3;font-size:8px;margin-left:2px'>▲</span>":"<span style='color:#E85D75;font-size:8px;margin-left:2px'>▼</span>"):"";return`<td style="text-align:right;padding:5px 6px;color:${col}">${v!=null?v.toLocaleString():"—"}${arrow}</td>`;}).join("")}</tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">영업이익률</td>${_q.map(q=>{if(!q.revenue||!q.operatingProfit)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const m=(q.operatingProfit/q.revenue*100);const col=m>=10?"#4ECCA3":m>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${col}">${m.toFixed(1)}%</td>`;}).join("")}</tr>
-      </table></div>`;
-    }
+    // Combined financial table: Annual | Quarterly (single table with divider)
+    if(_ann.length||_q.length){
+      const isKRW=data.currency==="KRW";
+      const unit=isKRW?"억":"M";
+      const qDiv=isKRW?1e8:1e6;
+      const aDiv=isKRW?100:1;
+      const fmt2=(v,d)=>v!=null?(v/d).toFixed(2):"—";
+      const fmtI=(v,d)=>v!=null?Math.round(v/d).toLocaleString():"—";
 
-    // Annual table
-    if(_ann.length){
-      const aIsKRW=data.currency==="KRW";
-      const aUnit=aIsKRW?"억":"M";
-      const aDivisor=aIsKRW?100:1; // Naver gives 백만원, /100 = 억원
-      h+=`<div style="margin-bottom:12px"><div style="font-size:9px;color:#C9A96E;letter-spacing:0.08em;margin-bottom:6px">연간 실적</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px;min-width:400px">
-      <tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#888;padding:6px;font-weight:400">연도</th>${_ann.map(a=>`<th style="text-align:right;color:#888;padding:6px;font-weight:400">${a.year}</th>`).join("")}</tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">매출(${aUnit})</td>${_ann.map(a=>`<td style="text-align:right;padding:5px 6px;color:#999">${a.revenue!=null?Math.round(a.revenue/aDivisor).toLocaleString():"—"}</td>`).join("")}</tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">영업이익(${aUnit})</td>${_ann.map((a,ai)=>{const v=a.operatingProfit;const prev=ai>0?_ann[ai-1].operatingProfit:null;const col=v==null?"#999":v>=0?"#4ECCA3":"#E85D75";const arrow=v!=null&&prev!=null?(v>prev?"<span style='color:#4ECCA3;font-size:8px;margin-left:2px'>▲</span>":"<span style='color:#E85D75;font-size:8px;margin-left:2px'>▼</span>"):"";return`<td style="text-align:right;padding:5px 6px;color:${col}">${v!=null?Math.round(v/aDivisor).toLocaleString():"—"}${arrow}</td>`;}).join("")}</tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">영업이익률</td>${_ann.map(a=>{const m=a.opm;if(m==null)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const col=m>=10?"#4ECCA3":m>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${col}">${m.toFixed?m.toFixed(1):m}%</td>`;}).join("")}</tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">ROE</td>${_ann.map(a=>{const v=a.roe;if(v==null)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const col=v>=10?"#4ECCA3":v>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${col}">${v.toFixed?v.toFixed(1):v}%</td>`;}).join("")}</tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">부채비율</td>${_ann.map(a=>{const v=a.debtRatio;if(v==null)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const col=v<100?"#4ECCA3":v<200?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${col}">${v.toFixed?v.toFixed(0):v}%</td>`;}).join("")}</tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">PER</td>${_ann.map(a=>`<td style="text-align:right;padding:5px 6px;color:#999">${a.per!=null?(a.per.toFixed?a.per.toFixed(1):a.per)+"배":"—"}</td>`).join("")}</tr>
-      </table></div></div>`; 
+      h+=`<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:10px;min-width:500px">`;
+      // Header row
+      h+=`<tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#888;padding:6px;font-weight:400"></th>`;
+      if(_ann.length) h+=_ann.map(a=>`<th style="text-align:right;color:#C9A96E;padding:6px;font-weight:400;font-size:9px">${a.year}</th>`).join("");
+      if(_ann.length&&_q.length) h+=`<th style="width:2px;padding:0;background:#C9A96E30"></th>`;
+      if(_q.length) h+=_q.map(q=>`<th style="text-align:right;color:#888;padding:6px;font-weight:400;font-size:9px">${q.quarter}</th>`).join("");
+      h+=`</tr>`;
+
+      // Revenue row
+      h+=`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">매출(${unit})</td>`;
+      if(_ann.length) h+=_ann.map(a=>`<td style="text-align:right;padding:5px 6px;color:#999">${a.revenue!=null?(a.revenue/aDiv).toFixed(2):"—"}</td>`).join("");
+      if(_ann.length&&_q.length) h+=`<td style="background:#C9A96E15"></td>`;
+      if(_q.length) h+=_q.map(q=>`<td style="text-align:right;padding:5px 6px;color:#999">${q.revenue!=null?(q.revenue/qDiv).toFixed(2):"—"}</td>`).join("");
+      h+=`</tr>`;
+
+      // Operating profit row
+      h+=`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">영업이익(${unit})</td>`;
+      if(_ann.length) h+=_ann.map((a,i)=>{const v=a.operatingProfit;const p=i>0?_ann[i-1].operatingProfit:null;const c=v==null?"#999":v>=0?"#4ECCA3":"#E85D75";const ar=v!=null&&p!=null?(v>p?"<span style='color:#4ECCA3;font-size:8px;margin-left:2px'>▲</span>":"<span style='color:#E85D75;font-size:8px;margin-left:2px'>▼</span>"):"";return`<td style="text-align:right;padding:5px 6px;color:${c}">${v!=null?(v/aDiv).toFixed(2):"—"}${ar}</td>`;}).join("");
+      if(_ann.length&&_q.length) h+=`<td style="background:#C9A96E15"></td>`;
+      if(_q.length) h+=_q.map((q,i)=>{const v=q.operatingProfit!=null?q.operatingProfit:q.earnings;const p=i>0?(_q[i-1].operatingProfit!=null?_q[i-1].operatingProfit:_q[i-1].earnings):null;const c=v==null?"#999":v>=0?"#4ECCA3":"#E85D75";const ar=v!=null&&p!=null?(v>p?"<span style='color:#4ECCA3;font-size:8px;margin-left:2px'>▲</span>":"<span style='color:#E85D75;font-size:8px;margin-left:2px'>▼</span>"):"";return`<td style="text-align:right;padding:5px 6px;color:${c}">${v!=null?(v/qDiv).toFixed(2):"—"}${ar}</td>`;}).join("");
+      h+=`</tr>`;
+
+      // OPM row
+      h+=`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">영업이익률</td>`;
+      if(_ann.length) h+=_ann.map(a=>{const m=a.opm;if(m==null)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const c=m>=10?"#4ECCA3":m>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${c}">${typeof m==="number"?m.toFixed(1):m}%</td>`;}).join("");
+      if(_ann.length&&_q.length) h+=`<td style="background:#C9A96E15"></td>`;
+      if(_q.length) h+=_q.map(q=>{const m=q.opm!=null?q.opm:(q.revenue&&q.operatingProfit?(q.operatingProfit/q.revenue*100):null);if(m==null)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const c=m>=10?"#4ECCA3":m>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${c}">${m.toFixed(1)}%</td>`;}).join("");
+      h+=`</tr>`;
+
+      // ROE row (annual only if available)
+      if(_ann.some(a=>a.roe!=null)){
+        h+=`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">ROE</td>`;
+        h+=_ann.map(a=>{const v=a.roe;if(v==null)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const c=v>=10?"#4ECCA3":v>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${c}">${typeof v==="number"?v.toFixed(1):v}%</td>`;}).join("");
+        if(_q.length) h+=`<td style="background:#C9A96E15"></td>`;
+        if(_q.length) h+=_q.map(q=>{const v=q.roe;if(v==null)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const c=v>=10?"#4ECCA3":v>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${c}">${typeof v==="number"?v.toFixed(1):v}%</td>`;}).join("");
+        h+=`</tr>`;
+      }
+
+      // Debt ratio row (annual only)
+      if(_ann.some(a=>a.debtRatio!=null)){
+        h+=`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">부채비율</td>`;
+        h+=_ann.map(a=>{const v=a.debtRatio;if(v==null)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const c=v<100?"#4ECCA3":v<200?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${c}">${typeof v==="number"?v.toFixed(0):v}%</td>`;}).join("");
+        if(_q.length){h+=`<td style="background:#C9A96E15"></td>`;h+=_q.map(q=>{const v=q.debtRatio;if(v==null)return`<td style="text-align:right;padding:5px 6px;color:#555">—</td>`;const c=v<100?"#4ECCA3":v<200?"#C9A96E":"#E85D75";return`<td style="text-align:right;padding:5px 6px;color:${c}">${typeof v==="number"?v.toFixed(0):v}%</td>`;}).join("");}
+        h+=`</tr>`;
+      }
+
+      h+=`</table></div>`;
+      // Legend
+      h+=`<div style="display:flex;gap:12px;font-size:8px;color:#555;margin-bottom:12px"><span style="color:#C9A96E">◆ 연간</span><span>|</span><span>분기</span><span style="margin-left:auto">단위: ${unit}원</span></div>`;
     }
 
     // Summary cards with sector comparison badges + tooltips
