@@ -1058,16 +1058,48 @@ function render(data,ai){
       h+=`<div style="display:flex;gap:12px;font-size:8px;color:#555;margin-bottom:12px"><span style="color:#C9A96E">◆ 연간</span><span>|</span><span>분기</span><span style="margin-left:auto">단위: ${unit}원</span></div>`;
     }
 
-    // US financials from Google Finance (Revenue/Net Income)
+    // US financials from Google Finance (3 tables: Income / Balance / Cash Flow)
     const _usF=data.usFinancials;
     if(_usF&&(!_q.length&&!_ann.length)){
-      h+=`<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:10px">
-      <tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#888;padding:6px;font-weight:400">최근 실적</th><th style="text-align:right;color:#888;padding:6px;font-weight:400">${_usF.quarter||"Latest"}</th></tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">Revenue</td><td style="text-align:right;padding:5px 6px;color:#999">${_usF.revenue||"—"}</td></tr>
-      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">Net Income</td><td style="text-align:right;padding:5px 6px;color:${_usF.netIncome&&_usF.netIncome.includes("-")?"#E85D75":"#4ECCA3"}">${_usF.netIncome||"—"}</td></tr>
-      ${data.fundamentals?.eps!=null?`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">EPS</td><td style="text-align:right;padding:5px 6px;color:#999">$${data.fundamentals.eps.toFixed(2)}</td></tr>`:""}
-      ${data.fundamentals?.profitMargins!=null?`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">Net Profit Margin</td><td style="text-align:right;padding:5px 6px;color:${data.fundamentals.profitMargins>=0.1?"#4ECCA3":data.fundamentals.profitMargins>=0.05?"#C9A96E":"#E85D75"}">${(data.fundamentals.profitMargins*100).toFixed(1)}%</td></tr>`:""}
-      </table></div>`;
+      const period=_usF.period||"Latest";
+      const inc=_usF.income||{};
+      const bal=_usF.balance||{};
+      const cf=_usF.cashflow||{};
+
+      h+=`<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:10px">`;
+      // Income Statement
+      h+=`<tr><td colspan="4" style="color:#C9A96E;font-size:9px;letter-spacing:0.08em;padding:8px 6px 4px;border-bottom:1px solid #C9A96E20">손익계산서 <span style="color:#555">(${period})</span></td></tr>`;
+      [["Revenue","매출"],["Operating expense","영업비용"],["Net income","순이익"],["EBITDA","EBITDA"],["Earnings per share","EPS"],["Net profit margin","순이익률"],["Effective tax rate","실효세율"]].forEach(([k,label])=>{
+        if(!inc[k])return;
+        const v=inc[k];const isNeg=v.startsWith("-");const pctV=parseFloat(v);const c=k.includes("margin")||k.includes("rate")?(pctV>=10?"#4ECCA3":pctV>=5?"#C9A96E":"#E85D75"):isNeg?"#E85D75":"#999";
+        h+=`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px;width:40%">${label}</td><td style="text-align:right;padding:5px 6px;color:${c}">${v}${k.includes("margin")?"%":""}</td></tr>`;
+      });
+      // Balance Sheet
+      if(Object.keys(bal).length){
+        h+=`<tr><td colspan="4" style="color:#C9A96E;font-size:9px;letter-spacing:0.08em;padding:10px 6px 4px;border-bottom:1px solid #C9A96E20">대차대조표</td></tr>`;
+        [["Total assets","총자산"],["Total liabilities","총부채"],["Total equity","총자본"],["Cash and short-term investments","현금성자산"],["Shares outstanding","발행주식수"],["Price to book","PBR"],["Return on assets","ROA"],["Return on capital","ROC"]].forEach(([k,label])=>{
+          if(!bal[k])return;
+          const v=bal[k];const c=k.includes("Return")?((parseFloat(v))>=10?"#4ECCA3":"#C9A96E"):"#999";
+          h+=`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">${label}</td><td style="text-align:right;padding:5px 6px;color:${c}">${v}${k.includes("Return")||k.includes("book")?"":""}  </td></tr>`;
+        });
+      }
+      // Cash Flow
+      if(Object.keys(cf).length){
+        h+=`<tr><td colspan="4" style="color:#C9A96E;font-size:9px;letter-spacing:0.08em;padding:10px 6px 4px;border-bottom:1px solid #C9A96E20">현금흐름표</td></tr>`;
+        [["Cash from operations","영업활동"],["Cash from investing","투자활동"],["Cash from financing","재무활동"],["Free cash flow","잉여현금흐름"],["Net change in cash","현금증감"]].forEach(([k,label])=>{
+          if(!cf[k])return;
+          const v=cf[k];const isNeg=v.startsWith("-");
+          h+=`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">${label}</td><td style="text-align:right;padding:5px 6px;color:${isNeg?"#E85D75":"#4ECCA3"}">${v}</td></tr>`;
+        });
+      }
+      h+=`</table></div>`;
+      // Company info
+      if(_usF.employees||_usF.founded){
+        h+=`<div style="display:flex;gap:12px;font-size:9px;color:#555;margin-bottom:12px">`;
+        if(_usF.employees)h+=`<span>직원수: <span style="color:#999">${_usF.employees}</span></span>`;
+        if(_usF.founded)h+=`<span>설립: <span style="color:#999">${_usF.founded}</span></span>`;
+        h+=`</div>`;
+      }
     }
 
     // Summary cards with sector comparison badges + tooltips
