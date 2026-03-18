@@ -887,6 +887,32 @@ function render(data,ai){
     ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"일20",v:ma20?fp(ma20):"-",c:"#4ECCA3"},{l:"주20",v:ma100?fp(ma100):"-",c:"#C9A96E"},{l:"월20",v:ma440?fp(ma440):"-",c:"#F0ECE3"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
   </div>`;
 
+  // ═══ SENTIMENT DETAIL PANEL ═══
+  const _sent=window._lastSentiment||50;
+  const _sd=window._sentimentData||{};
+  const _sentLabel=_sent<20?"극심한 공포":_sent<40?"공포":_sent<60?"중립":_sent<80?"욕망":"극심한 욕망";
+  const _sentCol=_sent<30?"#E85D75":_sent<45?"#E8A87C":_sent<60?"#C9A96E":_sent<75?"#85C1E9":"#4ECCA3";
+  h+=`<div style="background:#0e0e18;border:1px solid #1e1e2e;border-radius:10px;padding:12px 14px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:10px;color:#C9A96E;letter-spacing:0.1em">◆ 종목 심리지수</div>
+      <div style="font-size:13px;font-weight:600;color:${_sentCol}">${_sent} · ${_sentLabel}</div>
+    </div>
+    <div style="height:6px;background:#1a1a28;border-radius:3px;position:relative;margin-bottom:8px">
+      <div style="height:100%;width:100%;border-radius:3px;background:linear-gradient(90deg,#E85D75,#E8A87C,#C9A96E,#85C1E9,#4ECCA3)"></div>
+      <div style="position:absolute;top:-4px;left:${_sent}%;width:3px;height:14px;background:#F0ECE3;border-radius:2px;transform:translateX(-50%)"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:#555;margin-bottom:10px">
+      <span style="color:#E85D75">극심한 공포 0</span><span style="color:#E8A87C">공포 25</span><span style="color:#C9A96E">중립 50</span><span style="color:#85C1E9">욕망 75</span><span style="color:#4ECCA3">극심한 욕망 100</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;font-size:9px">
+      <div style="text-align:center"><div style="color:#666;margin-bottom:3px">RSI(14)</div><div style="color:${_sd.rsi!=null&&_sd.rsi<30?"#E85D75":_sd.rsi!=null&&_sd.rsi>70?"#4ECCA3":"#C9A96E"};font-weight:500">${_sd.rsi!=null?_sd.rsi.toFixed(1):"—"}</div><div style="color:#555;font-size:7px;margin-top:2px">${_sd.rsi!=null?(_sd.rsi<30?"과매도":_sd.rsi>70?"과매수":"중립"):"—"}</div></div>
+      <div style="text-align:center"><div style="color:#666;margin-bottom:3px">BB 위치</div><div style="color:${_sd.bbPos!=null&&_sd.bbPos<25?"#E85D75":_sd.bbPos!=null&&_sd.bbPos>75?"#4ECCA3":"#C9A96E"};font-weight:500">${_sd.bbPos!=null?_sd.bbPos.toFixed(0)+"%":"—"}</div><div style="color:#555;font-size:7px;margin-top:2px">${_sd.bbPos!=null?(_sd.bbPos<25?"하단 접근":_sd.bbPos>75?"상단 접근":"중심 부근"):"—"}</div></div>
+      <div style="text-align:center"><div style="color:#666;margin-bottom:3px">가격 vs MA20</div><div style="color:${_sd.maDev!=null&&_sd.maDev<-5?"#E85D75":_sd.maDev!=null&&_sd.maDev>5?"#4ECCA3":"#C9A96E"};font-weight:500">${_sd.maDev!=null?(_sd.maDev>=0?"+":"")+_sd.maDev.toFixed(1)+"%":"—"}</div><div style="color:#555;font-size:7px;margin-top:2px">${_sd.maDev!=null?(_sd.maDev<-5?"MA20 하회":_sd.maDev>5?"MA20 상회":"MA20 부근"):"—"}</div></div>
+      <div style="text-align:center"><div style="color:#666;margin-bottom:3px">거래량</div><div style="color:${_sd.volRatio!=null&&_sd.volRatio>1.5?"#4ECCA3":_sd.volRatio!=null&&_sd.volRatio<0.5?"#E85D75":"#C9A96E"};font-weight:500">${_sd.volRatio!=null?_sd.volRatio.toFixed(1)+"x":"—"}</div><div style="color:#555;font-size:7px;margin-top:2px">${_sd.volRatio!=null?(_sd.volRatio>1.5?"활발":_sd.volRatio<0.5?"침체":"보통"):"—"}</div></div>
+      <div style="text-align:center"><div style="color:#666;margin-bottom:3px">변동성</div><div style="color:#C9A96E;font-weight:500">—</div><div style="color:#555;font-size:7px;margin-top:2px">ATR 기반</div></div>
+    </div>
+  </div>`;
+
   // ═══════ FUNDAMENTAL ANALYSIS PANEL ═══════
   try{
   const _f=data.fundamentals||{};
@@ -1901,7 +1927,51 @@ function svgChart(data,cp,cur,ai,stockName){
     }
   }
 
-  // Candles
+  // ═══ SENTIMENT INDEX (Fear/Greed Background) ═══
+  if(data.length>=20){
+    const sCls=data.map(d=>d.close||0),sVol=data.map(d=>d.volume||0);
+    const sRsi=[];
+    {let ag=0,al=0;
+    for(let i=1;i<=14&&i<sCls.length;i++){const d=sCls[i]-sCls[i-1];d>0?ag+=d:al+=Math.abs(d);}
+    ag/=14;al/=14;
+    for(let i=0;i<sCls.length;i++){
+      if(i<14){sRsi.push(50);continue;}
+      if(i>14){const d=sCls[i]-sCls[i-1];ag=(ag*13+(d>0?d:0))/14;al=(al*13+(d<0?Math.abs(d):0))/14;}
+      sRsi.push(al===0?100:100-100/(1+ag/al));
+    }}
+    const sMa20=[];for(let i=0;i<sCls.length;i++){sMa20.push(i>=19?sCls.slice(i-19,i+1).reduce((a,b)=>a+b,0)/20:null);}
+    const sBBu=[],sBBl=[];
+    for(let i=0;i<sCls.length;i++){if(i<19){sBBu.push(null);sBBl.push(null);continue;}const sl=sCls.slice(i-19,i+1),ma=sl.reduce((a,b)=>a+b,0)/20,std=Math.sqrt(sl.reduce((s2,v)=>s2+Math.pow(v-ma,2),0)/20);sBBu.push(ma+2*std);sBBl.push(ma-2*std);}
+    const sVolMA=[];for(let i=0;i<sVol.length;i++){sVolMA.push(i>=19?sVol.slice(i-19,i+1).reduce((a,b)=>a+b,0)/20:null);}
+    const sATR=[];
+    {let atr=0;for(let i=0;i<data.length;i++){const tr=i===0?data[i].high-data[i].low:Math.max(data[i].high-data[i].low,Math.abs(data[i].high-sCls[i-1]),Math.abs(data[i].low-sCls[i-1]));if(i<14){sATR.push(null);atr+=tr;if(i===13)atr/=14;continue;}atr=(atr*13+tr)/14;sATR.push(atr);}}
+    const sATRma=[];for(let i=0;i<sATR.length;i++){if(i<33||!sATR[i]){sATRma.push(null);continue;}const sl=sATR.slice(i-19,i+1).filter(Boolean);sATRma.push(sl.length?sl.reduce((a,b)=>a+b,0)/sl.length:null);}
+    const sentiment=[];
+    for(let i=0;i<data.length;i++){
+      let sc=50;
+      if(sRsi[i]!=null)sc+=(sRsi[i]-50);
+      if(sBBu[i]!=null&&sBBl[i]!=null){const pos=(sCls[i]-sBBl[i])/(sBBu[i]-sBBl[i]||1);sc+=(pos-0.5)*40;}
+      if(sMa20[i]!=null&&sMa20[i]>0)sc+=Math.max(-25,Math.min(25,(sCls[i]-sMa20[i])/sMa20[i]*250));
+      if(sVolMA[i]!=null&&sVolMA[i]>0){const vr=sVol[i]/sVolMA[i],bull=sCls[i]>=data[i].open;sc+=Math.max(-20,Math.min(20,(bull?1:-1)*(vr-1)*15));}
+      if(sATR[i]!=null&&sATRma[i]!=null&&sATRma[i]>0){const trend=sMa20[i]?sCls[i]-sMa20[i]:0;sc+=Math.max(-15,Math.min(15,trend<0?-(sATR[i]/sATRma[i]-1)*15:(sATR[i]/sATRma[i]-1)*10));}
+      sentiment.push(Math.max(0,Math.min(100,sc)));
+    }
+    const smoothS=[];for(let i=0;i<sentiment.length;i++){if(i<4){smoothS.push(sentiment[i]);continue;}smoothS.push(sentiment.slice(i-4,i+1).reduce((a,b)=>a+b,0)/5);}
+    const barW=cw/data.length;
+    for(let i=0;i<data.length;i++){
+      const sc=smoothS[i];let col,op=0;
+      if(sc<20){col="232,93,117";op=0.12;}else if(sc<30){col="232,93,117";op=0.08;}else if(sc<40){col="232,93,117";op=0.04;}
+      else if(sc>80){col="78,204,163";op=0.12;}else if(sc>70){col="78,204,163";op=0.08;}else if(sc>60){col="78,204,163";op=0.04;}
+      if(op>0)s+=`<rect x="${P.l+i*barW}" y="${P.t}" width="${barW+.5}" height="${ch}" fill="rgba(${col},${op})"/>`;
+    }
+    window._lastSentiment=Math.round(smoothS[smoothS.length-1]||50);
+    window._sentimentData={rsi:sRsi[sRsi.length-1],bbPos:sBBu[sBBu.length-1]&&sBBl[sBBl.length-1]?((sCls[sCls.length-1]-sBBl[sBBl.length-1])/(sBBu[sBBu.length-1]-sBBl[sBBl.length-1])*100):null,maDev:sMa20[sMa20.length-1]?((sCls[sCls.length-1]-sMa20[sMa20.length-1])/sMa20[sMa20.length-1]*100):null,volRatio:sVolMA[sVolMA.length-1]?(sVol[sVol.length-1]/sVolMA[sVolMA.length-1]):null};
+    const curS=window._lastSentiment,sL=curS<20?"극심한 공포":curS<40?"공포":curS<60?"중립":curS<80?"욕망":"극심한 욕망",sC=curS<30?"#E85D75":curS<45?"#E8A87C":curS<60?"#C9A96E":curS<75?"#85C1E9":"#4ECCA3";
+    s+=`<rect x="${W/2-55}" y="4" width="110" height="18" rx="6" fill="rgba(10,10,16,.75)" stroke="${sC}40"/>`;
+    s+=`<text x="${W/2}" y="16" fill="${sC}" font-size="9" font-weight="600" font-family="DM Mono,monospace" text-anchor="middle">심리 ${curS} · ${sL}</text>`;
+  }
+
+  // Candles (main)
   data.forEach((d,i)=>{if(!d.close||!d.open)return;const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75",bt=ty(Math.max(d.open,d.close)),bb=ty(Math.min(d.open,d.close));if(!isFinite(bt)||!isFinite(bb))return;s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width="1" opacity=".7"/><rect x="${x-bw/2}" y="${bt}" width="${bw}" height="${Math.max(bb-bt,1)}" fill="${cl}" rx=".5" opacity=".85"/>`;});
 
   // ★★★ BUY/SELL SIGNAL SYSTEM ★★★
@@ -2069,6 +2139,10 @@ function svgChart(data,cp,cur,ai,stockName){
 
     // Signal legend
     s+=`<text x="${P.l+4}" y="${H-16}" fill="#888" font-size="7" font-family="DM Mono,monospace" opacity=".5">⬆3과반(3/5) ⬆4강한(4/5) ⬆5최강(5/5) ◆강한상승예상 | M.A S.T DMI B.B I.M</text>`;
+    // Sentiment legend
+    s+=`<rect x="${W-P.r-280}" y="${H-24}" width="14" height="7" rx="2" fill="rgba(232,93,117,.12)"/><text x="${W-P.r-264}" y="${H-18}" fill="#666" font-size="6" font-family="DM Mono,monospace">공포</text>`;
+    s+=`<rect x="${W-P.r-240}" y="${H-24}" width="14" height="7" rx="2" fill="rgba(78,204,163,.12)"/><text x="${W-P.r-224}" y="${H-18}" fill="#666" font-size="6" font-family="DM Mono,monospace">욕망</text>`;
+    s+=`<rect x="${W-P.r-200}" y="${H-24}" width="14" height="7" rx="2" fill="transparent" stroke="#33333380"/><text x="${W-P.r-184}" y="${H-18}" fill="#666" font-size="6" font-family="DM Mono,monospace">중립</text>`;
 
     // ═══════ 상승예상신호 시스템 ═══════
     if(data.length>=30){
@@ -2693,23 +2767,41 @@ function miniChartSvg(mini,change,miniMA20,miniMA22){
   const tx=i=>P+(i/(cls.length-1))*(W-P*2);
   const ty=v=>P+(1-(v-mn)/rng)*(H-P-Pb);
   const col=change>=0?"#4ECCA3":"#E85D75";
-  const pts=cls.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`);
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:210px;height:80px">`;
+
+  // Sentiment background per bar (RSI-based simplified)
+  const barW=(W-P*2)/cls.length;
+  for(let i=14;i<cls.length;i++){
+    let ag=0,al=0;for(let j=1;j<=14&&(i-14+j)<cls.length;j++){const d=cls[i-14+j]-cls[i-14+j-1];d>0?ag+=d:al+=Math.abs(d);}ag/=14;al/=14;
+    const rsi=al===0?100:100-100/(1+ag/al);
+    // MA deviation
+    const ma20=i>=19?cls.slice(i-19,i+1).reduce((a,b)=>a+b,0)/20:null;
+    const dev=ma20?(cls[i]-ma20)/ma20*100:0;
+    const sent=Math.max(0,Math.min(100,50+(rsi-50)*0.6+dev*2));
+    let bc,bo=0;
+    if(sent<20){bc="232,93,117";bo=0.15;}else if(sent<35){bc="232,93,117";bo=0.07;}else if(sent<42){bc="232,93,117";bo=0.03;}
+    else if(sent>80){bc="78,204,163";bo=0.15;}else if(sent>65){bc="78,204,163";bo=0.07;}else if(sent>58){bc="78,204,163";bo=0.03;}
+    if(bo>0)s+=`<rect x="${P+i*barW}" y="${P}" width="${barW+.5}" height="${H-P-Pb}" fill="rgba(${bc},${bo})" rx="1"/>`;
+  }
+
   s+=`<text x="2" y="8" fill="#555" font-size="7" font-family="DM Mono,monospace">주봉 52주</text>`;
+  const pts=cls.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`);
   s+=`<polygon points="${pts.join(" ")} ${tx(cls.length-1).toFixed(1)},${H-Pb} ${P},${H-Pb}" fill="${col}" opacity=".06"/>`;
   s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.5" opacity=".7"/>`;
-  // Weekly MA20 (주20)
-  if(miniMA20&&miniMA20.length===mini.length){
-    const mPts=miniMA20.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);
+
+  // Weekly MA20 (주20) - draw all non-null values
+  if(miniMA20&&miniMA20.length>=cls.length){
+    const mPts=[];for(let i=0;i<cls.length;i++){if(miniMA20[i]!=null)mPts.push(`${tx(i).toFixed(1)},${ty(miniMA20[i]).toFixed(1)}`);}
     if(mPts.length>1){s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="2" opacity=".6" stroke-dasharray="3,2"/>`;
-    s+=`<text x="${W-P}" y="${ty(miniMA20[miniMA20.length-1]||0).toFixed(0)}" fill="#C9A96E" font-size="6.5" font-family="DM Mono,monospace" text-anchor="end">주20</text>`;}
+    const lastMA20=miniMA20.filter(v=>v!=null).pop();
+    if(lastMA20)s+=`<text x="${W-P}" y="${ty(lastMA20).toFixed(0)}" fill="#C9A96E" font-size="6.5" font-family="DM Mono,monospace" text-anchor="end">주20</text>`;}
   }
-  // Monthly MA20 (월20, ≈weekly MA22)
-  if(miniMA22&&miniMA22.length===mini.length){
-    const mPts=miniMA22.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);
+  // Monthly MA20 (월20) - draw all non-null values
+  if(miniMA22&&miniMA22.length>=cls.length){
+    const mPts=[];for(let i=0;i<cls.length;i++){if(miniMA22[i]!=null)mPts.push(`${tx(i).toFixed(1)},${ty(miniMA22[i]).toFixed(1)}`);}
     if(mPts.length>1){s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#F0ECE3" stroke-width="2.5" opacity=".5" stroke-dasharray="4,2"/>`;
-    const lastV=miniMA22.filter(v=>v!=null).pop();
-    if(lastV)s+=`<text x="${W-P}" y="${(ty(lastV)+10).toFixed(0)}" fill="#F0ECE3" font-size="6.5" font-family="DM Mono,monospace" text-anchor="end">월20</text>`;}
+    const lastMA22=miniMA22.filter(v=>v!=null).pop();
+    if(lastMA22)s+=`<text x="${W-P}" y="${(ty(lastMA22)+10).toFixed(0)}" fill="#F0ECE3" font-size="6.5" font-family="DM Mono,monospace" text-anchor="end">월20</text>`;}
   }
   s+=`<line x1="${P}" y1="${H-Pb}" x2="${W-P}" y2="${H-Pb}" stroke="#1a1a28" stroke-width=".5"/>`;
   s+=`<text x="${P}" y="${H-1}" fill="#444" font-size="6" font-family="DM Mono,monospace">1Y</text>`;
@@ -2789,12 +2881,20 @@ function renderScanResults(data){
       return`<div style="flex:1;min-width:60px"><div style="display:flex;justify-content:space-between;font-size:7px;color:#666"><span>${lbl}</span><span style="color:${vc}">${val.toFixed(1)}</span></div><div style="height:3px;background:#1a1a28;border-radius:2px;position:relative;margin-top:2px"><div style="height:100%;width:80%;border-radius:2px;background:linear-gradient(90deg,${rev?"#E85D75,#C9A96E,#4ECCA3":"#4ECCA3,#C9A96E,#E85D75"})"></div><div style="position:absolute;top:-1px;left:${pct*.8}%;width:2px;height:5px;background:#F0ECE3;border-radius:1px"></div></div></div>`;
     };
 
-    // Quarterly mini table
+    // Quarterly mini table or US finance
     let qHtml="";
     if(f.quarterly&&f.quarterly.length){
       const qDiv=r.currency==="KRW"?1e8:1e6;
-      const qUnit=r.currency==="KRW"?"억":"M";
       qHtml=`<table style="width:100%;border-collapse:collapse;font-size:8px;margin-top:6px"><tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#555;padding:2px 4px;font-weight:400"></th>${f.quarterly.map(q=>`<th style="text-align:right;color:#666;padding:2px 4px;font-weight:400">${q.q||""}</th>`).join("")}</tr><tr><td style="color:#555;padding:2px 4px">매출</td>${f.quarterly.map(q=>{const v=q.rev!=null?Math.round(q.rev/qDiv):null;return`<td style="text-align:right;color:#999;padding:2px 4px">${v!=null?v.toLocaleString():"—"}</td>`;}).join("")}</tr><tr><td style="color:#555;padding:2px 4px">영업이익</td>${f.quarterly.map((q,qi)=>{const v=q.opProfit!=null?Math.round(q.opProfit/qDiv):q.earn!=null?Math.round(q.earn/qDiv):null;const c=v==null?"#888":v>=0?"#4ECCA3":"#E85D75";return`<td style="text-align:right;color:${c};padding:2px 4px">${v!=null?v.toLocaleString():"—"}</td>`;}).join("")}</tr><tr><td style="color:#555;padding:2px 4px">이익률</td>${f.quarterly.map(q=>{if(!q.rev||!q.opProfit)return`<td style="text-align:right;color:#555;padding:2px 4px">—</td>`;const m=q.opProfit/q.rev*100;const c=m>=10?"#4ECCA3":m>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;color:${c};padding:2px 4px">${m.toFixed(1)}%</td>`;}).join("")}</tr></table>`;
+    } else if(f.usFinance){
+      // US stock finance from Google
+      const uf=f.usFinance;
+      qHtml=`<table style="width:100%;border-collapse:collapse;font-size:8px;margin-top:6px"><tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#555;padding:2px 4px;font-weight:400"></th><th style="text-align:right;color:#666;padding:2px 4px;font-weight:400">Latest</th></tr>`;
+      if(uf.revenue)qHtml+=`<tr><td style="color:#555;padding:2px 4px">Revenue</td><td style="text-align:right;color:#999;padding:2px 4px">${uf.revenue}</td></tr>`;
+      if(uf.netIncome)qHtml+=`<tr><td style="color:#555;padding:2px 4px">Net Income</td><td style="text-align:right;color:${uf.netIncome.startsWith("-")?"#E85D75":"#4ECCA3"};padding:2px 4px">${uf.netIncome}</td></tr>`;
+      if(f.per)qHtml+=`<tr><td style="color:#555;padding:2px 4px">PER</td><td style="text-align:right;color:#999;padding:2px 4px">${f.per.toFixed(1)}배</td></tr>`;
+      if(f.dividendYield)qHtml+=`<tr><td style="color:#555;padding:2px 4px">배당률</td><td style="text-align:right;color:#999;padding:2px 4px">${(f.dividendYield*100).toFixed(2)}%</td></tr>`;
+      qHtml+=`</table>`;
     }
 
     return`<div class="card" style="border-left:3px solid ${borderCol};padding:14px;margin-bottom:10px;cursor:pointer" onclick="switchTab('analyze');document.getElementById('symInput').value='${safeName} (${r.symbol})';selSym={symbol:'${r.symbol}',source:'${r.source}',name:'${safeName}'};setSrc('${r.source}');fetchData();">
@@ -2809,12 +2909,13 @@ function renderScanResults(data){
             <div class="mono" style="font-size:9px;color:${chCol}">${r.change>=0?"+":""}${r.change}%</div>
           </div>
         </div>
-        <div style="text-align:right">
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
-            <span style="font-size:${isTypeC||sig.count>=4?'15':'12'}px;color:${sigCol}">${sigIcon}</span>
-            <span class="badge" style="background:rgba(${bgRgb},.12);color:${sigCol};border:1px solid ${sigCol}30;font-size:9px">${sigLabel}</span>
+        <div style="text-align:right;min-width:120px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;justify-content:flex-end">
+            <span style="font-size:${isTypeC?'20':sig.count>=4?'18':'15'}px;font-weight:700;color:${sigCol}">${sigIcon}</span>
+            <span style="padding:4px 10px;border-radius:6px;font-size:${isTypeC?'11':'10'}px;font-weight:600;background:rgba(${bgRgb},.15);color:${sigCol};border:1px solid ${sigCol}40">${sigLabel}</span>
           </div>
           <div class="mono" style="font-size:8px;color:#888">${sig.date} (${dayLabel})</div>
+          <div class="mono" style="font-size:7px;color:#555;margin-top:2px">${sig.signals?sig.signals.join("+"):""}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
