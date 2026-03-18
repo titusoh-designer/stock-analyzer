@@ -888,6 +888,7 @@ function render(data,ai){
   </div>`;
 
   // ═══════ FUNDAMENTAL ANALYSIS PANEL ═══════
+  try{
   const _f=data.fundamentals||{};
   const _sec=data.sector||"";
   const _ind=data.industry||"";
@@ -948,9 +949,9 @@ function render(data,ai){
   if(_divY!=null&&_divY>3)keywords.push({t:"고배당 "+_divY.toFixed(1)+"%",hot:false});
   if(_dty!=null&&_dty>200)keywords.push({t:"고부채",hot:true});
   if(_f.beta!=null&&_f.beta>1.5)keywords.push({t:"고변동성",hot:true});
-  if(_f.targetPrice&&data.currentPrice)keywords.push({t:"목표가 "+cs+fm(_f.targetPrice),hot:false});
+  if(_f.targetPrice&&data.currentPrice)keywords.push({t:"목표가 "+cs+fp(_f.targetPrice),hot:false});
 
-  if(_sec||_f.per!=null||_q.length){
+  if(_sec||_f.per!=null||_f.pbr!=null||_f.roe!=null||_f.marketCap!=null||_q.length){
     h+=`<div class="card" style="margin-top:16px;padding:16px">
     <div class="mono" style="font-size:11px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:14px">◆ 기업실적분석</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
@@ -995,6 +996,7 @@ function render(data,ai){
     ].forEach(s=>{h+=`<div style="background:#0e0e18;border:1px solid #1e1e2e;border-radius:8px;padding:10px"><div style="font-size:8px;color:#666;letter-spacing:0.08em;margin-bottom:4px">${s.l}</div><div style="font-size:15px;font-weight:500;color:${s.c}">${s.v}</div><div style="font-size:8px;color:#555;margin-top:4px;line-height:1.5">${s.d}</div>${s.vs}</div>`;});
     h+=`</div></div>`; 
   }
+  }catch(fundErr){console.warn("Fundamental panel error:",fundErr);}
   h+=`<div style="margin-bottom:16px">
     <button id="aiAnalyzeBtn" onclick="doAiAnalyze()" style="width:100%;padding:14px;border-radius:10px;border:1px solid rgba(201,169,110,0.3);background:linear-gradient(135deg,rgba(201,169,110,0.1),rgba(201,169,110,0.03));color:#C9A96E;font-size:14px;font-weight:600;font-family:'DM Mono',monospace;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s" onmouseenter="this.style.background='linear-gradient(135deg,rgba(201,169,110,0.2),rgba(201,169,110,0.08))'" onmouseleave="this.style.background='linear-gradient(135deg,rgba(201,169,110,0.1),rgba(201,169,110,0.03))'">
       <span style="font-size:16px">🔍</span> AI 차트 패턴분석
