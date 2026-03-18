@@ -3,93 +3,128 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
-<title>Stock Pattern Analyzer</title>
+<title>종목분석 — Stock Analyzer</title>
 <meta name="theme-color" content="#0a0a10">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height:100vh}
+body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height:100vh}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
 .mono{font-family:'DM Mono',monospace}.noto{font-family:'Noto Sans KR',sans-serif;font-weight:300}
-.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
 
-/* Tabs */
-.tabs{display:flex;gap:0;border-bottom:1px solid #1e1e2e;margin-bottom:24px}
-.tab-btn{padding:14px 28px;border:none;cursor:pointer;background:transparent;border-bottom:2px solid transparent;color:#555;font-size:13px;font-weight:400;font-family:'DM Mono',monospace;transition:all 0.2s}
-.tab-btn.active{border-bottom-color:#C9A96E;color:#C9A96E;font-weight:600}
+/* ═══ F: Command Center Topbar ═══ */
+.f-topbar{display:flex;align-items:center;padding:0 20px;height:44px;background:#0c0c16;border-bottom:1px solid #1a1a2a;position:sticky;top:0;z-index:100}
+.f-logo{font-size:10px;color:#C9A96E;letter-spacing:0.15em;font-weight:600;margin-right:16px;white-space:nowrap;cursor:pointer}
+.f-search-area{flex:1;max-width:360px;position:relative}
+.f-search-area input{width:100%;background:#07070d;border:1px solid #1e1e2e;border-radius:5px;padding:7px 10px;color:#F0ECE3;font-size:10px;font-family:'DM Mono',monospace;outline:none}
+.f-search-area input:focus{border-color:#C9A96E40}
+#searchDrop{display:none;position:absolute;top:100%;left:0;right:0;background:#0c0c16;border:1px solid #1e1e2e;border-radius:0 0 8px 8px;border-top:none;z-index:200;max-height:280px;overflow-y:auto}
+.drop-item{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;cursor:pointer;border-bottom:1px solid #12121e;font-size:10px;transition:background 0.1s}
+.drop-item:hover{background:#12121e}
+.f-nav{display:flex;gap:0;margin-left:auto}
+.f-nav-item{padding:12px 16px;font-size:9px;color:#555;border-bottom:2px solid transparent;cursor:pointer;height:44px;display:flex;align-items:center;font-family:'DM Mono',monospace;transition:all .15s}
+.f-nav-item.on{color:#C9A96E;border-color:#C9A96E;background:rgba(201,169,110,.03)}
+.f-nav-item:hover{color:#C9A96E80}
 
-/* Header */
-.hdr{padding:32px 0 12px}.hdr .tag{font-size:9px;color:#C9A96E;font-family:'DM Mono',monospace;letter-spacing:0.25em;display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.hdr .diamond{width:9px;height:9px;border:1.5px solid #C9A96E;transform:rotate(45deg);animation:pulse 2.4s ease infinite}
-.hdr h1{font-size:clamp(26px,3.5vw,38px);font-weight:800;background:linear-gradient(135deg,#F0ECE3 30%,#C9A96E 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.03em}
+/* ═══ F: Ticker Strip ═══ */
+.f-ticker{display:none;align-items:center;padding:8px 20px;background:#0a0a14;border-bottom:1px solid #12121e;gap:14px;flex-wrap:wrap}
+.f-ticker.show{display:flex}
+.tk-name{font-size:15px;font-weight:700;color:#F0ECE3;font-family:Outfit,sans-serif}
+.tk-code{font-size:8px;color:#666}
+.tk-price{font-size:19px;font-weight:700;color:#F0ECE3;margin-left:16px;font-family:'DM Mono',monospace}
+.tk-chg{font-size:10px;margin-left:4px;font-family:'DM Mono',monospace}
+.tk-sep{width:1px;height:22px;background:#1e1e2e}
+.tk-kpi{text-align:center}.tk-kpi-l{font-size:6.5px;color:#555;letter-spacing:.04em;font-family:'DM Mono',monospace}.tk-kpi-v{font-size:11px;font-weight:600;color:#F0ECE3;margin-top:1px;font-family:'DM Mono',monospace}
+.f-sent-chip{display:flex;align-items:center;gap:5px;background:rgba(201,169,110,.08);border:1px solid #C9A96E20;border-radius:4px;padding:3px 8px;margin-left:auto}
+.f-sent-score{font-size:11px;font-weight:600;color:#C9A96E;font-family:'DM Mono',monospace}
+.f-sent-info{font-size:7px;color:#888;font-family:'DM Mono',monospace}
+.f-sent-bar{width:36px;height:3px;background:#1a1a28;border-radius:2px;position:relative;margin-top:2px}
+.f-sent-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#E85D75,#C9A96E,#4ECCA3)}
+.f-sent-mk{position:absolute;top:-1.5px;width:2px;height:6px;background:#F0ECE3;border-radius:1px}
 
-/* Search */
-.search-wrap{position:relative;margin-bottom:12px}
-.search-bar{display:flex;gap:8px;background:#0e0e16;border:1px solid #2a2a3a;border-radius:12px;padding:5px}
-.search-bar input{flex:1;background:transparent;border:none;outline:none;padding:12px 16px;color:#F0ECE3;font-size:14px;font-family:'DM Mono',monospace}
-.search-bar button{padding:10px 24px;border-radius:8px;border:none;cursor:pointer;background:linear-gradient(135deg,#C9A96E,#A88B5A);color:#0a0a10;font-size:12px;font-weight:600;font-family:'DM Mono',monospace}
-.search-bar button:disabled{background:#2a2a3a;cursor:wait}
-#searchDrop{display:none;position:absolute;top:100%;left:0;right:0;background:#12121a;border:1px solid #2a2a3a;border-radius:0 0 12px 12px;border-top:none;z-index:100;max-height:280px;overflow-y:auto}
-.drop-item{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;cursor:pointer;border-bottom:1px solid #1a1a28;transition:background 0.1s}
-.drop-item:hover{background:#1a1a28}
+/* ═══ F: Body / Content Area ═══ */
+.f-body{padding:10px 20px 20px;max-width:1200px;margin:0 auto}
+.tf-bar{display:flex;gap:2px;align-items:center;margin-bottom:6px}
+.tf-btn{padding:3px 8px;border-radius:3px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:8px;background:transparent;color:#555;transition:all .1s}
+.tf-btn.on{background:rgba(201,169,110,.12);color:#C9A96E;font-weight:600}
+.src-btn{padding:3px 8px;border-radius:3px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:8px;background:transparent;color:#555}
+.src-btn.on{background:rgba(78,204,163,.12);color:#4ECCA3}
+.pill{padding:3px 9px;border-radius:4px;border:1px solid #16162a;background:transparent;color:#555;font-size:9px;cursor:pointer;font-family:'DM Mono',monospace;transition:all .15s}
+.pill:hover,.pill.on{border-color:#C9A96E40;color:#C9A96E}
+.f-live{margin-left:auto;font-size:7px;color:#4ECCA3;display:flex;align-items:center;gap:3px;font-family:'DM Mono',monospace}
+.f-live-dot{width:4px;height:4px;border-radius:50%;background:#4ECCA3;animation:livePulse 1.5s infinite}
+.chart-box{background:#0a0a12;border-radius:6px;border:1px solid #16162a;padding:10px 6px 4px;margin-bottom:8px}
 
-.pill{padding:4px 10px;border-radius:20px;border:1px solid #1e1e2e;background:transparent;color:#666;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace;transition:all 0.15s}
-.pill:hover,.pill.on{border-color:#C9A96E;color:#C9A96E}
-.tf-bar{display:flex;gap:2px;background:#12121a;border-radius:7px;padding:2px}
-.tf-btn{padding:4px 10px;border-radius:5px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;background:transparent;color:#555;transition:all 0.1s}
-.tf-btn.on{background:rgba(201,169,110,0.2);color:#C9A96E;font-weight:600}
-.src-btn{padding:4px 9px;border-radius:5px;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:9px;background:transparent;color:#555}
-.src-btn.on{background:rgba(78,204,163,0.12);color:#4ECCA3}
+/* ═══ F: 3-Column Panels ═══ */
+.f-panels{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px}
+.f-panel{background:#0c0c16;border:1px solid #16162a;border-radius:6px;padding:7px 9px}
+.f-panel-t{font-size:7.5px;color:#C9A96E;letter-spacing:.06em;margin-bottom:4px;text-transform:uppercase;font-family:'DM Mono',monospace}
+.f-row{display:flex;justify-content:space-between;font-size:7.5px;padding:2px 0;border-bottom:1px solid #0e0e18;font-family:'DM Mono',monospace}
+.f-row .k{color:#666}.f-row .v{color:#999}
 
-/* Cards / Grids */
-.card{background:#0e0e16;border:1px solid #1e1e2e;border-radius:12px;padding:16px;margin-bottom:10px}
-.badge{font-size:9px;padding:3px 8px;border-radius:16px;font-family:'DM Mono',monospace}
-.sg{display:grid;gap:8px;margin-bottom:20px}
-.si{background:#0e0e16;border:1px solid #1e1e2e;border-radius:8px;padding:10px}
-.si .l{font-size:8px;color:#555;font-family:'DM Mono',monospace;letter-spacing:0.06em;margin-bottom:3px}
-.si .v{font-size:13px;font-weight:600;font-family:'DM Mono',monospace}
-.chart-box{background:#0a0a12;border-radius:12px;border:1px solid #1e1e2e;padding:12px 8px 4px;margin-bottom:16px}
+/* ═══ F: Section Dividers ═══ */
+.sec{margin-top:14px}
+.sec-title{font-size:9px;color:#C9A96E;letter-spacing:.1em;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-family:'DM Mono',monospace}
+.sec-line{flex:1;height:1px;background:#C9A96E15}
 
-/* Watchlist */
-.wl-item{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #1a1a28;cursor:pointer;transition:background 0.15s}
-.wl-item:hover{background:#12121a}
-.wl-signal{font-size:9px;padding:2px 8px;border-radius:12px;font-family:'DM Mono',monospace}
+/* ═══ Cards / Grids ═══ */
+.card{background:#0c0c16;border:1px solid #16162a;border-radius:8px;padding:14px;margin-bottom:8px}
+.badge{font-size:9px;padding:3px 8px;border-radius:4px;font-family:'DM Mono',monospace}
+.sg{display:grid;gap:4px;margin-bottom:14px}
+.si{background:#0c0c16;border:1px solid #16162a;border-radius:5px;padding:6px 8px}
+.si .l{font-size:7px;color:#555;font-family:'DM Mono',monospace;letter-spacing:.06em;margin-bottom:2px}
+.si .v{font-size:11px;font-weight:600;font-family:'DM Mono',monospace}
 
-/* Loading & misc */
-.loading{text-align:center;padding:50px 0}
-.dot{width:8px;height:8px;border-radius:50%;background:#C9A96E;display:inline-block;animation:pulse 1.2s ease infinite}
+/* ═══ Scanner ═══ */
+.f-scan-header{padding:10px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #12121e;background:#0a0a14}
+.f-scan-title{font-size:13px;font-weight:600;color:#F0ECE3}
+.f-scan-sub{font-size:8px;color:#666;font-family:'DM Mono',monospace}
+
+/* ═══ Watchlist ═══ */
+.wl-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wl-card{background:#0c0c16;border:1px solid #16162a;border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:border-color .15s}
+.wl-card:hover{border-color:#C9A96E30}
+
+/* ═══ Empty / Loading / Misc ═══ */
+.loading{text-align:center;padding:40px 0}
+.dot{width:6px;height:6px;border-radius:50%;background:#C9A96E;display:inline-block;animation:pulse 1.2s ease infinite}
 .dot:nth-child(2){animation-delay:0.2s}.dot:nth-child(3){animation-delay:0.4s}
 @keyframes pulse{0%,100%{opacity:0.4}50%{opacity:1}}
 @keyframes livePulse{0%,100%{opacity:1}50%{opacity:0.3}}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-.fade{animation:fadeIn 0.3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.fade{animation:fadeIn 0.25s ease}
+@media(max-width:768px){
+  .f-topbar{padding:0 12px;height:40px}
+  .f-ticker{padding:6px 12px;gap:8px}
+  .f-body{padding:8px 12px 16px}
+  .f-panels{grid-template-columns:1fr}
+  .wl-grid{grid-template-columns:1fr}
+  .sg{grid-template-columns:repeat(4,1fr)!important}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-<div class="hdr">
-  <div class="tag"><div class="diamond"></div>STOCK PATTERN ANALYZER v2</div>
-  <h1>종목 패턴 분석</h1>
+<!-- ═══ F: Command Center Topbar ═══ -->
+<div class="f-topbar">
+  <div class="f-logo" onclick="switchTab('analyze')">◇ 종목분석</div>
+  <div class="f-search-area">
+    <input id="symInput" placeholder="종목 검색... (삼성전자, AAPL, BTC-USD)" autocomplete="off"/>
+    <div id="searchDrop"></div>
+  </div>
+  <div class="f-nav">
+    <div class="f-nav-item on" data-tab="analyze" onclick="switchTab('analyze')">분석</div>
+    <div class="f-nav-item" data-tab="scanner" onclick="switchTab('scanner')">스캐너</div>
+    <div class="f-nav-item" data-tab="watchlist" onclick="switchTab('watchlist')">워치</div>
+  </div>
 </div>
 
-<!-- Tabs -->
-<div class="tabs">
-  <button class="tab-btn active" onclick="switchTab('analyze')">◈ 종목 분석</button>
-  <button class="tab-btn" onclick="switchTab('scanner')">★ 시그널 스캐너</button>
-  <button class="tab-btn" onclick="switchTab('watchlist')">◇ 워치리스트</button>
-  <button class="tab-btn" onclick="switchTab('patterns')">◆ 패턴 학습</button>
-</div>
+<!-- ═══ F: Ticker Strip (shown when stock loaded) ═══ -->
+<div class="f-ticker" id="tickerStrip"></div>
 
 <!-- ═══════ TAB: Analyze ═══════ -->
 <div id="tabAnalyze">
-  <div class="search-wrap">
-    <div class="search-bar">
-      <input id="symInput" placeholder="종목명 또는 티커 (삼성전자, Apple, AAPL, bitcoin)" autocomplete="off"/>
-      <button id="goBtn" onclick="fetchData()">분석</button>
-    </div>
-    <div id="searchDrop"></div>
-  </div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:20px">
+  <div class="f-body">
+  <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
     <button class="pill" onclick="qk('AAPL','yahoo')">AAPL</button>
     <button class="pill" onclick="qk('TSLA','yahoo')">TSLA</button>
     <button class="pill" onclick="qk('NVDA','yahoo')">NVDA</button>
@@ -99,94 +134,93 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
     <button class="pill" onclick="qk('bitcoin','coingecko')">BTC</button>
     <button class="pill" onclick="qk('ethereum','coingecko')">ETH</button>
     <div style="flex:1"></div>
-    <div class="tf-bar" id="srcBar">
+    <div id="srcBar" style="display:flex;gap:1px">
       <button class="src-btn on" data-s="yahoo" onclick="setSrc('yahoo')">Yahoo</button>
       <button class="src-btn" data-s="naver" onclick="setSrc('naver')">네이버</button>
       <button class="src-btn" data-s="coingecko" onclick="setSrc('coingecko')">Crypto</button>
     </div>
-    <div class="tf-bar" id="tfBar" style="flex-wrap:wrap">
-      <button class="tf-btn" data-t="1m" onclick="setTf('1m')">1분</button>
-      <button class="tf-btn" data-t="5m" onclick="setTf('5m')">5분</button>
-      <button class="tf-btn" data-t="10m" onclick="setTf('10m')">10분</button>
-      <button class="tf-btn" data-t="30m" onclick="setTf('30m')">30분</button>
-      <button class="tf-btn" data-t="60m" onclick="setTf('60m')">1시간</button>
-      <button class="tf-btn" data-t="4h" onclick="setTf('4h')">4시간</button>
-      <button class="tf-btn on" data-t="1d" onclick="setTf('1d')">일봉</button>
-      <button class="tf-btn" data-t="1wk" onclick="setTf('1wk')">주봉</button>
-      <button class="tf-btn" data-t="1mo" onclick="setTf('1mo')">월봉</button>
-    </div>
-    <button class="pill" id="addWlBtn" onclick="addToWatchlist()" style="display:none;border-color:#C9A96E40;color:#C9A96E">+ 워치리스트</button>
-    <button class="pill" id="ichiBtn" onclick="toggleIchimoku()" style="border-color:#C39BD340;color:#C39BD3;opacity:.5">일목균형표</button>
-    <span id="liveBadge" style="display:none;align-items:center;gap:4px;color:#4ECCA3;font-size:11px;font-family:'DM Mono',monospace;animation:livePulse 1.5s infinite">● LIVE</span>
+  </div>
+  <div class="tf-bar" id="tfBar">
+    <button class="tf-btn" data-t="1m" onclick="setTf('1m')">1m</button>
+    <button class="tf-btn" data-t="5m" onclick="setTf('5m')">5m</button>
+    <button class="tf-btn" data-t="10m" onclick="setTf('10m')">10m</button>
+    <button class="tf-btn" data-t="30m" onclick="setTf('30m')">30m</button>
+    <button class="tf-btn" data-t="60m" onclick="setTf('60m')">1h</button>
+    <button class="tf-btn" data-t="4h" onclick="setTf('4h')">4h</button>
+    <button class="tf-btn on" data-t="1d" onclick="setTf('1d')">D</button>
+    <button class="tf-btn" data-t="1wk" onclick="setTf('1wk')">W</button>
+    <button class="tf-btn" data-t="1mo" onclick="setTf('1mo')">M</button>
+    <button class="pill" id="addWlBtn" onclick="addToWatchlist()" style="display:none;border-color:#C9A96E40;color:#C9A96E;margin-left:8px">+ 워치</button>
+    <button class="pill" id="ichiBtn" onclick="toggleIchimoku()" style="border-color:#C39BD320;color:#C39BD360;margin-left:4px">일목</button>
+    <span id="liveBadge" style="display:none;align-items:center;gap:3px;color:#4ECCA3;font-size:8px;font-family:'DM Mono',monospace;animation:livePulse 1.5s infinite;margin-left:4px">● LIVE</span>
+    <div class="f-live" style="display:none" id="dataInfo"><div class="f-live-dot"></div><span id="dataInfoText"></span></div>
   </div>
   <div id="analyzeOut"></div>
-  <div id="loadEl" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p id="loadMsg" class="noto" style="color:#666;font-size:12px;margin-top:14px"></p></div>
-  <div id="errEl" style="display:none;background:rgba(232,93,117,0.06);border:1px solid rgba(232,93,117,0.2);border-radius:10px;padding:16px;margin-bottom:16px"><p id="errMsg" style="color:#E85D75;font-size:12px" class="noto"></p></div>
-  <div id="emptyEl" style="text-align:center;padding:60px 0"><div style="font-size:40px;opacity:0.1;margin-bottom:12px">◇</div><p class="noto" style="color:#555;font-size:13px;line-height:1.8">종목명 또는 티커를 입력하면<br>실시간 가격 + AI 패턴 분석이 시작됩니다</p></div>
+  <div id="loadEl" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p id="loadMsg" class="noto" style="color:#666;font-size:11px;margin-top:10px"></p></div>
+  <div id="errEl" style="display:none;background:rgba(232,93,117,0.06);border:1px solid rgba(232,93,117,0.15);border-radius:6px;padding:12px;margin-bottom:12px"><p id="errMsg" style="color:#E85D75;font-size:11px" class="noto"></p></div>
+  <div id="emptyEl" style="text-align:center;padding:60px 0"><div style="font-size:36px;opacity:0.08;margin-bottom:10px">◇</div><p class="noto" style="color:#44444480;font-size:12px;line-height:1.8">종목명 또는 티커를 입력하면<br>실시간 가격 + AI 패턴 분석이 시작됩니다</p></div>
+  </div>
 </div>
 
 <!-- ═══════ TAB: Watchlist ═══════ -->
 <!-- ═══════ TAB: Signal Scanner ═══════ -->
 <div id="tabScanner" style="display:none">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <div>
-      <span class="mono" style="font-size:12px;color:#C9A96E;letter-spacing:0.1em">★ 별매수 시그널 스캐너</span>
-      <div id="scanTime" class="mono" style="font-size:9px;color:#555;margin-top:4px"></div>
-    </div>
-    <div style="display:flex;gap:6px">
-      <button onclick="toggleScanEdit()" class="pill" style="border-color:#88888830;color:#888;padding:6px 12px;font-size:11px">⚙ 편집</button>
-      <button onclick="clearScanCache()" class="pill" style="border-color:#E85D7520;color:#888;padding:6px 12px;font-size:11px">↻ 캐시삭제</button>
-      <button onclick="runScan()" id="scanBtn" class="pill" style="border-color:#C9A96E40;color:#C9A96E;padding:8px 16px">🔍 스캔 시작</button>
-    </div>
+  <div class="f-scan-header">
+    <div class="f-scan-title">시그널 스캐너</div>
+    <div class="f-scan-sub">상승 시그널이 감지된 종목을 탐색합니다</div>
+    <div id="scanTime" class="mono" style="font-size:8px;color:#555;margin-left:auto"></div>
   </div>
-  <!-- Category filters -->
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-    <button id="scanCat_kospi" onclick="toggleScanCat('kospi')" class="pill" style="border-color:#E8A87C30;color:#E8A87C;padding:5px 12px;font-size:11px">코스피 <span id="scanCnt_kospi">500</span></button>
-    <button id="scanCat_kosdaq" onclick="toggleScanCat('kosdaq')" class="pill" style="border-color:#85C1E930;color:#85C1E9;padding:5px 12px;font-size:11px">코스닥 <span id="scanCnt_kosdaq">500</span></button>
-    <button id="scanCat_us" onclick="toggleScanCat('us')" class="pill" style="border-color:#C39BD330;color:#C39BD3;padding:5px 12px;font-size:11px">미국 300</button>
-    <button id="scanCat_crypto" onclick="toggleScanCat('crypto')" class="pill" style="border-color:#7DCEA030;color:#7DCEA0;padding:5px 12px;font-size:11px">암호화폐 20</button>
-    <span style="border-left:1px solid #1a1a24;height:20px;margin:0 4px"></span>
-    <select id="scanDays" onchange="saveScanDays();filterScanResults()" style="background:#0e0e14;color:#C9A96E;border:1px solid #C9A96E30;border-radius:6px;padding:4px 8px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer">
+  <div class="f-body">
+  <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+    <button id="scanCat_kospi" onclick="toggleScanCat('kospi')" class="pill" style="border-color:#E8A87C30;color:#E8A87C">KOSPI <span id="scanCnt_kospi" style="font-size:7px">500</span></button>
+    <button id="scanCat_kosdaq" onclick="toggleScanCat('kosdaq')" class="pill" style="border-color:#85C1E930;color:#85C1E9">KOSDAQ <span id="scanCnt_kosdaq" style="font-size:7px">500</span></button>
+    <button id="scanCat_us" onclick="toggleScanCat('us')" class="pill" style="border-color:#C39BD330;color:#C39BD3">US 300</button>
+    <button id="scanCat_crypto" onclick="toggleScanCat('crypto')" class="pill" style="border-color:#7DCEA030;color:#7DCEA0">Crypto 20</button>
+    <div style="width:1px;height:16px;background:#1e1e2e;margin:0 4px"></div>
+    <select id="scanDays" onchange="saveScanDays();filterScanResults()" style="background:#0c0c16;color:#C9A96E;border:1px solid #C9A96E20;border-radius:4px;padding:3px 6px;font-size:9px;font-family:'DM Mono',monospace;cursor:pointer">
       <option value="1">1일</option><option value="3">3일</option><option value="5">5일</option><option value="10" selected>10일</option><option value="20">20일</option><option value="30">30일</option><option value="60">60일</option><option value="100">100일</option>
     </select>
-    <span id="scanTotal" class="mono" style="font-size:10px;color:#555"></span>
+    <span id="scanTotal" class="mono" style="font-size:8px;color:#555"></span>
+    <div style="flex:1"></div>
+    <button onclick="toggleScanEdit()" class="pill" style="border-color:#55555530;color:#666">⚙</button>
+    <button onclick="clearScanCache()" class="pill" style="border-color:#55555530;color:#666">↻</button>
+    <button onclick="runScan()" id="scanBtn" style="padding:5px 14px;border-radius:5px;border:1px solid #C9A96E;color:#C9A96E;background:transparent;font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;font-weight:500">▶ 스캔</button>
   </div>
-  <!-- Edit panel (hidden) -->
-  <div id="scanEditPanel" class="card" style="display:none;margin-bottom:12px"><div id="scanEditList"></div></div>
-  <!-- Progress -->
-  <div id="scanProgress" style="display:none;margin-bottom:16px">
-    <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="mono" style="font-size:10px;color:#888" id="scanStatus">스캔 중...</span><span class="mono" style="font-size:10px;color:#C9A96E" id="scanPct">0%</span></div>
-    <div style="height:4px;border-radius:2px;background:#1a1a24;overflow:hidden"><div id="scanBar" style="width:0%;height:100%;background:#C9A96E;border-radius:2px;transition:width .3s"></div></div>
+  <div id="scanEditPanel" class="card" style="display:none;margin-bottom:8px"><div id="scanEditList"></div></div>
+  <div id="scanProgress" style="display:none;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span class="mono" style="font-size:9px;color:#888" id="scanStatus">스캔 중...</span><span class="mono" style="font-size:9px;color:#C9A96E" id="scanPct">0%</span></div>
+    <div style="height:3px;border-radius:2px;background:#1a1a28;overflow:hidden"><div id="scanBar" style="width:0%;height:100%;background:#C9A96E;border-radius:2px;transition:width .3s"></div></div>
   </div>
   <div id="scanResults"></div>
-  <div id="scanEmpty" style="text-align:center;padding:60px 0">
-    <div style="font-size:48px;opacity:.1;margin-bottom:12px">★</div>
-    <p class="noto" style="color:#555;font-size:13px;line-height:1.8">한국 + 미국 + 암호화폐 주요 종목에서<br>★ 강력 매수 시그널(3+합류)을 스캔합니다</p>
-    <p class="mono" style="color:#444;font-size:10px;margin-top:8px">기간을 선택하여 스캔 범위를 조절하세요</p>
+  <div id="scanEmpty" style="text-align:center;padding:50px 0">
+    <div style="font-size:36px;opacity:.06;margin-bottom:10px">★</div>
+    <p class="noto" style="color:#44444480;font-size:11px;line-height:1.8">한국 + 미국 + 암호화폐 주요 종목에서<br>상승 시그널(3+합류)을 스캔합니다</p>
+  </div>
   </div>
 </div>
 
 <div id="tabWatchlist" style="display:none">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:10px">
-      <span class="mono" style="font-size:11px;color:#C9A96E;letter-spacing:0.1em">관심종목</span>
-      <span id="wlCount" class="mono" style="font-size:10px;color:#555"></span>
-    </div>
-    <div style="display:flex;gap:8px">
+  <div class="f-scan-header">
+    <div class="f-scan-title">워치리스트</div>
+    <span id="wlCount" class="mono" style="font-size:8px;color:#555;background:#0c0c16;border:1px solid #16162a;border-radius:10px;padding:2px 8px"></span>
+    <div style="display:flex;gap:6px;margin-left:auto">
       <button class="pill" onclick="scanWatchlist()">전체 스캔</button>
-      <button class="pill" onclick="clearWatchlist()" style="border-color:#E85D7540;color:#E85D75">전체 삭제</button>
+      <button class="pill" onclick="clearWatchlist()" style="border-color:#E85D7520;color:#E85D75">삭제</button>
     </div>
   </div>
-  <div id="wlScanMsg" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p class="noto" style="color:#666;font-size:12px;margin-top:12px">워치리스트 스캔 중...</p></div>
+  <div class="f-body">
+  <div id="wlScanMsg" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p class="noto" style="color:#666;font-size:11px;margin-top:10px">워치리스트 스캔 중...</p></div>
   <div id="wlList"></div>
-  <div id="wlEmpty" style="text-align:center;padding:60px 0"><div style="font-size:40px;opacity:0.1;margin-bottom:12px">◇</div><p class="noto" style="color:#555;font-size:13px;line-height:1.8">종목 분석 후 "워치리스트 추가" 버튼을 눌러<br>관심종목을 등록하세요</p></div>
+  <div id="wlEmpty" style="text-align:center;padding:50px 0"><div style="font-size:36px;opacity:0.06;margin-bottom:10px">◇</div><p class="noto" style="color:#44444480;font-size:11px;line-height:1.8">종목 분석 후 "+ 워치" 버튼을 눌러<br>관심종목을 등록하세요</p></div>
+  </div>
 </div>
 
 <!-- ═══════ TAB: Patterns Learning ═══════ -->
 <div id="tabPatterns" style="display:none">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <span class="mono" style="font-size:11px;color:#C9A96E;letter-spacing:0.1em">35개 차트 패턴 레퍼런스</span>
-    <div class="tf-bar" id="patCatBar">
+  <div class="f-scan-header">
+    <div class="f-scan-title">패턴 학습</div>
+    <div class="f-scan-sub">35개 차트 패턴 레퍼런스</div>
+    <div class="tf-bar" id="patCatBar" style="margin-left:auto">
       <button class="tf-btn on" data-c="all" onclick="filterPat('all')">전체</button>
       <button class="tf-btn" data-c="reversal" onclick="filterPat('reversal')">반전</button>
       <button class="tf-btn" data-c="continuation" onclick="filterPat('continuation')">지속</button>
@@ -194,11 +228,10 @@ body{background:#0a0a10;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
       <button class="tf-btn" data-c="harmonic" onclick="filterPat('harmonic')">하모닉</button>
     </div>
   </div>
-  <div id="patList"></div>
+  <div class="f-body"><div id="patList"></div></div>
 </div>
 
-<div style="border-top:1px solid #1a1a28;padding:16px 0 32px;margin-top:32px"><p class="mono" style="font-size:9px;color:#444;text-align:center">※ AI 분석 및 매수/매도 권유는 교육·참고 목적이며, 투자 판단의 최종 근거로 사용할 수 없습니다. 투자 손실에 대한 책임은 투자자 본인에게 있습니다.</p></div>
-</div>
+<div style="border-top:1px solid #12121e;padding:12px 20px;text-align:center"><p class="mono" style="font-size:7px;color:#44444460">※ AI 분석 및 매수/매도 권유는 교육·참고 목적이며, 투자 판단의 최종 근거로 사용할 수 없습니다.</p></div>
 
 <script>
 // ═══════ STATE ═══════
@@ -211,15 +244,17 @@ let watchlist=JSON.parse(localStorage.getItem("wl")||"[]");
 
 // ═══════ TABS ═══════
 function switchTab(t){
-  document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",i===(t==="analyze"?0:t==="scanner"?1:t==="watchlist"?2:3)));
+  document.querySelectorAll(".f-nav-item").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
   document.getElementById("tabAnalyze").style.display=t==="analyze"?"block":"none";
   document.getElementById("tabScanner").style.display=t==="scanner"?"block":"none";
   document.getElementById("tabWatchlist").style.display=t==="watchlist"?"block":"none";
-  document.getElementById("tabPatterns").style.display=t==="patterns"?"block":"none";
+  const pTab=document.getElementById("tabPatterns");if(pTab)pTab.style.display=t==="patterns"?"block":"none";
   if(t==="watchlist")renderWatchlist();
-  if(t==="patterns")renderPatterns();
+  if(t==="patterns"&&typeof renderPatterns==="function")renderPatterns();
   if(t==="scanner")loadScanCache();
 }
+// Search Enter key
+document.getElementById("symInput").addEventListener("keydown",e=>{if(e.key==="Enter")fetchData();});
 
 // ═══════ CONTROLS ═══════
 function setSrc(s){src=s;document.querySelectorAll("#srcBar .src-btn").forEach(b=>b.classList.toggle("on",b.dataset.s===s));}
@@ -466,8 +501,8 @@ function calcCandleFlow(ohlcv){
 async function fetchData(){
   let sym,sr;if(selSym){sym=selSym.symbol;sr=selSym.source||src;setSrc(sr);}else{sym=inp.value.trim();sr=src;}
   if(!sym)return;curSym={symbol:sym,source:sr,name:selSym?.name||sym};
-  const btn=document.getElementById("goBtn"),ld=document.getElementById("loadEl"),out=document.getElementById("analyzeOut"),err=document.getElementById("errEl"),emp=document.getElementById("emptyEl");
-  btn.disabled=true;btn.textContent="...";ld.style.display="block";out.innerHTML="";err.style.display="none";emp.style.display="none";
+  const ld=document.getElementById("loadEl"),out=document.getElementById("analyzeOut"),err=document.getElementById("errEl"),emp=document.getElementById("emptyEl");
+  ld.style.display="block";out.innerHTML="";err.style.display="none";emp.style.display="none";
   document.getElementById("addWlBtn").style.display="none";
   window._lastAI=null;
   try{
@@ -479,7 +514,7 @@ async function fetchData(){
     render(r,null);
     document.getElementById("addWlBtn").style.display="inline-block";
   }catch(e){err.style.display="block";document.getElementById("errMsg").textContent=e.message;
-  }finally{btn.disabled=false;btn.textContent="분석";ld.style.display="none";}
+  }finally{ld.style.display="none";}
 
   // Auto-refresh: Naver realtime (3s) for Korean stocks, Yahoo polling for US
   if(autoRefreshTimer)clearInterval(autoRefreshTimer);
@@ -851,7 +886,7 @@ JSON으로만 응답 (모든 텍스트 한국어):
 // ═══════ RENDER ═══════
 function render(data,ai){
   const allData=data.ohlcv;
-  const o=allData.slice(viewStart,viewEnd); // interactive zoom range
+  const o=allData.slice(viewStart,viewEnd);
   const cp=data.currentPrice||o[o.length-1].close,pv=o.length>1?o[o.length-2].close:cp;
   const ch=((cp-pv)/pv*100).toFixed(2),cs=data.currency==="KRW"?"₩":"$",fp=v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
   const cls=o.map(d=>d.close),h52=Math.max(...o.map(d=>d.high)),l52=Math.min(...o.map(d=>d.low));
@@ -863,12 +898,28 @@ function render(data,ai){
   const stockCode = data.symbol || curSym?.symbol || "";
   const stockLabel = stockFullName !== stockCode ? `${stockFullName} (${stockCode})` : stockFullName;
 
+  // ═══ Update Ticker Strip ═══
+  const _f0=data.fundamentals||{};
+  const _per0=_f0.per,_pbr0=_f0.pbr,_roe0=_f0.roe?(_f0.roe*100):null;
+  const _mcap0=_f0.marketCap;
+  const _mcapS0=_mcap0?(_mcap0>=1e12?((_mcap0/1e12).toFixed(1)+"조"):_mcap0>=1e8?((_mcap0/1e8).toFixed(0)+"억"):_mcap0>=1e9?((_mcap0/1e9).toFixed(1)+"B"):((_mcap0/1e6).toFixed(0)+"M")):"—";
+  const _sec0=data.sector||"";
+  const tsEl=document.getElementById("tickerStrip");
+  if(tsEl){
+    tsEl.innerHTML=`
+      <div><div class="tk-name">${stockFullName}</div><div class="tk-code">${stockCode} · ${data.exchange||data.source}${_sec0?" · "+_sec0:""}</div></div>
+      <div class="tk-price">${cs}${fp(cp)}</div>
+      <div class="tk-chg" style="color:${ch>=0?"#4ECCA3":"#E85D75"}">${ch>=0?"▲":"▼"} ${Math.abs(ch)}%</div>
+      <div class="tk-sep"></div>
+      ${_per0!=null?`<div class="tk-kpi"><div class="tk-kpi-l">PER</div><div class="tk-kpi-v" style="color:${_per0<15?"#4ECCA3":_per0>30?"#E85D75":"#F0ECE3"}">${_per0.toFixed(1)}</div></div>`:""}
+      ${_pbr0!=null?`<div class="tk-kpi"><div class="tk-kpi-l">PBR</div><div class="tk-kpi-v">${_pbr0.toFixed(1)}</div></div>`:""}
+      ${_roe0!=null?`<div class="tk-kpi"><div class="tk-kpi-l">ROE</div><div class="tk-kpi-v">${_roe0.toFixed(1)}%</div></div>`:""}
+      <div class="tk-kpi"><div class="tk-kpi-l">시총</div><div class="tk-kpi-v">${_mcapS0}</div></div>
+      <div class="f-sent-chip" id="tkSentChip"><div class="f-sent-score" id="tkSentScore">—</div><div><div class="f-sent-info" id="tkSentLabel">심리</div><div class="f-sent-bar"><div class="f-sent-fill"></div><div class="f-sent-mk" id="tkSentMk" style="left:50%"></div></div></div></div>`;
+    tsEl.classList.add("show");
+  }
+
   let h=`<div class="fade">
-  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #1e1e2e">
-    <div><h2 style="font-size:24px;font-weight:800;color:#F0ECE3">${stockFullName}</h2>
-    <div style="display:flex;gap:6px;margin-top:3px"><span class="mono" style="font-size:11px;color:#888">${stockCode}</span><span class="badge" style="background:rgba(78,204,163,0.08);color:#4ECCA3;border:1px solid rgba(78,204,163,0.15)">● ${data.source}</span><span class="badge" style="background:rgba(201,169,110,0.08);color:#C9A96E;border:1px solid rgba(201,169,110,0.15)">${o.length}봉·${tf}</span><span class="mono" style="font-size:8px;color:#555">${new Date(data.fetchedAt).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})}</span></div></div>
-    <div style="text-align:right"><div class="mono" style="font-size:28px;font-weight:700">${cs}${fp(cp)}</div><div class="mono" style="font-size:13px;margin-top:2px;color:${ch>=0?"#4ECCA3":"#E85D75"}">${ch>=0?"▲":"▼"} ${Math.abs(ch)}%</div></div>
-  </div>
   <div style="position:relative">
     <div id="mainChartWrap" class="chart-box" style="cursor:crosshair;user-select:none">${svgChart(o,cp,data.currency,ai,stockLabel)}</div>
     <div id="crosshair" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none">
@@ -877,13 +928,37 @@ function render(data,ai){
       <div id="chLabel" style="position:absolute;padding:4px 8px;border-radius:4px;background:rgba(10,10,16,.9);border:1px solid rgba(201,169,110,.3);white-space:nowrap;font-family:'DM Mono',monospace;font-size:10px;color:#C9A96E;pointer-events:none"></div>
     </div>
   </div>
-  <div id="chartInfoText" class="mono" style="font-size:8px;color:#444;text-align:center;margin:-12px 0 14px">마우스 휠: 줌 · 클릭&드래그: 이동 · 표시: ${o.length}봉 / 전체 ${allData.length}봉</div>
-  <div style="margin-bottom:16px">
-    <div id="rsiChartWrap" class="chart-box" style="margin-bottom:8px">${svgRSI(o)}</div>
-    <div id="macdChartWrap" class="chart-box" style="margin-bottom:8px">${svgMACD(o)}</div>
+  <div id="chartInfoText" class="mono" style="font-size:7px;color:#44444460;text-align:center;margin:-6px 0 8px">휠: 줌 · 드래그: 이동 · ${o.length}봉 / ${allData.length}봉</div>
+
+  <!-- 3-column quick panels -->
+  <div class="f-panels">
+    <div class="f-panel"><div class="f-panel-t">기술 지표</div>
+      <div class="f-row"><span class="k">RSI(14)</span><span class="v" style="color:${rc}">${rsi??"-"}</span></div>
+      <div class="f-row"><span class="k">MACD</span><span class="v" style="color:${mc}">${macd.v??"-"}</span></div>
+      <div class="f-row"><span class="k">Stoch %K</span><span class="v" style="color:${stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"}">${stoch??"-"}</span></div>
+      <div class="f-row"><span class="k">BB</span><span class="v">${bb?fp(bb.lower)+" ~ "+fp(bb.upper):"-"}</span></div>
+    </div>
+    <div class="f-panel"><div class="f-panel-t">이동평균</div>
+      <div class="f-row"><span class="k">일20</span><span class="v" style="color:#4ECCA3">${ma20?fp(ma20):"-"}</span></div>
+      <div class="f-row"><span class="k">주20</span><span class="v" style="color:#C9A96E">${ma100?fp(ma100):"-"}</span></div>
+      <div class="f-row"><span class="k">월20</span><span class="v" style="color:#F0ECE3">${ma440?fp(ma440):"-"}</span></div>
+      <div class="f-row"><span class="k">52W</span><span class="v">${fp(l52)} ~ ${fp(h52)}</span></div>
+    </div>
+    <div class="f-panel" id="quickSentPanel"><div class="f-panel-t">심리 지표</div>
+      <div class="f-row"><span class="k">RSI</span><span class="v" style="color:${rc}">${rsi??"-"} ${rsi>70?"과매수":rsi<30?"과매도":"중립"}</span></div>
+      <div class="f-row"><span class="k">BB 위치</span><span class="v">${bb?((cp-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0)+"%":"-"}</span></div>
+      <div class="f-row"><span class="k">MA20 이격</span><span class="v" style="color:${ma20&&cp>ma20?"#4ECCA3":"#E85D75"}">${ma20?((cp-ma20)/ma20*100).toFixed(1)+"%":"-"}</span></div>
+      <div class="f-row"><span class="k">추세</span><span class="v" style="color:${ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}">${ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보"}</span></div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:14px">
+    <div id="rsiChartWrap" class="chart-box" style="margin-bottom:6px">${svgRSI(o)}</div>
+    <div id="macdChartWrap" class="chart-box" style="margin-bottom:6px">${svgMACD(o)}</div>
     <div id="obvChartWrap" class="chart-box" style="margin-bottom:0">${svgOBV(o)}</div>
   </div>
-  <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(95px,1fr))">
+  <div class="sec"><div class="sec-title">◇ 기술 지표<div class="sec-line"></div></div></div>
+  <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(85px,1fr))">
     ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"일20",v:ma20?fp(ma20):"-",c:"#4ECCA3"},{l:"주20",v:ma100?fp(ma100):"-",c:"#C9A96E"},{l:"월20",v:ma440?fp(ma440):"-",c:"#F0ECE3"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
   </div>`;
 
@@ -892,9 +967,17 @@ function render(data,ai){
   const _sd=window._sentimentData||{};
   const _sentLabel=_sent<20?"극심한 공포":_sent<40?"공포":_sent<60?"중립":_sent<80?"욕망":"극심한 욕망";
   const _sentCol=_sent<30?"#E85D75":_sent<45?"#E8A87C":_sent<60?"#C9A96E":_sent<75?"#85C1E9":"#4ECCA3";
-  h+=`<div style="background:#0e0e18;border:1px solid #1e1e2e;border-radius:10px;padding:12px 14px;margin-bottom:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:10px;color:#C9A96E;letter-spacing:0.1em">◆ 종목 심리지수</div>
+  // Update ticker strip sentiment
+  setTimeout(()=>{
+    const sc=document.getElementById("tkSentScore"),sl=document.getElementById("tkSentLabel"),mk=document.getElementById("tkSentMk");
+    if(sc)sc.textContent=_sent;if(sc)sc.style.color=_sentCol;
+    if(sl)sl.textContent=`심리 · ${_sentLabel}`;
+    if(mk)mk.style.left=_sent+"%";
+  },50);
+  h+=`<div class="sec"><div class="sec-title">◇ 종목 심리지수<div class="sec-line"></div></div></div>`;
+  h+=`<div style="background:#0c0c16;border:1px solid #16162a;border-radius:8px;padding:10px 12px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-size:9px;color:#C9A96E;letter-spacing:.08em;font-family:'DM Mono',monospace">FEAR & GREED INDEX</div>
       <div style="font-size:13px;font-weight:600;color:${_sentCol}">${_sent} · ${_sentLabel}</div>
     </div>
     <div style="height:6px;background:#1a1a28;border-radius:3px;position:relative;margin-bottom:8px">
@@ -914,6 +997,7 @@ function render(data,ai){
   </div>`;
 
   // ═══════ FUNDAMENTAL ANALYSIS PANEL ═══════
+  h+=`<div class="sec"><div class="sec-title">◆ 기업실적분석<div class="sec-line"></div></div></div>`;
   try{
   const _f=data.fundamentals||{};
   const _sec=data.sector||"";
@@ -999,7 +1083,8 @@ function render(data,ai){
   // Always show panel
   {
     h+=`<div class="card" style="margin-top:16px;padding:16px">
-    <div class="mono" style="font-size:11px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:14px">◆ 기업실적분석</div>`;
+    `;
+    // Fund already has section header above
     if(!hasFund){
       h+=`<div style="text-align:center;padding:20px 0"><div style="font-size:11px;color:#555">펀더멘털 데이터를 불러오지 못했습니다</div><div style="font-size:9px;color:#444;margin-top:6px">이 종목의 재무 정보가 제공되지 않을 수 있습니다</div></div></div>`;
     } else {
@@ -2942,7 +3027,7 @@ function addToWatchlist(){
   watchlist.push({symbol:curSym.symbol,source:curSym.source,name:curSym.name||curSym.symbol,addedAt:new Date().toISOString()});
   localStorage.setItem("wl",JSON.stringify(watchlist));
   document.getElementById("addWlBtn").textContent="✓ 추가됨";
-  setTimeout(()=>{document.getElementById("addWlBtn").textContent="+ 워치리스트";},1500);
+  setTimeout(()=>{document.getElementById("addWlBtn").textContent="+ 워치";},1500);
 }
 function removeFromWatchlist(sym){
   watchlist=watchlist.filter(w=>w.symbol!==sym);
@@ -2956,16 +3041,19 @@ function renderWatchlist(){
   const el=document.getElementById("wlList"),emp=document.getElementById("wlEmpty");
   if(!watchlist.length){el.innerHTML="";emp.style.display="block";return;}
   emp.style.display="none";
-  el.innerHTML=watchlist.map(w=>`
-    <div class="card wl-item" onclick="qkFromWl('${w.symbol}','${w.source}')">
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:600;color:#F0ECE3">${w.name}</div>
-        <div class="mono" style="font-size:10px;color:#666;margin-top:1px">${w.symbol} · ${w.source}</div>
+  el.innerHTML=`<div class="wl-grid">${watchlist.map(w=>{
+    const abbr=(w.name||w.symbol).slice(0,2);
+    return`<div class="wl-card" onclick="qkFromWl('${w.symbol}','${w.source}')">
+      <div style="display:flex;align-items:center;gap:10px;min-width:0">
+        <div style="width:32px;height:32px;border-radius:8px;background:#10101c;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#C9A96E;flex-shrink:0">${abbr}</div>
+        <div style="min-width:0"><div style="font-size:11px;font-weight:600;color:#F0ECE3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div><div class="mono" style="font-size:7px;color:#666;margin-top:2px">${w.symbol}</div></div>
       </div>
-      <div id="wl_${w.symbol.replace(/[^a-zA-Z0-9]/g,"_")}" class="mono" style="font-size:12px;color:#888">—</div>
-      <button onclick="event.stopPropagation();removeFromWatchlist('${w.symbol}')" style="background:none;border:none;color:#E85D7560;cursor:pointer;font-size:14px;padding:4px 8px">✕</button>
-    </div>
-  `).join("");
+      <div style="text-align:right;display:flex;align-items:center;gap:8px">
+        <div id="wl_${w.symbol.replace(/[^a-zA-Z0-9]/g,"_")}" class="mono" style="font-size:11px;color:#888">—</div>
+        <button onclick="event.stopPropagation();removeFromWatchlist('${w.symbol}')" style="background:none;border:none;color:#E85D7530;cursor:pointer;font-size:12px;padding:2px">✕</button>
+      </div>
+    </div>`;
+  }).join("")}</div>`;
 }
 
 function qkFromWl(sym,sr){switchTab("analyze");inp.value=sym;selSym={symbol:sym,source:sr};setSrc(sr);hideDrop();fetchData();}
