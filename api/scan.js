@@ -185,9 +185,52 @@ export default async function handler(req, res) {
       if (allSignals.length > 0) {
         allSignals.sort((a, b) => { if (a.type !== b.type) return a.type === "C" ? -1 : 1; return (b.count - a.count) || (a.daysAgo - b.daysAgo); });
         const top = allSignals.slice(0, 10);
-        const mini = ohlcv.slice(-30).map(d => ({ c: Math.round(d.close * 100) / 100 }));
         const change = ohlcv.length >= 2 ? ((cls[cls.length - 1] / cls[cls.length - 2] - 1) * 100).toFixed(2) : 0;
-        results.push({ symbol: ticker, name, source, currency, currentPrice, change: +change, starSignals: top, bestSignal: top[0], mini, dataLen: ohlcv.length });
+
+        // Weekly aggregation for mini chart (last 52 weeks)
+        const weekly = [];
+        for (let w = 0; w < ohlcv.length; w += 5) {
+          const wk = ohlcv.slice(w, w + 5);
+          if (!wk.length) continue;
+          weekly.push({ c: wk[wk.length - 1].close, h: Math.max(...wk.map(d => d.high)), l: Math.min(...wk.map(d => d.low)) });
+        }
+        const wk52 = weekly.slice(-52);
+        // Weekly MA20 (=주20) and MA22 (≈월20, 22weeks≈5months)
+        const wkCls = weekly.map(w => w.c);
+        const wkMA20 = [], wkMA22 = [];
+        for (let j = 0; j < weekly.length; j++) {
+          wkMA20.push(j >= 19 ? wkCls.slice(j - 19, j + 1).reduce((a, b) => a + b, 0) / 20 : null);
+          wkMA22.push(j >= 21 ? wkCls.slice(j - 21, j + 1).reduce((a, b) => a + b, 0) / 22 : null);
+        }
+        const miniMA20 = wkMA20.slice(-52);
+        const miniMA22 = wkMA22.slice(-52);
+
+        // Fetch basic fundamentals (sector, PER, PBR, ROE, quarterly)
+        let fund = null;
+        try {
+          const yTicker = source === "naver" ? (ticker.replace(/\.(KS|KQ)$/, "") + (ohlcv._suffix || ".KS")) : ticker;
+          const fUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yTicker)}?modules=price,defaultKeyStatistics,financialData,summaryDetail,earnings`;
+          const fResp = await fetch(fUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+          const fJson = await fResp.json();
+          const r0 = fJson?.quoteSummary?.result?.[0] || {};
+          const pr = r0.price || {}, ks = r0.defaultKeyStatistics || {}, fd = r0.financialData || {}, sd = r0.summaryDetail || {};
+          const earn = r0.earnings?.financialsChart?.quarterly || [];
+          fund = {
+            sector: pr.sector || "", industry: pr.industry || "",
+            marketCap: pr.marketCap?.raw || sd.marketCap?.raw || null,
+            per: sd.trailingPE?.raw || ks.trailingPE?.raw || null,
+            pbr: sd.priceToBook?.raw || ks.priceToBook?.raw || null,
+            roe: fd.returnOnEquity?.raw ? (fd.returnOnEquity.raw * 100) : null,
+            opm: fd.operatingMargins?.raw ? (fd.operatingMargins.raw * 100) : null,
+            quarterly: earn.slice(-4).map(q => ({ q: q.date, rev: q.revenue?.raw, earn: q.earnings?.raw }))
+          };
+        } catch (e) { /* fundamentals optional */ }
+
+        results.push({
+          symbol: ticker, name, source, currency, currentPrice, change: +change,
+          starSignals: top, bestSignal: top[0],
+          mini: wk52, miniMA20, miniMA22, fund, dataLen: ohlcv.length
+        });
       }
     } catch (e) { /* skip */ }
   }

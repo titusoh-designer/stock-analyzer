@@ -115,21 +115,25 @@ export default async function handler(req, res) {
       fetchedAt: new Date().toISOString()
     };
 
-    // ── Fundamentals (optional, non-blocking) ──
+    // ── Fundamentals + Sector + Quarterly (optional, non-blocking) ──
     try {
-      const fUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooTicker)}?modules=defaultKeyStatistics,financialData,summaryDetail,price`;
+      const fUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooTicker)}?modules=defaultKeyStatistics,financialData,summaryDetail,price,assetProfile,earningsHistory,earnings`;
       const fResp = await fetch(fUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
       const fJson = await fResp.json();
-      const ks = fJson?.quoteSummary?.result?.[0]?.defaultKeyStatistics || {};
-      const fd = fJson?.quoteSummary?.result?.[0]?.financialData || {};
-      const sd = fJson?.quoteSummary?.result?.[0]?.summaryDetail || {};
-      const pr = fJson?.quoteSummary?.result?.[0]?.price || {};
+      const r0 = fJson?.quoteSummary?.result?.[0] || {};
+      const ks = r0.defaultKeyStatistics || {};
+      const fd = r0.financialData || {};
+      const sd = r0.summaryDetail || {};
+      const pr = r0.price || {};
+      const ap = r0.assetProfile || {};
+      const earn = r0.earnings || {};
+
       data.fundamentals = {
         marketCap: pr.marketCap?.raw || sd.marketCap?.raw || null,
         per: sd.trailingPE?.raw || ks.trailingPE?.raw || null,
         forwardPer: sd.forwardPE?.raw || ks.forwardPE?.raw || null,
         pbr: sd.priceToBook?.raw || ks.priceToBook?.raw || null,
-        eps: fd.revenuePerShare?.raw || null,
+        eps: ks.trailingEps?.raw || null,
         roe: fd.returnOnEquity?.raw || null,
         debtToEquity: fd.debtToEquity?.raw || null,
         dividendYield: sd.dividendYield?.raw || null,
@@ -137,8 +141,27 @@ export default async function handler(req, res) {
         fiftyTwoWeekHigh: sd.fiftyTwoWeekHigh?.raw || null,
         fiftyTwoWeekLow: sd.fiftyTwoWeekLow?.raw || null,
         shortRatio: ks.shortRatio?.raw || null,
-        targetPrice: fd.targetMeanPrice?.raw || null
+        targetPrice: fd.targetMeanPrice?.raw || null,
+        operatingMargins: fd.operatingMargins?.raw || null,
+        profitMargins: fd.profitMargins?.raw || null,
+        revenueGrowth: fd.revenueGrowth?.raw || null,
+        earningsGrowth: fd.earningsGrowth?.raw || null
       };
+
+      // Sector & Industry
+      data.sector = ap.sector || pr.sector || null;
+      data.industry = ap.industry || null;
+      data.businessSummary = ap.longBusinessSummary ? ap.longBusinessSummary.slice(0, 200) : null;
+
+      // Quarterly earnings (last 4 quarters)
+      const qEarn = earn.financialsChart?.quarterly || [];
+      if (qEarn.length) {
+        data.quarterly = qEarn.map(q => ({
+          quarter: q.date || "",
+          revenue: q.revenue?.raw || null,
+          earnings: q.earnings?.raw || null
+        }));
+      }
     } catch (e) { /* fundamentals are optional */ }
 
     return res.status(200).json(data);
