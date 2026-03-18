@@ -896,26 +896,25 @@ function render(data,ai){
   const _q=data.quarterly||[];
   const _ann=data.annual||[];
   const _peers=data.peers||[];
-
-  // Auto-generate description if empty
-  let _desc=_biz;
-  if(!_desc&&(_sec||_peers.length)){
-    const parts=[];
-    if(_sec)parts.push(`${_sec} 섹터에 속한 기업`);
-    if(_f.marketCap){parts.push(`시가총액 ${_mcapStr}`);}
-    if(_peers.length)parts.push(`동종업계: ${_peers.slice(0,3).map(p=>p.name).join(", ")}`);
-    if(_f.per)parts.push(`PER ${_f.per.toFixed(1)}배`);
-    if(_opm!=null)parts.push(`영업이익률 ${_opm.toFixed(1)}%`);
-    _desc=parts.join(" · ");
-  }
-  console.log("[FUND] sector:",_sec,"per:",_f.per,"pbr:",_f.pbr,"roe:",_f.roe,"mcap:",_f.marketCap,"quarterly:",_q.length,"keys:",Object.keys(_f).filter(k=>_f[k]!=null).join(","));
   const _mcap=_f.marketCap;
   const _mcapStr=_mcap?(_mcap>=1e12?((_mcap/1e12).toFixed(1)+"조"):_mcap>=1e8?((_mcap/1e8).toFixed(0)+"억"):_mcap>=1e9?((_mcap/1e9).toFixed(1)+"B"):((_mcap/1e6).toFixed(0)+"M")):"—";
   const _per=_f.per,_pbr=_f.pbr,_roe=_f.roe?(_f.roe*100):null;
   const _opm=_f.operatingMargins?(_f.operatingMargins*100):null;
   const _dty=_f.debtToEquity;
   const _divY=_f.dividendYield?(_f.dividendYield*100):null;
-  // (revenueGrowth/earningsGrowth now calculated from annual data in keywords section)
+  console.log("[FUND] sector:",_sec,"per:",_per,"pbr:",_pbr,"roe:",_roe,"mcap:",_mcap,"quarterly:",_q.length,"annual:",_ann.length,"peers:",_peers.length);
+
+  // Auto-generate description if empty
+  let _desc=_biz;
+  if(!_desc&&(_sec||_peers.length)){
+    const parts=[];
+    if(_sec)parts.push(`${_sec} 섹터에 속한 기업`);
+    if(_mcap)parts.push(`시가총액 ${_mcapStr}`);
+    if(_peers.length)parts.push(`동종업계: ${_peers.slice(0,3).map(p=>p.name).join(", ")}`);
+    if(_per)parts.push(`PER ${_per.toFixed(1)}배`);
+    if(_opm!=null)parts.push(`영업이익률 ${_opm.toFixed(1)}%`);
+    _desc=parts.join(" · ");
+  }
 
   // Sector average estimates by sector (approximate industry medians)
   const secAvgs={
@@ -970,7 +969,7 @@ function render(data,ai){
   if(_roe!=null&&_roe>15)keywords.push({t:"ROE "+_roe.toFixed(0)+"%",hot:false});
   if(_opm!=null&&_opm>15)keywords.push({t:"영업이익률 "+_opm.toFixed(0)+"%",hot:false});
 
-  const hasFund=_sec||_f.per!=null||_f.pbr!=null||_f.roe!=null||_f.marketCap!=null||_q.length;
+  const hasFund=_sec||_f.per!=null||_f.pbr!=null||_f.roe!=null||_f.marketCap!=null||_f.fiftyTwoWeekHigh!=null||_q.length||_ann.length||_peers.length;
   // Always show panel
   {
     h+=`<div class="card" style="margin-top:16px;padding:16px">
