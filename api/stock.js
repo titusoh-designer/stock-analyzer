@@ -242,81 +242,61 @@ export default async function handler(req, res) {
             if (gResp.ok) { gHtml = await gResp.text(); if (gHtml.length > 10000) { gExchange = ex; break; } }
           }
           if (gHtml) {
-            // Google Finance embeds data in JSON-LD and specific div patterns
-            // Generic extractor: find "Label" followed by value in nearby tags
-            const gExtract = (label) => {
-              // Pattern: label text in one div, value in next sibling div
-              const patterns = [
-                new RegExp(label + `</div>[\\s\\S]{0,100}?<div[^>]*>([^<]+)`, 'i'),
-                new RegExp(label + `[^<]*</[^>]+>[\\s\\S]{0,50}?<[^>]+>([^<]+)`, 'i'),
-                new RegExp(`"${label}","([^"]+)"`, 'i'),
-                new RegExp(`>${label}<[^>]*>[\\s\\S]{0,200}?>([\\d.,]+[TBMK%]?)`, 'i')
-              ];
-              for (const p of patterns) {
-                const m = gHtml.match(p);
-                if (m && m[1].trim().length > 0 && m[1].trim() !== "-") return m[1].trim();
-              }
-              return null;
+            // Exact pattern: Label...tooltip...</span><div class="P6K39c">VALUE</div>
+            const gVal = (label) => {
+              const re = new RegExp(label + '[\\s\\S]{0,500}?class="P6K39c">([^<]+)', 'i');
+              const m = gHtml.match(re);
+              return m ? m[1].trim() : null;
             };
 
-            // Extract all available metrics
-            const rawPE = gExtract("P/E ratio") || gExtract("P\\/E ratio");
-            const rawMcap = gExtract("Market cap");
-            const rawDiv = gExtract("Dividend yield");
-            const rawEPS = gExtract("Earnings per share");
-            const rawROE = gExtract("Return on equity");
-            const rawOPM = gExtract("Operating margin") || gExtract("Profit margin");
-            const rawPB = gExtract("Price-to-book") || gExtract("P/B ratio");
-            const rawRevenue = gExtract("Revenue");
-            const rawNetIncome = gExtract("Net income");
+            // Key stats (P6K39c pattern)
+            const rawPE = gVal("P/E ratio");
+            const rawMcap = gVal("Market cap");
+            const rawDiv = gVal("Dividend yield");
 
             if (rawPE) data.fundamentals.per = pn(rawPE);
-            if (rawPB) data.fundamentals.pbr = pn(rawPB);
-            if (rawEPS) data.fundamentals.eps = pn(rawEPS);
-            if (rawROE) data.fundamentals.roe = pn(rawROE) > 1 ? pn(rawROE) / 100 : pn(rawROE);
-            if (rawOPM) data.fundamentals.operatingMargins = pn(rawOPM) > 1 ? pn(rawOPM) / 100 : pn(rawOPM);
-
-            if (rawMcap) {
-              const mv = rawMcap;
-              if (mv.includes("T")) data.fundamentals.marketCap = pn(mv) * 1e12;
-              else if (mv.includes("B")) data.fundamentals.marketCap = pn(mv) * 1e9;
-              else if (mv.includes("M")) data.fundamentals.marketCap = pn(mv) * 1e6;
-            }
             if (rawDiv && rawDiv.includes("%")) data.fundamentals.dividendYield = pn(rawDiv) / 100;
-
-            // Revenue/income for simple display
-            if (rawRevenue || rawNetIncome) {
-              data.usFinancials = { revenue: rawRevenue, netIncome: rawNetIncome };
+            if (rawMcap) {
+              if (rawMcap.includes("T")) data.fundamentals.marketCap = pn(rawMcap) * 1e12;
+              else if (rawMcap.includes("B")) data.fundamentals.marketCap = pn(rawMcap) * 1e9;
+              else if (rawMcap.includes("M")) data.fundamentals.marketCap = pn(rawMcap) * 1e6;
             }
 
-            // Sector/Industry from Google page
-            // Google Finance shows sector in breadcrumb or about section
-            const sectorPatterns = [
-              /finance\/markets\/sector\/([^"?]+)/i,
-              /"sector":"([^"]+)"/i,
-              /data-topic="[^"]*"[^>]*>([^<]{2,30})<\/a>/gi
-            ];
-            for (const p of sectorPatterns) {
-              const m = gHtml.match(p);
-              if (m) {
-                let s = (m[1] || "").replace(/_/g, " ").trim();
-                if (s.length > 1 && s.length < 40) { data.sector = s; break; }
+            // Revenue table: <td class="QXDnM">143.76B</td>
+            const tblMatch = gHtml.match(/Revenue<\/div>[\s\S]{0,300}?Net income[\s\S]{0,3000}?<\/table>/i);
+            if (tblMatch) {
+              const tbl = tblMatch[0];
+              const qHeader = tbl.match(/<th class="yNnsfe">([A-Z][a-z]+ \d{4})/);
+              const qVals = [...tbl.matchAll(/class="QXDnM">([^<]+)/g)].map(m => m[1].trim());
+              // Revenue row values, then net income row values
+              if (qVals.length >= 2) {
+                data.usFinancials = {
+                  quarter: qHeader ? qHeader[1] : null,
+                  revenue: qVals[0], netIncome: qVals[1]
+                };
               }
             }
 
-            // Description from About section
-            const descPatterns = [
-              /class="bLLb2d"[^>]*>([^<]{30,})/i,
-              /About\s*<\/[^>]+>[^<]*<[^>]+>([^<]{30,})/i,
-              /"description"\s*:\s*"([^"]{30,300})"/i
-            ];
-            for (const p of descPatterns) {
-              const m = gHtml.match(p);
-              if (m) { data.businessSummary = m[1].trim().slice(0, 200); break; }
+            // Income statement rows: EPS, Net profit margin (QXDnM pattern)
+            const epsMatch = gHtml.match(/Earnings per share[\s\S]{0,600}?class="QXDnM">([^<]+)/i);
+            if (epsMatch) data.fundamentals.eps = pn(epsMatch[1]);
+
+            const npmMatch = gHtml.match(/Net profit margin[\s\S]{0,600}?class="QXDnM">([^<]+)/i);
+            if (npmMatch) {
+              const npmVal = pn(npmMatch[1]);
+              data.fundamentals.profitMargins = npmVal > 1 ? npmVal / 100 : npmVal;
             }
 
+            // Sector from URL pattern
+            const secMatch = gHtml.match(/\/finance\/markets\/sector\/([^"?&]+)/i);
+            if (secMatch) data.sector = decodeURIComponent(secMatch[1]).replace(/_/g, " ");
+
+            // Description: find content in bLLb2d class div (actual content, not CSS def)
+            const descMatches = [...gHtml.matchAll(/class="bLLb2d"[^>]*>([^<]{30,})/gi)];
+            if (descMatches.length) data.businessSummary = descMatches[descMatches.length - 1][1].trim().slice(0, 200);
+
             data.industry = gExchange;
-            console.log("[GFIN]", symbol, "PE:", rawPE, "MCap:", rawMcap, "EPS:", rawEPS, "ROE:", rawROE, "Sector:", data.sector);
+            console.log("[GFIN]", symbol, "PE:", rawPE, "MCap:", rawMcap, "Div:", rawDiv, "EPS:", data.fundamentals.eps, "NPM:", data.fundamentals.profitMargins, "Rev:", data.usFinancials?.revenue);
             data.fundSource = "google-finance";
           }
         } catch(ge) { console.log("[GFIN ERROR]", ge.message); }
