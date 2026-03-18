@@ -242,17 +242,20 @@ export default async function handler(req, res) {
             if (gResp.ok) { gHtml = await gResp.text(); if (gHtml.length > 10000) { gExchange = ex; break; } }
           }
           if (gHtml) {
-            // Exact pattern: Label...tooltip...</span><div class="P6K39c">VALUE</div>
+            // P6K39c = key stats values
             const gVal = (label) => {
               const re = new RegExp(label + '[\\s\\S]{0,500}?class="P6K39c">([^<]+)', 'i');
-              const m = gHtml.match(re);
-              return m ? m[1].trim() : null;
+              const m = gHtml.match(re); return m ? m[1].trim() : null;
+            };
+            // QXDnM = financial table values (by row label)
+            const gRow = (label) => {
+              const re = new RegExp(label + '[\\s\\S]{0,600}?class="QXDnM">([^<]+)', 'i');
+              const m = gHtml.match(re); return m ? m[1].trim() : null;
             };
 
-            // Key stats (P6K39c pattern)
-            const rawPE = gVal("P/E ratio");
-            const rawMcap = gVal("Market cap");
-            const rawDiv = gVal("Dividend yield");
+            // Key Stats
+            const rawPE = gVal("P/E ratio"), rawMcap = gVal("Market cap"), rawDiv = gVal("Dividend yield");
+            const rawEmployees = gVal("Employees"), rawFounded = gVal("Founded");
 
             if (rawPE) data.fundamentals.per = pn(rawPE);
             if (rawDiv && rawDiv.includes("%")) data.fundamentals.dividendYield = pn(rawDiv) / 100;
@@ -262,41 +265,62 @@ export default async function handler(req, res) {
               else if (rawMcap.includes("M")) data.fundamentals.marketCap = pn(rawMcap) * 1e6;
             }
 
-            // Revenue table: <td class="QXDnM">143.76B</td>
-            const tblMatch = gHtml.match(/Revenue<\/div>[\s\S]{0,300}?Net income[\s\S]{0,3000}?<\/table>/i);
-            if (tblMatch) {
-              const tbl = tblMatch[0];
-              const qHeader = tbl.match(/<th class="yNnsfe">([A-Z][a-z]+ \d{4})/);
-              const qVals = [...tbl.matchAll(/class="QXDnM">([^<]+)/g)].map(m => m[1].trim());
-              // Revenue row values, then net income row values
-              if (qVals.length >= 2) {
-                data.usFinancials = {
-                  quarter: qHeader ? qHeader[1] : null,
-                  revenue: qVals[0], netIncome: qVals[1]
-                };
+            // Parse ALL 3 tables: Income / Balance / Cash Flow
+            const tables = [...gHtml.matchAll(/<table class="slpEwd">([\s\S]*?)<\/table>/g)];
+            const parseTbl = (html) => {
+              const hdr = html.match(/<th class="yNnsfe">([^<]+)/);
+              const rows = [...html.matchAll(/class="rsPbEe"[^>]*>([^<]+)[\s\S]{0,600}?class="QXDnM">([^<]+)/g)];
+              return { period: hdr ? hdr[1].trim() : null, data: Object.fromEntries(rows.map(m => [m[1].trim(), m[2].trim()])) };
+            };
+
+            let incomeStmt = null, balanceSheet = null, cashFlow = null;
+            if (tables[0]) incomeStmt = parseTbl(tables[0][1]);
+            if (tables[1]) balanceSheet = parseTbl(tables[1][1]);
+            if (tables[2]) cashFlow = parseTbl(tables[2][1]);
+
+            // Enrich fundamentals from tables
+            if (incomeStmt?.data) {
+              const d = incomeStmt.data;
+              if (d["Earnings per share"]) data.fundamentals.eps = pn(d["Earnings per share"]);
+              if (d["Net profit margin"]) { const v = pn(d["Net profit margin"]); data.fundamentals.profitMargins = v > 1 ? v / 100 : v; }
+              if (d["EBITDA"]) data.fundamentals.ebitda = d["EBITDA"];
+              if (d["Effective tax rate"]) data.fundamentals.taxRate = d["Effective tax rate"];
+              // Calculate operating margin: (Revenue - OpEx) / Revenue
+              if (d["Revenue"] && d["Operating expense"]) {
+                const rev = pn(d["Revenue"]) * (d["Revenue"].includes("B") ? 1e9 : d["Revenue"].includes("M") ? 1e6 : 1);
+                const opex = pn(d["Operating expense"]) * (d["Operating expense"].includes("B") ? 1e9 : d["Operating expense"].includes("M") ? 1e6 : 1);
+                if (rev > 0) data.fundamentals.operatingMargins = (rev - opex) / rev;
+              }
+            }
+            if (balanceSheet?.data) {
+              const d = balanceSheet.data;
+              if (d["Price to book"]) data.fundamentals.pbr = pn(d["Price to book"]);
+              if (d["Return on assets"]) data.fundamentals.roa = pn(d["Return on assets"]);
+              if (d["Return on capital"]) { const v = pn(d["Return on capital"]); data.fundamentals.roe = v > 1 ? v / 100 : v; }
+              if (d["Total liabilities"] && d["Total equity"]) {
+                const liab = pn(d["Total liabilities"]), eq = pn(d["Total equity"]);
+                if (eq > 0) data.fundamentals.debtToEquity = (liab / eq) * 100;
               }
             }
 
-            // Income statement rows: EPS, Net profit margin (QXDnM pattern)
-            const epsMatch = gHtml.match(/Earnings per share[\s\S]{0,600}?class="QXDnM">([^<]+)/i);
-            if (epsMatch) data.fundamentals.eps = pn(epsMatch[1]);
+            // Store full financials for display
+            data.usFinancials = {
+              period: incomeStmt?.period || null,
+              income: incomeStmt?.data || null,
+              balance: balanceSheet?.data || null,
+              cashflow: cashFlow?.data || null,
+              employees: rawEmployees, founded: rawFounded
+            };
 
-            const npmMatch = gHtml.match(/Net profit margin[\s\S]{0,600}?class="QXDnM">([^<]+)/i);
-            if (npmMatch) {
-              const npmVal = pn(npmMatch[1]);
-              data.fundamentals.profitMargins = npmVal > 1 ? npmVal / 100 : npmVal;
-            }
-
-            // Sector from URL pattern
+            // Sector
             const secMatch = gHtml.match(/\/finance\/markets\/sector\/([^"?&]+)/i);
             if (secMatch) data.sector = decodeURIComponent(secMatch[1]).replace(/_/g, " ");
 
-            // Description: find content in bLLb2d class div (actual content, not CSS def)
+            // Description
             const descMatches = [...gHtml.matchAll(/class="bLLb2d"[^>]*>([^<]{30,})/gi)];
-            if (descMatches.length) data.businessSummary = descMatches[descMatches.length - 1][1].trim().slice(0, 200);
+            if (descMatches.length) data.businessSummary = descMatches[descMatches.length - 1][1].trim().slice(0, 300);
 
             data.industry = gExchange;
-            console.log("[GFIN]", symbol, "PE:", rawPE, "MCap:", rawMcap, "Div:", rawDiv, "EPS:", data.fundamentals.eps, "NPM:", data.fundamentals.profitMargins, "Rev:", data.usFinancials?.revenue);
             data.fundSource = "google-finance";
           }
         } catch(ge) { console.log("[GFIN ERROR]", ge.message); }
