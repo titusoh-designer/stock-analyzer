@@ -894,6 +894,7 @@ function render(data,ai){
   const _ind=data.industry||"";
   const _biz=data.businessSummary||"";
   const _q=data.quarterly||[];
+  console.log("[FUND] sector:",_sec,"per:",_f.per,"pbr:",_f.pbr,"roe:",_f.roe,"mcap:",_f.marketCap,"quarterly:",_q.length,"keys:",Object.keys(_f).filter(k=>_f[k]!=null).join(","));
   const _mcap=_f.marketCap;
   const _mcapStr=_mcap?(_mcap>=1e12?((_mcap/1e12).toFixed(1)+"조"):_mcap>=1e8?((_mcap/1e8).toFixed(0)+"억"):_mcap>=1e9?((_mcap/1e9).toFixed(1)+"B"):((_mcap/1e6).toFixed(0)+"M")):"—";
   const _per=_f.per,_pbr=_f.pbr,_roe=_f.roe?(_f.roe*100):null;
@@ -951,10 +952,15 @@ function render(data,ai){
   if(_f.beta!=null&&_f.beta>1.5)keywords.push({t:"고변동성",hot:true});
   if(_f.targetPrice&&data.currentPrice)keywords.push({t:"목표가 "+cs+fp(_f.targetPrice),hot:false});
 
-  if(_sec||_f.per!=null||_f.pbr!=null||_f.roe!=null||_f.marketCap!=null||_q.length){
+  const hasFund=_sec||_f.per!=null||_f.pbr!=null||_f.roe!=null||_f.marketCap!=null||_q.length;
+  // Always show panel
+  {
     h+=`<div class="card" style="margin-top:16px;padding:16px">
-    <div class="mono" style="font-size:11px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:14px">◆ 기업실적분석</div>
-    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+    <div class="mono" style="font-size:11px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:14px">◆ 기업실적분석</div>`;
+    if(!hasFund){
+      h+=`<div style="text-align:center;padding:20px 0"><div style="font-size:11px;color:#555">펀더멘털 데이터를 불러오지 못했습니다</div><div style="font-size:9px;color:#444;margin-top:6px">Yahoo Finance에서 이 종목의 재무 정보를 제공하지 않을 수 있습니다</div></div></div>`;
+    } else {
+    h+=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
       <div style="flex:1;min-width:240px;background:#0e0e18;border:1px solid #1e1e2e;border-radius:10px;padding:12px 14px">
         <div style="font-size:14px;font-weight:500;color:#F0ECE3;margin-bottom:2px">${data.name||data.symbol}</div>
         <div class="mono" style="font-size:10px;color:#666;margin-bottom:8px">${data.symbol} · ${data.exchange||data.source} · 시총 ${_mcapStr}</div>
@@ -995,7 +1001,8 @@ function render(data,ai){
      {l:"영업이익률",v:_opm!=null?_opm.toFixed(1)+"%":"—",c:_opm!=null&&_opm>_sa.opm?"#4ECCA3":_opm!=null&&_opm<5?"#E85D75":"#C9A96E",d:"매출 대비 영업이익<br><span style='color:#555'>10%↑ 우수</span>",vs:vsTag(_opm,_sa.opm,true)}
     ].forEach(s=>{h+=`<div style="background:#0e0e18;border:1px solid #1e1e2e;border-radius:8px;padding:10px"><div style="font-size:8px;color:#666;letter-spacing:0.08em;margin-bottom:4px">${s.l}</div><div style="font-size:15px;font-weight:500;color:${s.c}">${s.v}</div><div style="font-size:8px;color:#555;margin-top:4px;line-height:1.5">${s.d}</div>${s.vs}</div>`;});
     h+=`</div></div>`; 
-  }
+  } // end else hasFund
+  } // end always block
   }catch(fundErr){console.warn("Fundamental panel error:",fundErr);}
   h+=`<div style="margin-bottom:16px">
     <button id="aiAnalyzeBtn" onclick="doAiAnalyze()" style="width:100%;padding:14px;border-radius:10px;border:1px solid rgba(201,169,110,0.3);background:linear-gradient(135deg,rgba(201,169,110,0.1),rgba(201,169,110,0.03));color:#C9A96E;font-size:14px;font-weight:600;font-family:'DM Mono',monospace;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s" onmouseenter="this.style.background='linear-gradient(135deg,rgba(201,169,110,0.2),rgba(201,169,110,0.08))'" onmouseleave="this.style.background='linear-gradient(135deg,rgba(201,169,110,0.1),rgba(201,169,110,0.03))'">
