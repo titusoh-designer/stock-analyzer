@@ -1,4 +1,4 @@
-// Debug: /api/debug-fund?symbol=AAPL — shows HTML snippets from Google Finance
+// Debug: show wider HTML context around financial labels
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const symbol = req.query.symbol || "AAPL";
@@ -11,39 +11,48 @@ export default async function handler(req, res) {
       const r = await fetch(`https://www.google.com/finance/quote/${encodeURIComponent(symbol)}:${ex}`, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept-Language": "en-US,en;q=0.9" }
       });
-      if (r.ok) { gHtml = await r.text(); if (gHtml.length > 10000) { R.exchange = ex; R.htmlLength = gHtml.length; break; } }
+      if (r.ok) { gHtml = await r.text(); if (gHtml.length > 10000) { R.exchange = ex; break; } }
     } catch(e) {}
   }
+  if (!gHtml) return res.status(200).json({ error: "No HTML" });
 
-  if (!gHtml) { R.error = "No Google Finance HTML"; return res.status(200).json(R); }
-
-  // Extract 200-char snippets around key labels
-  const labels = ["P/E ratio", "Market cap", "Dividend yield", "Earnings per share", "Return on equity", "Operating margin", "Profit margin", "Price-to-book", "Revenue", "Net income", "About", "sector", "bLLb2d", "description"];
-  R.snippets = {};
+  // Show 500 chars AFTER each label (to find value divs)
+  const labels = ["P/E ratio", "Market cap", "Dividend yield", "Avg volume", "Previous close"];
+  R.after = {};
   for (const label of labels) {
     const idx = gHtml.indexOf(label);
     if (idx >= 0) {
-      R.snippets[label] = { found: true, position: idx, context: gHtml.slice(Math.max(0, idx - 30), idx + 200).replace(/\s+/g, " ") };
-    } else {
-      // Case insensitive search
-      const lc = gHtml.toLowerCase().indexOf(label.toLowerCase());
-      if (lc >= 0) {
-        R.snippets[label] = { found: true, position: lc, caseInsensitive: true, context: gHtml.slice(Math.max(0, lc - 30), lc + 200).replace(/\s+/g, " ") };
-      } else {
-        R.snippets[label] = { found: false };
-      }
+      // Skip past the tooltip div, find the value
+      R.after[label] = gHtml.slice(idx, idx + 600).replace(/\s+/g, " ");
     }
   }
 
-  // Also look for JSON-LD structured data
-  const jsonLdMatch = gHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
-  if (jsonLdMatch) {
-    R.jsonLd = jsonLdMatch[1].slice(0, 500);
+  // Find the key-value table structure (class patterns)
+  // Look for the financial stats section
+  const statsSection = gHtml.indexOf("P/E ratio");
+  if (statsSection > 0) {
+    // Go back to find the container start
+    const containerStart = gHtml.lastIndexOf("<div", statsSection - 200);
+    R.statsContainer = gHtml.slice(Math.max(0, containerStart), statsSection + 800).replace(/\s+/g, " ").slice(0, 1500);
   }
 
-  // Look for any financial data table patterns
-  const tableMatch = gHtml.match(/financials[\s\S]{0,500}/i);
-  if (tableMatch) R.financialsSnippet = tableMatch[0].slice(0, 300).replace(/\s+/g, " ");
+  // Revenue table
+  const revIdx = gHtml.indexOf("Revenue</div>");
+  if (revIdx > 0) {
+    R.revenueTable = gHtml.slice(revIdx, revIdx + 1500).replace(/\s+/g, " ");
+  }
+
+  // About section with description
+  const aboutIdx = gHtml.indexOf("bLLb2d");
+  if (aboutIdx > 0) {
+    R.aboutSection = gHtml.slice(aboutIdx, aboutIdx + 500).replace(/\s+/g, " ");
+  }
+
+  // Sector links
+  const sectorIdx = gHtml.indexOf("/finance/markets/sector");
+  if (sectorIdx > 0) {
+    R.sectorLink = gHtml.slice(Math.max(0, sectorIdx - 50), sectorIdx + 200).replace(/\s+/g, " ");
+  }
 
   return res.status(200).json(R);
 }
