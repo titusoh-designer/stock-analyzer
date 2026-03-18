@@ -205,25 +205,45 @@ export default async function handler(req, res) {
         const miniMA20 = wkMA20.slice(-52);
         const miniMA22 = wkMA22.slice(-52);
 
-        // Fetch basic fundamentals (sector, PER, PBR, ROE, quarterly)
+        // Fetch basic fundamentals (Korean=Naver, US=skip)
         let fund = null;
         try {
-          const yTicker = source === "naver" ? (ticker.replace(/\.(KS|KQ)$/, "") + (ohlcv._suffix || ".KS")) : ticker;
-          const fUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yTicker)}?modules=price,defaultKeyStatistics,financialData,summaryDetail,earnings`;
-          const fResp = await fetch(fUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-          const fJson = await fResp.json();
-          const r0 = fJson?.quoteSummary?.result?.[0] || {};
-          const pr = r0.price || {}, ks = r0.defaultKeyStatistics || {}, fd = r0.financialData || {}, sd = r0.summaryDetail || {};
-          const earn = r0.earnings?.financialsChart?.quarterly || [];
-          fund = {
-            sector: pr.sector || "", industry: pr.industry || "",
-            marketCap: pr.marketCap?.raw || sd.marketCap?.raw || null,
-            per: sd.trailingPE?.raw || ks.trailingPE?.raw || null,
-            pbr: sd.priceToBook?.raw || ks.priceToBook?.raw || null,
-            roe: fd.returnOnEquity?.raw ? (fd.returnOnEquity.raw * 100) : null,
-            opm: fd.operatingMargins?.raw ? (fd.operatingMargins.raw * 100) : null,
-            quarterly: earn.slice(-4).map(q => ({ q: q.date, rev: q.revenue?.raw, earn: q.earnings?.raw }))
-          };
+          if (source === "naver") {
+            const fCode = ticker.replace(/\.(KS|KQ)$/, "").replace(/[^0-9]/g, "");
+            const intResp = await fetch(`https://m.stock.naver.com/api/stock/${fCode}/integration`);
+            if (intResp.ok) {
+              const intJson = await intResp.json();
+              const infos = {};
+              (intJson.totalInfos || []).forEach(i => { infos[i.code] = i.value; });
+              const pn = s => s ? parseFloat(s.replace(/[^0-9.\-]/g, "")) : null;
+              const parseMcap = s => { if (!s) return null; const t = s.match(/([\d,]+)조/); const e = s.match(/([\d,]+)억/); return (t ? parseFloat(t[1].replace(/,/g, "")) * 1e12 : 0) + (e ? parseFloat(e[1].replace(/,/g, "")) * 1e8 : 0); };
+              fund = {
+                sector: intJson.sectorName || "", industry: intJson.industryName || "",
+                marketCap: parseMcap(infos.marketValue),
+                per: pn(infos.per), pbr: pn(infos.pbr), roe: null, opm: null,
+                quarterly: []
+              };
+            }
+            // Quarterly
+            const qResp = await fetch(`https://m.stock.naver.com/api/stock/${fCode}/finance/quarter`);
+            if (qResp.ok && fund) {
+              const qJson = await qResp.json();
+              const fi = qJson.financeInfo;
+              if (fi?.rowList && fi?.trTitleList) {
+                const titles = fi.trTitleList.filter(t => t.isConsensus === "N").slice(-4);
+                const rows = {}; fi.rowList.forEach(r => { rows[r.title] = r.columns; });
+                fund.quarterly = titles.map(t => ({
+                  q: t.title.replace(".", ""),
+                  rev: rows["매출액"]?.[t.key]?.value ? parseFloat(rows["매출액"][t.key].value.replace(/,/g, "")) * 1e6 : null,
+                  opProfit: rows["영업이익"]?.[t.key]?.value ? parseFloat(rows["영업이익"][t.key].value.replace(/,/g, "")) * 1e6 : null,
+                  earn: rows["당기순이익"]?.[t.key]?.value ? parseFloat(rows["당기순이익"][t.key].value.replace(/,/g, "")) * 1e6 : null
+                }));
+                // Calculate OPM from latest quarter
+                const lq = fund.quarterly[fund.quarterly.length - 1];
+                if (lq?.rev && lq?.opProfit) fund.opm = (lq.opProfit / lq.rev) * 100;
+              }
+            }
+          }
         } catch (e) { /* fundamentals optional */ }
 
         results.push({

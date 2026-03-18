@@ -115,53 +115,108 @@ export default async function handler(req, res) {
       fetchedAt: new Date().toISOString()
     };
 
-    // ── Fundamentals + Sector + Quarterly (optional, non-blocking) ──
+    // ── Fundamentals (Korean=Naver, US=Yahoo chart meta) ──
     try {
-      const fUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooTicker)}?modules=defaultKeyStatistics,financialData,summaryDetail,price,assetProfile,earningsHistory,earnings`;
-      const fResp = await fetch(fUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-      const fJson = await fResp.json();
-      if (fJson.quoteSummary?.error) console.log("[FUND] API error:", fJson.quoteSummary.error);
-      const r0 = fJson?.quoteSummary?.result?.[0] || {};
-      const ks = r0.defaultKeyStatistics || {};
-      const fd = r0.financialData || {};
-      const sd = r0.summaryDetail || {};
-      const pr = r0.price || {};
-      const ap = r0.assetProfile || {};
-      const earn = r0.earnings || {};
+      if (isKR) {
+        // ★ Korean stocks: Naver 3 APIs
+        const code = symbol.replace(/[^0-9]/g, "");
 
-      data.fundamentals = {
-        marketCap: pr.marketCap?.raw || sd.marketCap?.raw || null,
-        per: sd.trailingPE?.raw || ks.trailingPE?.raw || null,
-        forwardPer: sd.forwardPE?.raw || ks.forwardPE?.raw || null,
-        pbr: sd.priceToBook?.raw || ks.priceToBook?.raw || null,
-        eps: ks.trailingEps?.raw || null,
-        roe: fd.returnOnEquity?.raw || null,
-        debtToEquity: fd.debtToEquity?.raw || null,
-        dividendYield: sd.dividendYield?.raw || null,
-        beta: sd.beta?.raw || ks.beta?.raw || null,
-        fiftyTwoWeekHigh: sd.fiftyTwoWeekHigh?.raw || null,
-        fiftyTwoWeekLow: sd.fiftyTwoWeekLow?.raw || null,
-        shortRatio: ks.shortRatio?.raw || null,
-        targetPrice: fd.targetMeanPrice?.raw || null,
-        operatingMargins: fd.operatingMargins?.raw || null,
-        profitMargins: fd.profitMargins?.raw || null,
-        revenueGrowth: fd.revenueGrowth?.raw || null,
-        earningsGrowth: fd.earningsGrowth?.raw || null
-      };
+        // 1) Integration: PER, PBR, EPS, BPS, 시총, 배당, 섹터
+        const intResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/integration`);
+        if (intResp.ok) {
+          const intJson = await intResp.json();
+          const infos = {};
+          (intJson.totalInfos || []).forEach(i => { infos[i.code] = i.value; });
+          const parseNum = s => s ? parseFloat(s.replace(/[^0-9.\-]/g, "")) : null;
+          const parseMcap = s => {
+            if (!s) return null;
+            const t = s.match(/([\d,]+)조/); const e = s.match(/([\d,]+)억/);
+            return (t ? parseFloat(t[1].replace(/,/g, "")) * 1e12 : 0) + (e ? parseFloat(e[1].replace(/,/g, "")) * 1e8 : 0);
+          };
 
-      // Sector & Industry
-      data.sector = ap.sector || pr.sector || null;
-      data.industry = ap.industry || null;
-      data.businessSummary = ap.longBusinessSummary ? ap.longBusinessSummary.slice(0, 200) : null;
+          data.fundamentals = {
+            marketCap: parseMcap(infos.marketValue),
+            per: parseNum(infos.per),
+            forwardPer: parseNum(infos.cnsPer),
+            pbr: parseNum(infos.pbr),
+            eps: parseNum(infos.eps),
+            bps: parseNum(infos.bps),
+            dividendYield: parseNum(infos.dividendYieldRatio) ? parseNum(infos.dividendYieldRatio) / 100 : null,
+            dividend: parseNum(infos.dividend),
+            fiftyTwoWeekHigh: parseNum(infos.highPriceOf52Weeks),
+            fiftyTwoWeekLow: parseNum(infos.lowPriceOf52Weeks),
+            foreignRate: infos.foreignRate || null
+          };
+          data.sector = intJson.sectorName || null;
+          data.industry = intJson.industryName || null;
+          data.businessSummary = intJson.description ? intJson.description.slice(0, 200) : null;
 
-      // Quarterly earnings (last 4 quarters)
-      const qEarn = earn.financialsChart?.quarterly || [];
-      if (qEarn.length) {
-        data.quarterly = qEarn.map(q => ({
-          quarter: q.date || "",
-          revenue: q.revenue?.raw || null,
-          earnings: q.earnings?.raw || null
-        }));
+          // Industry compare info (sector averages)
+          if (intJson.industryCompareInfo) {
+            const ic = intJson.industryCompareInfo;
+            data.sectorAvg = {
+              per: parseNum(ic.industryPer),
+              changeRate: ic.industryChangeRate
+            };
+          }
+        }
+
+        // 2) Quarterly: 매출, 영업이익, 당기순이익
+        const qResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/quarter`);
+        if (qResp.ok) {
+          const qJson = await qResp.json();
+          const fi = qJson.financeInfo;
+          if (fi && fi.rowList && fi.trTitleList) {
+            const titles = fi.trTitleList.filter(t => t.isConsensus === "N").slice(-4);
+            const rows = {};
+            fi.rowList.forEach(r => { rows[r.title] = r.columns; });
+            data.quarterly = titles.map(t => ({
+              quarter: t.title.replace(".", ""),
+              revenue: rows["매출액"]?.[t.key]?.value ? parseFloat(rows["매출액"][t.key].value.replace(/,/g, "")) * 1e6 : null,
+              operatingProfit: rows["영업이익"]?.[t.key]?.value ? parseFloat(rows["영업이익"][t.key].value.replace(/,/g, "")) * 1e6 : null,
+              earnings: rows["당기순이익"]?.[t.key]?.value ? parseFloat(rows["당기순이익"][t.key].value.replace(/,/g, "")) * 1e6 : null
+            }));
+          }
+        }
+
+        // 3) Annual: 매출, 영업이익, 당기순이익
+        const aResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/annual`);
+        if (aResp.ok) {
+          const aJson = await aResp.json();
+          const fi = aJson.financeInfo;
+          if (fi && fi.rowList && fi.trTitleList) {
+            const titles = fi.trTitleList.filter(t => t.isConsensus === "N").slice(-3);
+            const rows = {};
+            fi.rowList.forEach(r => { rows[r.title] = r.columns; });
+            data.annual = titles.map(t => ({
+              year: t.title.replace(".", ""),
+              revenue: rows["매출액"]?.[t.key]?.value ? parseFloat(rows["매출액"][t.key].value.replace(/,/g, "")) * 1e6 : null,
+              operatingProfit: rows["영업이익"]?.[t.key]?.value ? parseFloat(rows["영업이익"][t.key].value.replace(/,/g, "")) * 1e6 : null,
+              earnings: rows["당기순이익"]?.[t.key]?.value ? parseFloat(rows["당기순이익"][t.key].value.replace(/,/g, "")) * 1e6 : null
+            }));
+            // Calculate operating margin from latest annual
+            if (data.annual.length && data.fundamentals) {
+              const latest = data.annual[data.annual.length - 1];
+              if (latest.revenue && latest.operatingProfit) {
+                data.fundamentals.operatingMargins = latest.operatingProfit / latest.revenue;
+              }
+            }
+          }
+        }
+
+      } else {
+        // ★ US/Crypto stocks: Yahoo v8 chart meta (limited but works)
+        data.fundamentals = {
+          marketCap: null,
+          per: null, pbr: null, eps: null,
+          dividendYield: null,
+          fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh || null,
+          fiftyTwoWeekLow: meta.fiftyTwoWeekLow || null
+        };
+        // Note: Yahoo quoteSummary blocked (401 crumb). Chart meta has limited data.
+        data.sector = null;
+        data.industry = null;
+        data.fundSource = "yahoo-meta-limited";
       }
     } catch (e) { console.log("[FUND ERROR]", yahooTicker, e.message); }
 
