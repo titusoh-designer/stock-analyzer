@@ -187,26 +187,28 @@ export default async function handler(req, res) {
         const top = allSignals.slice(0, 10);
         const change = ohlcv.length >= 2 ? ((cls[cls.length - 1] / cls[cls.length - 2] - 1) * 100).toFixed(2) : 0;
 
-        // Weekly aggregation for mini chart (last 52 weeks)
+        // Weekly aggregation for mini chart
         const weekly = [];
         for (let w = 0; w < ohlcv.length; w += 5) {
           const wk = ohlcv.slice(w, w + 5);
           if (!wk.length) continue;
           weekly.push({ c: wk[wk.length - 1].close, h: Math.max(...wk.map(d => d.high)), l: Math.min(...wk.map(d => d.low)) });
         }
-        const wk52 = weekly.slice(-52);
-        // Weekly MA20 (=주20) and MA22 (≈월20, 22weeks≈5months)
+        // Calculate MAs on FULL weekly data, then slice to visible range
         const wkCls = weekly.map(w => w.c);
-        const wkMA20 = [], wkMA22 = [];
+        const wkMA20Full = [], wkMA22Full = [];
         for (let j = 0; j < weekly.length; j++) {
-          wkMA20.push(j >= 19 ? wkCls.slice(j - 19, j + 1).reduce((a, b) => a + b, 0) / 20 : null);
-          wkMA22.push(j >= 21 ? wkCls.slice(j - 21, j + 1).reduce((a, b) => a + b, 0) / 22 : null);
+          wkMA20Full.push(j >= 19 ? wkCls.slice(j - 19, j + 1).reduce((a, b) => a + b, 0) / 20 : null);
+          wkMA22Full.push(j >= 21 ? wkCls.slice(j - 21, j + 1).reduce((a, b) => a + b, 0) / 22 : null);
         }
-        const miniMA20 = wkMA20.slice(-52);
-        const miniMA22 = wkMA22.slice(-52);
+        const sliceStart = Math.max(0, weekly.length - 52);
+        const wk52 = weekly.slice(sliceStart);
+        const miniMA20 = wkMA20Full.slice(sliceStart);
+        const miniMA22 = wkMA22Full.slice(sliceStart);
 
-        // Fetch basic fundamentals (Korean=Naver, US=skip)
+        // Fetch basic fundamentals (Korean=Naver, US=Google Finance)
         let fund = null;
+        const pn = s => s ? parseFloat(String(s).replace(/[^0-9.\-]/g, "")) : null;
         try {
           if (source === "naver") {
             const fCode = ticker.replace(/\.(KS|KQ)$/, "").replace(/[^0-9]/g, "");
@@ -215,10 +217,10 @@ export default async function handler(req, res) {
               const intJson = await intResp.json();
               const infos = {};
               (intJson.totalInfos || []).forEach(i => { infos[i.code] = i.value; });
-              const pn = s => s ? parseFloat(s.replace(/[^0-9.\-]/g, "")) : null;
               const parseMcap = s => { if (!s) return null; const t = s.match(/([\d,]+)조/); const e = s.match(/([\d,]+)억/); return (t ? parseFloat(t[1].replace(/,/g, "")) * 1e12 : 0) + (e ? parseFloat(e[1].replace(/,/g, "")) * 1e8 : 0); };
+              const krxSectors = {"278":"반도체","298":"가정용기기와용품","266":"전자제품","274":"디스플레이","281":"IT하드웨어","285":"반도체장비","263":"소프트웨어","271":"자동차","275":"건설","277":"화학","282":"의약품","283":"바이오","286":"은행","287":"증권","289":"부동산","295":"유통"};
               fund = {
-                sector: intJson.sectorName || "", industry: intJson.industryName || "",
+                sector: krxSectors[intJson.industryCode] || "", industry: intJson.industryName || "",
                 marketCap: parseMcap(infos.marketValue),
                 per: pn(infos.per), pbr: pn(infos.pbr), roe: null, opm: null,
                 quarterly: []
@@ -233,16 +235,46 @@ export default async function handler(req, res) {
                 const titles = fi.trTitleList.filter(t => t.isConsensus === "N").slice(-4);
                 const rows = {}; fi.rowList.forEach(r => { rows[r.title] = r.columns; });
                 fund.quarterly = titles.map(t => ({
-                  q: t.title.replace(".", ""),
+                  q: t.title.replace(/\./g, ""),
                   rev: rows["매출액"]?.[t.key]?.value ? parseFloat(rows["매출액"][t.key].value.replace(/,/g, "")) * 1e6 : null,
                   opProfit: rows["영업이익"]?.[t.key]?.value ? parseFloat(rows["영업이익"][t.key].value.replace(/,/g, "")) * 1e6 : null,
                   earn: rows["당기순이익"]?.[t.key]?.value ? parseFloat(rows["당기순이익"][t.key].value.replace(/,/g, "")) * 1e6 : null
                 }));
-                // Calculate OPM from latest quarter
                 const lq = fund.quarterly[fund.quarterly.length - 1];
                 if (lq?.rev && lq?.opProfit) fund.opm = (lq.opProfit / lq.rev) * 100;
               }
             }
+          } else {
+            // US stocks: Google Finance scraping
+            try {
+              const exchanges = ["NASDAQ", "NYSE", "NYSEARCA"];
+              let gHtml = null;
+              for (const ex of exchanges) {
+                const gResp = await fetch(`https://www.google.com/finance/quote/${encodeURIComponent(ticker)}:${ex}`, {
+                  headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept-Language": "en-US,en;q=0.9" }
+                });
+                if (gResp.ok) { gHtml = await gResp.text(); if (gHtml.length > 10000) break; }
+              }
+              if (gHtml) {
+                const gVal = (label) => { const re = new RegExp(label + '[\\s\\S]{0,500}?class="P6K39c">([^<]+)', 'i'); const m = gHtml.match(re); return m ? m[1].trim() : null; };
+                const rawPE = gVal("P/E ratio"), rawMcap = gVal("Market cap"), rawDiv = gVal("Dividend yield");
+                fund = { sector: "", industry: "", per: pn(rawPE), pbr: null, roe: null, opm: null, quarterly: [] };
+                if (rawMcap) {
+                  if (rawMcap.includes("T")) fund.marketCap = pn(rawMcap) * 1e12;
+                  else if (rawMcap.includes("B")) fund.marketCap = pn(rawMcap) * 1e9;
+                  else if (rawMcap.includes("M")) fund.marketCap = pn(rawMcap) * 1e6;
+                }
+                if (rawDiv && rawDiv.includes("%")) fund.dividendYield = pn(rawDiv) / 100;
+                const secMatch = gHtml.match(/\/finance\/markets\/sector\/([^"?&]+)/i);
+                if (secMatch) fund.sector = decodeURIComponent(secMatch[1]).replace(/_/g, " ");
+                // Revenue from table
+                const tblMatch = gHtml.match(/Revenue<\/div>[\s\S]{0,300}?Net income[\s\S]{0,3000}?<\/table>/i);
+                if (tblMatch) {
+                  const qVals = [...tblMatch[0].matchAll(/class="QXDnM">([^<]+)/g)].map(m => m[1].trim());
+                  if (qVals.length >= 2) fund.usFinance = { revenue: qVals[0], netIncome: qVals[1] };
+                }
+              }
+            } catch(ge) {}
           }
         } catch (e) { /* fundamentals optional */ }
 
