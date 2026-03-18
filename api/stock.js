@@ -120,6 +120,7 @@ export default async function handler(req, res) {
       const fUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooTicker)}?modules=defaultKeyStatistics,financialData,summaryDetail,price,assetProfile,earningsHistory,earnings`;
       const fResp = await fetch(fUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
       const fJson = await fResp.json();
+      if (fJson.quoteSummary?.error) console.log("[FUND] API error:", fJson.quoteSummary.error);
       const r0 = fJson?.quoteSummary?.result?.[0] || {};
       const ks = r0.defaultKeyStatistics || {};
       const fd = r0.financialData || {};
@@ -162,7 +163,7 @@ export default async function handler(req, res) {
           earnings: q.earnings?.raw || null
         }));
       }
-    } catch (e) { /* fundamentals are optional */ }
+    } catch (e) { console.log("[FUND ERROR]", yahooTicker, e.message); }
 
     return res.status(200).json(data);
 
