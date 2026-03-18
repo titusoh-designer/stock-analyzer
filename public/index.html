@@ -1058,6 +1058,18 @@ function render(data,ai){
       h+=`<div style="display:flex;gap:12px;font-size:8px;color:#555;margin-bottom:12px"><span style="color:#C9A96E">◆ 연간</span><span>|</span><span>분기</span><span style="margin-left:auto">단위: ${unit}원</span></div>`;
     }
 
+    // US financials from Google Finance (Revenue/Net Income)
+    const _usF=data.usFinancials;
+    if(_usF&&(!_q.length&&!_ann.length)){
+      h+=`<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:10px">
+      <tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#888;padding:6px;font-weight:400">최근 실적</th><th style="text-align:right;color:#888;padding:6px;font-weight:400">${_usF.quarter||"Latest"}</th></tr>
+      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">Revenue</td><td style="text-align:right;padding:5px 6px;color:#999">${_usF.revenue||"—"}</td></tr>
+      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">Net Income</td><td style="text-align:right;padding:5px 6px;color:${_usF.netIncome&&_usF.netIncome.includes("-")?"#E85D75":"#4ECCA3"}">${_usF.netIncome||"—"}</td></tr>
+      ${data.fundamentals?.eps!=null?`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">EPS</td><td style="text-align:right;padding:5px 6px;color:#999">$${data.fundamentals.eps.toFixed(2)}</td></tr>`:""}
+      ${data.fundamentals?.profitMargins!=null?`<tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">Net Profit Margin</td><td style="text-align:right;padding:5px 6px;color:${data.fundamentals.profitMargins>=0.1?"#4ECCA3":data.fundamentals.profitMargins>=0.05?"#C9A96E":"#E85D75"}">${(data.fundamentals.profitMargins*100).toFixed(1)}%</td></tr>`:""}
+      </table></div>`;
+    }
+
     // Summary cards with sector comparison badges + tooltips
     h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">`;
     [{l:"PER",v:_per!=null?_per.toFixed(1)+"배":"적자",c:_per!=null&&_per>0&&_per<_sa.per*.8?"#4ECCA3":_per!=null&&_per>_sa.per*1.5?"#E85D75":"#C9A96E",d:"주가÷주당순이익<br><span style='color:#555'>10배↓ 저평가 · 20배↑ 고평가</span>",vs:vsTag(_per,_sa.per,false)},
