@@ -899,15 +899,56 @@ function render(data,ai){
   const _opm=_f.operatingMargins?(_f.operatingMargins*100):null;
   const _dty=_f.debtToEquity;
   const _divY=_f.dividendYield?(_f.dividendYield*100):null;
+  const _revG=_f.revenueGrowth?(_f.revenueGrowth*100):null;
+  const _earG=_f.earningsGrowth?(_f.earningsGrowth*100):null;
 
-  // Gauge helper
-  const gauge=(label,val,valStr,secAvg,secStr,low,high,rev)=>{
-    if(val==null)return`<div style="flex:1;min-width:120px"><div style="display:flex;justify-content:space-between;font-size:9px;color:#666;margin-bottom:3px"><span>${label}</span><span style="color:#888">${valStr}</span></div><div style="height:4px;background:#1a1a28;border-radius:2px"></div><div style="font-size:8px;color:#555;text-align:right;margin-top:2px">섹터 ${secStr}</div></div>`;
+  // Sector average estimates by sector (approximate industry medians)
+  const secAvgs={
+    "Technology":{per:25,pbr:5,roe:15,opm:12},"Financial Services":{per:12,pbr:1.2,roe:10,opm:30},
+    "Healthcare":{per:20,pbr:4,roe:12,opm:10},"Consumer Cyclical":{per:18,pbr:3,roe:14,opm:8},
+    "Industrials":{per:18,pbr:3,roe:12,opm:10},"Communication Services":{per:16,pbr:3,roe:10,opm:15},
+    "Consumer Defensive":{per:22,pbr:4,roe:15,opm:8},"Energy":{per:10,pbr:1.5,roe:15,opm:12},
+    "Basic Materials":{per:12,pbr:1.5,roe:10,opm:10},"Real Estate":{per:30,pbr:2,roe:5,opm:25},
+    "Utilities":{per:18,pbr:1.8,roe:8,opm:20}
+  };
+  const _sa=secAvgs[_sec]||{per:15,pbr:2.5,roe:8.5,opm:7};
+
+  // Gauge helper with sector average
+  const gauge=(label,val,valStr,secVal,low,high,rev)=>{
+    const secStr=secVal.toFixed(1);
+    if(val==null)return`<div style="flex:1;min-width:120px"><div style="display:flex;justify-content:space-between;font-size:9px;color:#666;margin-bottom:3px"><span>${label}</span><span style="color:#888">${valStr}</span></div><div style="height:5px;background:#1a1a28;border-radius:3px"></div><div style="font-size:8px;color:#C9A96E;text-align:right;margin-top:2px">섹터 ${secStr}</div></div>`;
     const pct=rev?Math.max(0,Math.min(100,(1-(val-low)/(high-low||1))*100)):Math.max(0,Math.min(100,((val-low)/(high-low||1))*100));
+    const secPct=rev?Math.max(0,Math.min(100,(1-(secVal-low)/(high-low||1))*100)):Math.max(0,Math.min(100,((secVal-low)/(high-low||1))*100));
     const vCol=pct<35?"#4ECCA3":pct<65?"#C9A96E":"#E85D75";
     const vLabel=rev?(pct<35?"우수":pct<65?"보통":"저조"):(pct<35?"저평가":pct<65?"적정":"고평가");
-    return`<div style="flex:1;min-width:120px"><div style="display:flex;justify-content:space-between;font-size:9px;color:#666;margin-bottom:3px"><span>${label}</span><span style="color:${vCol}">${vLabel}</span></div><div style="height:4px;background:#1a1a28;border-radius:2px;position:relative"><div style="height:100%;width:80%;border-radius:2px;background:linear-gradient(90deg,${rev?"#E85D75,#C9A96E,#4ECCA3":"#4ECCA3,#C9A96E,#E85D75"})"></div><div style="position:absolute;top:-2px;left:${pct*.8}%;width:2px;height:8px;background:#F0ECE3;border-radius:1px"></div></div><div style="font-size:8px;color:#888;text-align:right;margin-top:2px">${valStr} <span style="color:#555">/ 섹터 ${secStr}</span></div></div>`;
+    return`<div style="flex:1;min-width:120px"><div style="display:flex;justify-content:space-between;font-size:9px;color:#666;margin-bottom:3px"><span>${label}</span><span style="color:${vCol}">${vLabel}</span></div><div style="height:5px;background:#1a1a28;border-radius:3px;position:relative"><div style="height:100%;width:80%;border-radius:3px;background:linear-gradient(90deg,${rev?"#E85D75,#C9A96E,#4ECCA3":"#4ECCA3,#C9A96E,#E85D75"})"></div><div style="position:absolute;top:-3px;left:${pct*.8}%;width:2px;height:11px;background:#F0ECE3;border-radius:1px" title="이 종목: ${valStr}"></div><div style="position:absolute;top:-1px;left:${secPct*.8}%;width:6px;height:7px;background:none;border:1px solid #C9A96E;border-radius:1px" title="섹터: ${secStr}"></div></div><div style="font-size:8px;color:#888;text-align:right;margin-top:2px">${valStr} <span style="color:#C9A96E">/ 섹터 ${secStr}</span></div></div>`;
   };
+
+  // Sector comparison verdict
+  const vsTag=(val,secVal,higherBetter)=>{
+    if(val==null||secVal==null)return"";
+    const ratio=val/secVal;
+    if(higherBetter){
+      if(ratio>=1.2)return`<span style="display:inline-block;padding:2px 6px;border-radius:3px;font-size:8px;background:rgba(78,204,163,.1);color:#4ECCA3;margin-top:3px">섹터 대비 우수</span>`;
+      if(ratio>=0.8)return`<span style="display:inline-block;padding:2px 6px;border-radius:3px;font-size:8px;background:rgba(201,169,110,.1);color:#C9A96E;margin-top:3px">섹터 평균 수준</span>`;
+      return`<span style="display:inline-block;padding:2px 6px;border-radius:3px;font-size:8px;background:rgba(232,93,117,.1);color:#E85D75;margin-top:3px">섹터 대비 저조</span>`;
+    } else {
+      if(ratio<=0.8)return`<span style="display:inline-block;padding:2px 6px;border-radius:3px;font-size:8px;background:rgba(78,204,163,.1);color:#4ECCA3;margin-top:3px">섹터 대비 저평가</span>`;
+      if(ratio<=1.5)return`<span style="display:inline-block;padding:2px 6px;border-radius:3px;font-size:8px;background:rgba(201,169,110,.1);color:#C9A96E;margin-top:3px">섹터 평균 수준</span>`;
+      return`<span style="display:inline-block;padding:2px 6px;border-radius:3px;font-size:8px;background:rgba(232,93,117,.1);color:#E85D75;margin-top:3px">섹터 대비 고평가</span>`;
+    }
+  };
+
+  // Keywords from sector + industry + growth
+  const keywords=[];
+  if(_ind)keywords.push({t:_ind,hot:false});
+  if(_revG!=null&&_revG>10)keywords.push({t:"매출성장 "+_revG.toFixed(0)+"%",hot:true});
+  if(_earG!=null&&_earG>20)keywords.push({t:"이익성장 "+_earG.toFixed(0)+"%",hot:true});
+  if(_earG!=null&&_earG<-20)keywords.push({t:"이익감소",hot:true});
+  if(_divY!=null&&_divY>3)keywords.push({t:"고배당 "+_divY.toFixed(1)+"%",hot:false});
+  if(_dty!=null&&_dty>200)keywords.push({t:"고부채",hot:true});
+  if(_f.beta!=null&&_f.beta>1.5)keywords.push({t:"고변동성",hot:true});
+  if(_f.targetPrice&&data.currentPrice)keywords.push({t:"목표가 "+cs+fm(_f.targetPrice),hot:false});
 
   if(_sec||_f.per!=null||_q.length){
     h+=`<div class="card" style="margin-top:16px;padding:16px">
@@ -918,15 +959,17 @@ function render(data,ai){
         <div class="mono" style="font-size:10px;color:#666;margin-bottom:8px">${data.symbol} · ${data.exchange||data.source} · 시총 ${_mcapStr}</div>
         ${_sec?`<div style="display:inline-flex;gap:6px;background:rgba(201,169,110,.06);border:1px solid #C9A96E20;border-radius:5px;padding:3px 8px;font-size:9px;color:#C9A96E;margin-bottom:6px">◆ ${_sec}${_ind?" · "+_ind:""}</div>`:""}
         ${_biz?`<div class="noto" style="font-size:10px;color:#777;line-height:1.7;margin-top:6px">${_biz}...</div>`:""}
+        ${keywords.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${keywords.map(k=>`<span style="background:rgba(${k.hot?"232,93,117":"78,204,163"},.08);border:1px solid ${k.hot?"#E85D75":"#4ECCA3"}20;border-radius:20px;padding:2px 8px;font-size:8px;color:${k.hot?"#E85D75":"#4ECCA3"}">${k.t}</span>`).join("")}</div>`:""}
       </div>
       <div style="flex:0 0 300px;background:#0e0e18;border:1px solid #1e1e2e;border-radius:10px;padding:12px 14px">
-        <div style="font-size:9px;color:#C9A96E;letter-spacing:0.1em;margin-bottom:12px">섹터 대비 평가가치</div>
+        <div style="font-size:9px;color:#C9A96E;letter-spacing:0.1em;margin-bottom:12px">섹터 대비 평가가치 <span style="color:#555">(${_sec||"전체"})</span></div>
         <div style="display:flex;flex-direction:column;gap:10px">
-          ${gauge("PER",_per,_per!=null?_per.toFixed(1)+"배":"적자","15.2",0,40,false)}
-          ${gauge("PBR",_pbr,_pbr!=null?_pbr.toFixed(1)+"배":"—","2.5",0,10,false)}
-          ${gauge("ROE",_roe,_roe!=null?_roe.toFixed(1)+"%":"—","8.5",-5,25,true)}
-          ${gauge("영업이익률",_opm,_opm!=null?_opm.toFixed(1)+"%":"—","7.0",-5,20,true)}
+          ${gauge("PER",_per,_per!=null?_per.toFixed(1)+"배":"적자",_sa.per,0,50,false)}
+          ${gauge("PBR",_pbr,_pbr!=null?_pbr.toFixed(1)+"배":"—",_sa.pbr,0,15,false)}
+          ${gauge("ROE",_roe,_roe!=null?_roe.toFixed(1)+"%":"—",_sa.roe,-10,30,true)}
+          ${gauge("영업이익률",_opm,_opm!=null?_opm.toFixed(1)+"%":"—",_sa.opm,-10,30,true)}
         </div>
+        <div style="display:flex;gap:10px;margin-top:10px;font-size:7px;color:#555"><span>▮ 이 종목</span><span style="color:#C9A96E">□ 섹터 평균</span><span>저평가←→고평가</span></div>
       </div>
     </div>`;
 
@@ -941,16 +984,16 @@ function render(data,ai){
       </table></div>`;
     }
 
-    // Summary cards
+    // Summary cards with sector comparison badges + tooltips
     h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">`;
-    [{l:"PER",v:_per!=null?_per.toFixed(1)+"배":"적자",c:_per!=null&&_per>0&&_per<15?"#4ECCA3":_per!=null&&_per>20?"#E85D75":"#C9A96E",d:"주가÷주당순이익"},
-     {l:"PBR",v:_pbr!=null?_pbr.toFixed(1)+"배":"—",c:_pbr!=null&&_pbr<1?"#4ECCA3":_pbr!=null&&_pbr>3?"#E85D75":"#C9A96E",d:"주가÷주당순자산"},
-     {l:"ROE",v:_roe!=null?_roe.toFixed(1)+"%":"—",c:_roe!=null&&_roe>10?"#4ECCA3":_roe!=null&&_roe<5?"#E85D75":"#C9A96E",d:"자기자본이익률"},
-     {l:"부채비율",v:_dty!=null?_dty.toFixed(0)+"%":"—",c:_dty!=null&&_dty<100?"#4ECCA3":_dty!=null&&_dty>200?"#E85D75":"#C9A96E",d:"부채÷자본"},
-     {l:"배당률",v:_divY!=null?_divY.toFixed(2)+"%":"—",c:_divY!=null&&_divY>3?"#4ECCA3":"#C9A96E",d:"시가배당수익률"},
-     {l:"영업이익률",v:_opm!=null?_opm.toFixed(1)+"%":"—",c:_opm!=null&&_opm>10?"#4ECCA3":_opm!=null&&_opm<5?"#E85D75":"#C9A96E",d:"매출 대비 영업이익"}
-    ].forEach(s=>{h+=`<div style="background:#0e0e18;border:1px solid #1e1e2e;border-radius:8px;padding:10px"><div style="font-size:8px;color:#666;letter-spacing:0.08em;margin-bottom:4px">${s.l}</div><div style="font-size:15px;font-weight:500;color:${s.c}">${s.v}</div><div style="font-size:8px;color:#555;margin-top:4px">${s.d}</div></div>`;});
-    h+=`</div></div>`;
+    [{l:"PER",v:_per!=null?_per.toFixed(1)+"배":"적자",c:_per!=null&&_per>0&&_per<_sa.per*.8?"#4ECCA3":_per!=null&&_per>_sa.per*1.5?"#E85D75":"#C9A96E",d:"주가÷주당순이익<br><span style='color:#555'>10배↓ 저평가 · 20배↑ 고평가</span>",vs:vsTag(_per,_sa.per,false)},
+     {l:"PBR",v:_pbr!=null?_pbr.toFixed(1)+"배":"—",c:_pbr!=null&&_pbr<1?"#4ECCA3":_pbr!=null&&_pbr>_sa.pbr*2?"#E85D75":"#C9A96E",d:"주가÷주당순자산<br><span style='color:#555'>1배↓ 자산대비 저평가</span>",vs:vsTag(_pbr,_sa.pbr,false)},
+     {l:"ROE",v:_roe!=null?_roe.toFixed(1)+"%":"—",c:_roe!=null&&_roe>_sa.roe?"#4ECCA3":_roe!=null&&_roe<5?"#E85D75":"#C9A96E",d:"자기자본이익률<br><span style='color:#555'>10%↑ 우수 · 5%↓ 저조</span>",vs:vsTag(_roe,_sa.roe,true)},
+     {l:"부채비율",v:_dty!=null?_dty.toFixed(0)+"%":"—",c:_dty!=null&&_dty<100?"#4ECCA3":_dty!=null&&_dty>200?"#E85D75":"#C9A96E",d:"부채÷자본<br><span style='color:#555'>100%↓ 안정 · 200%↑ 주의</span>",vs:""},
+     {l:"배당률",v:_divY!=null?_divY.toFixed(2)+"%":"—",c:_divY!=null&&_divY>3?"#4ECCA3":"#C9A96E",d:"시가배당수익률<br><span style='color:#555'>3%↑ 고배당</span>",vs:""},
+     {l:"영업이익률",v:_opm!=null?_opm.toFixed(1)+"%":"—",c:_opm!=null&&_opm>_sa.opm?"#4ECCA3":_opm!=null&&_opm<5?"#E85D75":"#C9A96E",d:"매출 대비 영업이익<br><span style='color:#555'>10%↑ 우수</span>",vs:vsTag(_opm,_sa.opm,true)}
+    ].forEach(s=>{h+=`<div style="background:#0e0e18;border:1px solid #1e1e2e;border-radius:8px;padding:10px"><div style="font-size:8px;color:#666;letter-spacing:0.08em;margin-bottom:4px">${s.l}</div><div style="font-size:15px;font-weight:500;color:${s.c}">${s.v}</div><div style="font-size:8px;color:#555;margin-top:4px;line-height:1.5">${s.d}</div>${s.vs}</div>`;});
+    h+=`</div></div>`; 
   }
   h+=`<div style="margin-bottom:16px">
     <button id="aiAnalyzeBtn" onclick="doAiAnalyze()" style="width:100%;padding:14px;border-radius:10px;border:1px solid rgba(201,169,110,0.3);background:linear-gradient(135deg,rgba(201,169,110,0.1),rgba(201,169,110,0.03));color:#C9A96E;font-size:14px;font-weight:600;font-family:'DM Mono',monospace;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s" onmouseenter="this.style.background='linear-gradient(135deg,rgba(201,169,110,0.2),rgba(201,169,110,0.08))'" onmouseleave="this.style.background='linear-gradient(135deg,rgba(201,169,110,0.1),rgba(201,169,110,0.03))'">
