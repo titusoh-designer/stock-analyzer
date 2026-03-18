@@ -887,7 +887,71 @@ function render(data,ai){
     ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"일20",v:ma20?fp(ma20):"-",c:"#4ECCA3"},{l:"주20",v:ma100?fp(ma100):"-",c:"#C9A96E"},{l:"월20",v:ma440?fp(ma440):"-",c:"#F0ECE3"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
   </div>`;
 
-  // AI Analysis Button + Result Area
+  // ═══════ FUNDAMENTAL ANALYSIS PANEL ═══════
+  const _f=data.fundamentals||{};
+  const _sec=data.sector||"";
+  const _ind=data.industry||"";
+  const _biz=data.businessSummary||"";
+  const _q=data.quarterly||[];
+  const _mcap=_f.marketCap;
+  const _mcapStr=_mcap?(_mcap>=1e12?((_mcap/1e12).toFixed(1)+"조"):_mcap>=1e8?((_mcap/1e8).toFixed(0)+"억"):_mcap>=1e9?((_mcap/1e9).toFixed(1)+"B"):((_mcap/1e6).toFixed(0)+"M")):"—";
+  const _per=_f.per,_pbr=_f.pbr,_roe=_f.roe?(_f.roe*100):null;
+  const _opm=_f.operatingMargins?(_f.operatingMargins*100):null;
+  const _dty=_f.debtToEquity;
+  const _divY=_f.dividendYield?(_f.dividendYield*100):null;
+
+  // Gauge helper
+  const gauge=(label,val,valStr,secAvg,secStr,low,high,rev)=>{
+    if(val==null)return`<div style="flex:1;min-width:120px"><div style="display:flex;justify-content:space-between;font-size:9px;color:#666;margin-bottom:3px"><span>${label}</span><span style="color:#888">${valStr}</span></div><div style="height:4px;background:#1a1a28;border-radius:2px"></div><div style="font-size:8px;color:#555;text-align:right;margin-top:2px">섹터 ${secStr}</div></div>`;
+    const pct=rev?Math.max(0,Math.min(100,(1-(val-low)/(high-low||1))*100)):Math.max(0,Math.min(100,((val-low)/(high-low||1))*100));
+    const vCol=pct<35?"#4ECCA3":pct<65?"#C9A96E":"#E85D75";
+    const vLabel=rev?(pct<35?"우수":pct<65?"보통":"저조"):(pct<35?"저평가":pct<65?"적정":"고평가");
+    return`<div style="flex:1;min-width:120px"><div style="display:flex;justify-content:space-between;font-size:9px;color:#666;margin-bottom:3px"><span>${label}</span><span style="color:${vCol}">${vLabel}</span></div><div style="height:4px;background:#1a1a28;border-radius:2px;position:relative"><div style="height:100%;width:80%;border-radius:2px;background:linear-gradient(90deg,${rev?"#E85D75,#C9A96E,#4ECCA3":"#4ECCA3,#C9A96E,#E85D75"})"></div><div style="position:absolute;top:-2px;left:${pct*.8}%;width:2px;height:8px;background:#F0ECE3;border-radius:1px"></div></div><div style="font-size:8px;color:#888;text-align:right;margin-top:2px">${valStr} <span style="color:#555">/ 섹터 ${secStr}</span></div></div>`;
+  };
+
+  if(_sec||_f.per!=null||_q.length){
+    h+=`<div class="card" style="margin-top:16px;padding:16px">
+    <div class="mono" style="font-size:11px;color:#C9A96E;letter-spacing:0.12em;margin-bottom:14px">◆ 기업실적분석</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+      <div style="flex:1;min-width:240px;background:#0e0e18;border:1px solid #1e1e2e;border-radius:10px;padding:12px 14px">
+        <div style="font-size:14px;font-weight:500;color:#F0ECE3;margin-bottom:2px">${data.name||data.symbol}</div>
+        <div class="mono" style="font-size:10px;color:#666;margin-bottom:8px">${data.symbol} · ${data.exchange||data.source} · 시총 ${_mcapStr}</div>
+        ${_sec?`<div style="display:inline-flex;gap:6px;background:rgba(201,169,110,.06);border:1px solid #C9A96E20;border-radius:5px;padding:3px 8px;font-size:9px;color:#C9A96E;margin-bottom:6px">◆ ${_sec}${_ind?" · "+_ind:""}</div>`:""}
+        ${_biz?`<div class="noto" style="font-size:10px;color:#777;line-height:1.7;margin-top:6px">${_biz}...</div>`:""}
+      </div>
+      <div style="flex:0 0 300px;background:#0e0e18;border:1px solid #1e1e2e;border-radius:10px;padding:12px 14px">
+        <div style="font-size:9px;color:#C9A96E;letter-spacing:0.1em;margin-bottom:12px">섹터 대비 평가가치</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${gauge("PER",_per,_per!=null?_per.toFixed(1)+"배":"적자","15.2",0,40,false)}
+          ${gauge("PBR",_pbr,_pbr!=null?_pbr.toFixed(1)+"배":"—","2.5",0,10,false)}
+          ${gauge("ROE",_roe,_roe!=null?_roe.toFixed(1)+"%":"—","8.5",-5,25,true)}
+          ${gauge("영업이익률",_opm,_opm!=null?_opm.toFixed(1)+"%":"—","7.0",-5,20,true)}
+        </div>
+      </div>
+    </div>`;
+
+    // Quarterly table
+    if(_q.length){
+      const qcs=data.currency==="KRW"?"억":"M";
+      const qDiv=data.currency==="KRW"?1e8:1e6;
+      h+=`<div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;border-collapse:collapse;font-size:10px;min-width:400px">
+      <tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#888;padding:6px;font-weight:400">분기</th>${_q.map(q=>`<th style="text-align:right;color:#888;padding:6px;font-weight:400">${q.quarter}</th>`).join("")}</tr>
+      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">매출(${qcs})</td>${_q.map(q=>`<td style="text-align:right;padding:5px 6px;color:#999">${q.revenue!=null?Math.round(q.revenue/qDiv).toLocaleString():"—"}</td>`).join("")}</tr>
+      <tr style="border-bottom:1px solid #0e0e14"><td style="color:#777;padding:5px 6px">순이익(${qcs})</td>${_q.map((q,qi)=>{const v=q.earnings!=null?Math.round(q.earnings/qDiv):null;const prev=qi>0&&_q[qi-1].earnings!=null?Math.round(_q[qi-1].earnings/qDiv):null;const col=v==null?"#999":v>=0?"#4ECCA3":"#E85D75";const arrow=v!=null&&prev!=null?(v>prev?"<span style='color:#4ECCA3;font-size:8px;margin-left:2px'>▲</span>":"<span style='color:#E85D75;font-size:8px;margin-left:2px'>▼</span>"):"";return`<td style="text-align:right;padding:5px 6px;color:${col}">${v!=null?v.toLocaleString():"—"}${arrow}</td>`;}).join("")}</tr>
+      </table></div>`;
+    }
+
+    // Summary cards
+    h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">`;
+    [{l:"PER",v:_per!=null?_per.toFixed(1)+"배":"적자",c:_per!=null&&_per>0&&_per<15?"#4ECCA3":_per!=null&&_per>20?"#E85D75":"#C9A96E",d:"주가÷주당순이익"},
+     {l:"PBR",v:_pbr!=null?_pbr.toFixed(1)+"배":"—",c:_pbr!=null&&_pbr<1?"#4ECCA3":_pbr!=null&&_pbr>3?"#E85D75":"#C9A96E",d:"주가÷주당순자산"},
+     {l:"ROE",v:_roe!=null?_roe.toFixed(1)+"%":"—",c:_roe!=null&&_roe>10?"#4ECCA3":_roe!=null&&_roe<5?"#E85D75":"#C9A96E",d:"자기자본이익률"},
+     {l:"부채비율",v:_dty!=null?_dty.toFixed(0)+"%":"—",c:_dty!=null&&_dty<100?"#4ECCA3":_dty!=null&&_dty>200?"#E85D75":"#C9A96E",d:"부채÷자본"},
+     {l:"배당률",v:_divY!=null?_divY.toFixed(2)+"%":"—",c:_divY!=null&&_divY>3?"#4ECCA3":"#C9A96E",d:"시가배당수익률"},
+     {l:"영업이익률",v:_opm!=null?_opm.toFixed(1)+"%":"—",c:_opm!=null&&_opm>10?"#4ECCA3":_opm!=null&&_opm<5?"#E85D75":"#C9A96E",d:"매출 대비 영업이익"}
+    ].forEach(s=>{h+=`<div style="background:#0e0e18;border:1px solid #1e1e2e;border-radius:8px;padding:10px"><div style="font-size:8px;color:#666;letter-spacing:0.08em;margin-bottom:4px">${s.l}</div><div style="font-size:15px;font-weight:500;color:${s.c}">${s.v}</div><div style="font-size:8px;color:#555;margin-top:4px">${s.d}</div></div>`;});
+    h+=`</div></div>`;
+  }
   h+=`<div style="margin-bottom:16px">
     <button id="aiAnalyzeBtn" onclick="doAiAnalyze()" style="width:100%;padding:14px;border-radius:10px;border:1px solid rgba(201,169,110,0.3);background:linear-gradient(135deg,rgba(201,169,110,0.1),rgba(201,169,110,0.03));color:#C9A96E;font-size:14px;font-weight:600;font-family:'DM Mono',monospace;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s" onmouseenter="this.style.background='linear-gradient(135deg,rgba(201,169,110,0.2),rgba(201,169,110,0.08))'" onmouseleave="this.style.background='linear-gradient(135deg,rgba(201,169,110,0.1),rgba(201,169,110,0.03))'">
       <span style="font-size:16px">🔍</span> AI 차트 패턴분석
@@ -2454,19 +2518,39 @@ async function runScan(){
   btn.disabled=false;btn.textContent="🔍 스캔 시작";
 }
 
-function miniChartSvg(mini,change){
+function miniChartSvg(mini,change,miniMA20,miniMA22){
   if(!mini||!Array.isArray(mini)||mini.length<3)return"";
-  const W=120,H=40,P=2;
+  const W=210,H=80,P=4,Pb=10;
   const cls=mini.map(d=>d?.c||d?.close||0).filter(v=>v>0);
   if(cls.length<3)return"";
-  const mn=Math.min(...cls),mx=Math.max(...cls),rng=mx-mn||1;
+  const allVals=[...cls];
+  if(miniMA20)miniMA20.forEach(v=>{if(v)allVals.push(v);});
+  if(miniMA22)miniMA22.forEach(v=>{if(v)allVals.push(v);});
+  const mn=Math.min(...allVals)*.998,mx=Math.max(...allVals)*1.002,rng=mx-mn||1;
   const tx=i=>P+(i/(cls.length-1))*(W-P*2);
-  const ty=v=>P+(1-(v-mn)/rng)*(H-P*2);
+  const ty=v=>P+(1-(v-mn)/rng)*(H-P-Pb);
   const col=change>=0?"#4ECCA3":"#E85D75";
   const pts=cls.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`);
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:120px;height:40px">`;
-  s+=`<polygon points="${pts.join(" ")} ${tx(cls.length-1).toFixed(1)},${H-P} ${P},${H-P}" fill="${col}" opacity=".1"/>`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:210px;height:80px">`;
+  s+=`<text x="2" y="8" fill="#555" font-size="7" font-family="DM Mono,monospace">주봉 52주</text>`;
+  s+=`<polygon points="${pts.join(" ")} ${tx(cls.length-1).toFixed(1)},${H-Pb} ${P},${H-Pb}" fill="${col}" opacity=".06"/>`;
   s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.5" opacity=".7"/>`;
+  // Weekly MA20 (주20)
+  if(miniMA20&&miniMA20.length===mini.length){
+    const mPts=miniMA20.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);
+    if(mPts.length>1){s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="2" opacity=".6" stroke-dasharray="3,2"/>`;
+    s+=`<text x="${W-P}" y="${ty(miniMA20[miniMA20.length-1]||0).toFixed(0)}" fill="#C9A96E" font-size="6.5" font-family="DM Mono,monospace" text-anchor="end">주20</text>`;}
+  }
+  // Monthly MA20 (월20, ≈weekly MA22)
+  if(miniMA22&&miniMA22.length===mini.length){
+    const mPts=miniMA22.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`:null).filter(Boolean);
+    if(mPts.length>1){s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#F0ECE3" stroke-width="2.5" opacity=".5" stroke-dasharray="4,2"/>`;
+    const lastV=miniMA22.filter(v=>v!=null).pop();
+    if(lastV)s+=`<text x="${W-P}" y="${(ty(lastV)+10).toFixed(0)}" fill="#F0ECE3" font-size="6.5" font-family="DM Mono,monospace" text-anchor="end">월20</text>`;}
+  }
+  s+=`<line x1="${P}" y1="${H-Pb}" x2="${W-P}" y2="${H-Pb}" stroke="#1a1a28" stroke-width=".5"/>`;
+  s+=`<text x="${P}" y="${H-1}" fill="#444" font-size="6" font-family="DM Mono,monospace">1Y</text>`;
+  s+=`<text x="${W-P}" y="${H-1}" fill="#444" font-size="6" font-family="DM Mono,monospace" text-anchor="end">Now</text>`;
   s+=`</svg>`;
   return s;
 }
@@ -2530,26 +2614,58 @@ function renderScanResults(data){
     const bgRgb=isTypeC?"201,169,110":(sig.count>=5?"27,122,67":sig.count>=4?"78,204,163":"144,238,144");
 
     const safeName=(r.name||r.symbol||"").replace(/'/g,"\\'");
-    return`<div class="card" style="border-left:3px solid ${borderCol};padding:16px;margin-bottom:8px;cursor:pointer" onclick="switchTab('analyze');document.getElementById('symInput').value='${safeName} (${r.symbol})';selSym={symbol:'${r.symbol}',source:'${r.source}',name:'${safeName}'};setSrc('${r.source}');fetchData();">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="display:flex;align-items:center;gap:14px">
+    const f=r.fund||{};
+    const mcap=f.marketCap;
+    const mcapStr=mcap?(r.currency==="KRW"?(mcap>=1e12?(mcap/1e12).toFixed(1)+"조":(mcap/1e8).toFixed(0)+"억"):(mcap>=1e12?"$"+(mcap/1e12).toFixed(1)+"T":mcap>=1e9?"$"+(mcap/1e9).toFixed(1)+"B":"$"+(mcap/1e6).toFixed(0)+"M")):"";
+
+    // Mini gauge helper
+    const mg=(lbl,val,lo,hi,rev)=>{
+      if(val==null)return`<div style="flex:1;min-width:60px"><div style="font-size:7px;color:#666">${lbl}</div><div style="height:3px;background:#1a1a28;border-radius:2px;margin-top:2px"></div><div style="font-size:7px;color:#555;text-align:right">—</div></div>`;
+      const pct=rev?Math.max(0,Math.min(100,(1-(val-lo)/(hi-lo||1))*100)):Math.max(0,Math.min(100,((val-lo)/(hi-lo||1))*100));
+      const vc=pct<35?"#4ECCA3":pct<65?"#C9A96E":"#E85D75";
+      return`<div style="flex:1;min-width:60px"><div style="display:flex;justify-content:space-between;font-size:7px;color:#666"><span>${lbl}</span><span style="color:${vc}">${val.toFixed(1)}</span></div><div style="height:3px;background:#1a1a28;border-radius:2px;position:relative;margin-top:2px"><div style="height:100%;width:80%;border-radius:2px;background:linear-gradient(90deg,${rev?"#E85D75,#C9A96E,#4ECCA3":"#4ECCA3,#C9A96E,#E85D75"})"></div><div style="position:absolute;top:-1px;left:${pct*.8}%;width:2px;height:5px;background:#F0ECE3;border-radius:1px"></div></div></div>`;
+    };
+
+    // Quarterly mini table
+    let qHtml="";
+    if(f.quarterly&&f.quarterly.length){
+      const qDiv=r.currency==="KRW"?1e8:1e6;
+      const qUnit=r.currency==="KRW"?"억":"M";
+      qHtml=`<table style="width:100%;border-collapse:collapse;font-size:8px;margin-top:6px"><tr style="border-bottom:1px solid #1a1a28">${f.quarterly.map(q=>`<th style="text-align:right;color:#666;padding:2px 4px;font-weight:400">${q.q||""}</th>`).join("")}</tr><tr>${f.quarterly.map(q=>{const v=q.rev!=null?Math.round(q.rev/qDiv):null;return`<td style="text-align:right;color:#999;padding:2px 4px">${v!=null?v.toLocaleString():"—"}</td>`;}).join("")}</tr><tr>${f.quarterly.map((q,qi)=>{const v=q.earn!=null?Math.round(q.earn/qDiv):null;const c=v==null?"#888":v>=0?"#4ECCA3":"#E85D75";return`<td style="text-align:right;color:${c};padding:2px 4px">${v!=null?v.toLocaleString():"—"}</td>`;}).join("")}</tr></table>`;
+    }
+
+    return`<div class="card" style="border-left:3px solid ${borderCol};padding:14px;margin-bottom:10px;cursor:pointer" onclick="switchTab('analyze');document.getElementById('symInput').value='${safeName} (${r.symbol})';selSym={symbol:'${r.symbol}',source:'${r.source}',name:'${safeName}'};setSrc('${r.source}');fetchData();">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
           <div style="min-width:0">
-            <div style="font-size:14px;font-weight:700;color:#F0ECE3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">${r.name||r.symbol}</div>
-            <div class="mono" style="font-size:10px;color:#666;margin-top:2px">${r.symbol} · ${r.source}</div>
+            <div style="font-size:14px;font-weight:500;color:#F0ECE3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${r.name||r.symbol}</div>
+            <div class="mono" style="font-size:9px;color:#666;margin-top:2px">${r.symbol} · ${r.source}</div>
           </div>
           <div style="text-align:right">
-            <div class="mono" style="font-size:15px;font-weight:700;color:#F0ECE3">${cs}${fp(r.currentPrice)}</div>
-            <div class="mono" style="font-size:10px;color:${chCol}">${r.change>=0?"+":""}${r.change}%</div>
+            <div class="mono" style="font-size:14px;font-weight:500;color:#F0ECE3">${cs}${fp(r.currentPrice)}</div>
+            <div class="mono" style="font-size:9px;color:${chCol}">${r.change>=0?"+":""}${r.change}%</div>
           </div>
-          <div>${miniChartSvg(r.mini,r.change)}</div>
         </div>
         <div style="text-align:right">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-            <span style="font-size:${isTypeC||sig.count>=4?'16':'13'}px;color:${sigCol}">${sigIcon}</span>
-            <span class="badge" style="background:rgba(${bgRgb},.12);color:${sigCol};border:1px solid ${sigCol}30">${sigLabel}</span>
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+            <span style="font-size:${isTypeC||sig.count>=4?'15':'12'}px;color:${sigCol}">${sigIcon}</span>
+            <span class="badge" style="background:rgba(${bgRgb},.12);color:${sigCol};border:1px solid ${sigCol}30;font-size:9px">${sigLabel}</span>
           </div>
-          <div class="mono" style="font-size:9px;color:#888">${sig.date} (${dayLabel})</div>
+          <div class="mono" style="font-size:8px;color:#888">${sig.date} (${dayLabel})</div>
         </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        ${f.sector?`<span style="background:rgba(201,169,110,.06);border:1px solid #C9A96E20;border-radius:4px;padding:2px 7px;font-size:8px;color:#C9A96E">◆ ${f.sector}${f.industry?" · "+f.industry:""}</span>`:""}
+        ${mcapStr?`<span style="background:rgba(133,193,233,.06);border:1px solid #85C1E920;border-radius:4px;padding:2px 7px;font-size:8px;color:#85C1E9">시총 ${mcapStr}</span>`:""}
+        <div style="display:flex;gap:8px;flex:1;min-width:180px">
+          ${mg("PER",f.per,0,40,false)}
+          ${mg("PBR",f.pbr,0,10,false)}
+          ${mg("ROE",f.roe,-5,25,true)}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:stretch">
+        <div style="flex:1;min-width:0">${qHtml||`<div style="font-size:8px;color:#444;padding:4px">분기 실적 데이터 없음</div>`}</div>
+        <div style="flex:0 0 210px;background:#0e0e16;border:1px solid #1a1a28;border-radius:6px;padding:4px 6px;display:flex;align-items:center;justify-content:center">${miniChartSvg(r.mini,r.change,r.miniMA20,r.miniMA22)}</div>
       </div>
     </div>`;
   }).join("");
