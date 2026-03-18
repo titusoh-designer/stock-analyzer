@@ -228,77 +228,95 @@ export default async function handler(req, res) {
         // ★ US stocks: Google Finance HTML scraping + Yahoo chart meta
         data.fundamentals = {
           marketCap: null, per: null, pbr: null, eps: null,
-          dividendYield: null,
+          dividendYield: null, roe: null, operatingMargins: null,
           fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh || null,
           fiftyTwoWeekLow: meta.fiftyTwoWeekLow || null
         };
         try {
           const exchanges = ["NASDAQ", "NYSE", "NYSEARCA"];
-          let gHtml = null;
+          let gHtml = null, gExchange = "";
           for (const ex of exchanges) {
             const gResp = await fetch(`https://www.google.com/finance/quote/${encodeURIComponent(symbol)}:${ex}`, {
-              headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" }
+              headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept-Language": "en-US,en;q=0.9" }
             });
-            if (gResp.ok) { gHtml = await gResp.text(); if (gHtml.length > 10000) { console.log("[GFIN] Got HTML from", ex, "length:", gHtml.length); break; } }
+            if (gResp.ok) { gHtml = await gResp.text(); if (gHtml.length > 10000) { gExchange = ex; break; } }
           }
           if (gHtml) {
-            // Google Finance uses data-* attributes and specific class patterns
-            // P/E ratio
-            const pePatterns = [
-              /P\/E ratio<\/div><div[^>]*>([^<]+)/i,
-              /P\/E ratio[^<]*<[^>]*>[^<]*<[^>]*>([^<]+)/i,
-              /"P\/E ratio","([^"]+)"/i,
-              /data-column-name="PE"[^>]*>([^<]+)/i
-            ];
-            for (const pat of pePatterns) {
-              const m = gHtml.match(pat);
-              if (m && pn(m[1]) > 0) { data.fundamentals.per = pn(m[1]); break; }
+            // Google Finance embeds data in JSON-LD and specific div patterns
+            // Generic extractor: find "Label" followed by value in nearby tags
+            const gExtract = (label) => {
+              // Pattern: label text in one div, value in next sibling div
+              const patterns = [
+                new RegExp(label + `</div>[\\s\\S]{0,100}?<div[^>]*>([^<]+)`, 'i'),
+                new RegExp(label + `[^<]*</[^>]+>[\\s\\S]{0,50}?<[^>]+>([^<]+)`, 'i'),
+                new RegExp(`"${label}","([^"]+)"`, 'i'),
+                new RegExp(`>${label}<[^>]*>[\\s\\S]{0,200}?>([\\d.,]+[TBMK%]?)`, 'i')
+              ];
+              for (const p of patterns) {
+                const m = gHtml.match(p);
+                if (m && m[1].trim().length > 0 && m[1].trim() !== "-") return m[1].trim();
+              }
+              return null;
+            };
+
+            // Extract all available metrics
+            const rawPE = gExtract("P/E ratio") || gExtract("P\\/E ratio");
+            const rawMcap = gExtract("Market cap");
+            const rawDiv = gExtract("Dividend yield");
+            const rawEPS = gExtract("Earnings per share");
+            const rawROE = gExtract("Return on equity");
+            const rawOPM = gExtract("Operating margin") || gExtract("Profit margin");
+            const rawPB = gExtract("Price-to-book") || gExtract("P/B ratio");
+            const rawRevenue = gExtract("Revenue");
+            const rawNetIncome = gExtract("Net income");
+
+            if (rawPE) data.fundamentals.per = pn(rawPE);
+            if (rawPB) data.fundamentals.pbr = pn(rawPB);
+            if (rawEPS) data.fundamentals.eps = pn(rawEPS);
+            if (rawROE) data.fundamentals.roe = pn(rawROE) > 1 ? pn(rawROE) / 100 : pn(rawROE);
+            if (rawOPM) data.fundamentals.operatingMargins = pn(rawOPM) > 1 ? pn(rawOPM) / 100 : pn(rawOPM);
+
+            if (rawMcap) {
+              const mv = rawMcap;
+              if (mv.includes("T")) data.fundamentals.marketCap = pn(mv) * 1e12;
+              else if (mv.includes("B")) data.fundamentals.marketCap = pn(mv) * 1e9;
+              else if (mv.includes("M")) data.fundamentals.marketCap = pn(mv) * 1e6;
             }
-            // Market cap
-            const mcPatterns = [
-              /Market cap<\/div><div[^>]*>([^<]+)/i,
-              /Market cap[^<]*<[^>]*>[^<]*<[^>]*>([^<]+)/i,
-              /"Market cap","([^"]+)"/i
+            if (rawDiv && rawDiv.includes("%")) data.fundamentals.dividendYield = pn(rawDiv) / 100;
+
+            // Revenue/income for simple display
+            if (rawRevenue || rawNetIncome) {
+              data.usFinancials = { revenue: rawRevenue, netIncome: rawNetIncome };
+            }
+
+            // Sector/Industry from Google page
+            // Google Finance shows sector in breadcrumb or about section
+            const sectorPatterns = [
+              /finance\/markets\/sector\/([^"?]+)/i,
+              /"sector":"([^"]+)"/i,
+              /data-topic="[^"]*"[^>]*>([^<]{2,30})<\/a>/gi
             ];
-            for (const pat of mcPatterns) {
-              const m = gHtml.match(pat);
+            for (const p of sectorPatterns) {
+              const m = gHtml.match(p);
               if (m) {
-                const mv = m[1].trim();
-                if (mv.includes("T")) data.fundamentals.marketCap = pn(mv) * 1e12;
-                else if (mv.includes("B")) data.fundamentals.marketCap = pn(mv) * 1e9;
-                else if (mv.includes("M")) data.fundamentals.marketCap = pn(mv) * 1e6;
-                if (data.fundamentals.marketCap) break;
+                let s = (m[1] || "").replace(/_/g, " ").trim();
+                if (s.length > 1 && s.length < 40) { data.sector = s; break; }
               }
             }
-            // Dividend yield
-            const divPatterns = [
-              /Dividend yield<\/div><div[^>]*>([^<]+)/i,
-              /Dividend yield[^<]*<[^>]*>[^<]*<[^>]*>([^<]+)/i
-            ];
-            for (const pat of divPatterns) {
-              const m = gHtml.match(pat);
-              if (m && m[1].includes("%")) { data.fundamentals.dividendYield = pn(m[1]) / 100; break; }
-            }
-            // Sector from breadcrumb or about section
-            const secPatterns = [
-              /data-topic[^>]*>([^<]{2,30})<\/a>/gi,
-              /About[^<]*<\/div>[^<]*<div[^>]*>[^<]*<a[^>]*>([^<]+)/i,
-              /"sector"\s*:\s*"([^"]+)"/i
-            ];
-            for (const pat of secPatterns) {
-              const m = gHtml.match(pat);
-              if (m) { data.sector = m[1].trim(); break; }
-            }
-            // Description
+
+            // Description from About section
             const descPatterns = [
-              /class="bLLb2d"[^>]*>([^<]{20,300})/i,
-              /About[^<]*<\/[^>]*>[^<]*<[^>]*class="[^"]*"[^>]*>([^<]{20,300})/i
+              /class="bLLb2d"[^>]*>([^<]{30,})/i,
+              /About\s*<\/[^>]+>[^<]*<[^>]+>([^<]{30,})/i,
+              /"description"\s*:\s*"([^"]{30,300})"/i
             ];
-            for (const pat of descPatterns) {
-              const m = gHtml.match(pat);
+            for (const p of descPatterns) {
+              const m = gHtml.match(p);
               if (m) { data.businessSummary = m[1].trim().slice(0, 200); break; }
             }
-            console.log("[GFIN] Extracted: per=", data.fundamentals.per, "mcap=", data.fundamentals.marketCap, "sector=", data.sector);
+
+            data.industry = gExchange;
+            console.log("[GFIN]", symbol, "PE:", rawPE, "MCap:", rawMcap, "EPS:", rawEPS, "ROE:", rawROE, "Sector:", data.sector);
             data.fundSource = "google-finance";
           }
         } catch(ge) { console.log("[GFIN ERROR]", ge.message); }
