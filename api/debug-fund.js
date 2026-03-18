@@ -1,4 +1,4 @@
-// Debug: show wider HTML context around financial labels
+// Debug: extract ALL financial data from Google Finance
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const symbol = req.query.symbol || "AAPL";
@@ -16,42 +16,61 @@ export default async function handler(req, res) {
   }
   if (!gHtml) return res.status(200).json({ error: "No HTML" });
 
-  // Show 500 chars AFTER each label (to find value divs)
-  const labels = ["P/E ratio", "Market cap", "Dividend yield", "Avg volume", "Previous close"];
-  R.after = {};
-  for (const label of labels) {
-    const idx = gHtml.indexOf(label);
-    if (idx >= 0) {
-      // Skip past the tooltip div, find the value
-      R.after[label] = gHtml.slice(idx, idx + 600).replace(/\s+/g, " ");
+  // 1. All P6K39c values (key stats)
+  const p6Matches = [...gHtml.matchAll(/([^<>]{2,40})<\/div>[\s\S]{0,500}?class="P6K39c">([^<]+)/g)];
+  R.keyStats = p6Matches.map(m => ({ label: m[1].replace(/.*>/, "").trim(), value: m[2].trim() }));
+
+  // 2. Full financials table (all rows)
+  const tables = [...gHtml.matchAll(/<table class="slpEwd">([\s\S]*?)<\/table>/g)];
+  R.tables = [];
+  for (const tbl of tables) {
+    const html = tbl[1];
+    // Headers
+    const headers = [...html.matchAll(/<th class="yNnsfe[^"]*">([^<]+)/g)].map(m => m[1].trim());
+    // Rows
+    const rows = [...html.matchAll(/<tr class="roXhBd">([\s\S]*?)<\/tr>/g)];
+    const parsedRows = [];
+    for (const row of rows) {
+      const cells = [...row[1].matchAll(/<td[^>]*>[\s\S]*?<\/td>/g)];
+      const rowData = cells.map(c => {
+        // Get label from rsPbEe class or J9Jhg class
+        const labelMatch = c[0].match(/class="rsPbEe"[^>]*>([^<]+)/i) || c[0].match(/class="J9Jhg"[^>]*>([^<]+)/i);
+        // Get value from QXDnM class
+        const valMatch = c[0].match(/class="QXDnM">([^<]+)/i);
+        return labelMatch ? labelMatch[1].trim() : valMatch ? valMatch[1].trim() : null;
+      }).filter(Boolean);
+      if (rowData.length) parsedRows.push(rowData);
     }
+    R.tables.push({ headers, rows: parsedRows });
   }
 
-  // Find the key-value table structure (class patterns)
-  // Look for the financial stats section
-  const statsSection = gHtml.indexOf("P/E ratio");
-  if (statsSection > 0) {
-    // Go back to find the container start
-    const containerStart = gHtml.lastIndexOf("<div", statsSection - 200);
-    R.statsContainer = gHtml.slice(Math.max(0, containerStart), statsSection + 800).replace(/\s+/g, " ").slice(0, 1500);
-  }
+  // 3. Quarterly tabs - check if there are quarterly financials
+  const quarterlyCheck = gHtml.match(/data-has-quarterlies="true"/);
+  R.hasQuarterlies = !!quarterlyCheck;
 
-  // Revenue table
-  const revIdx = gHtml.indexOf("Revenue</div>");
-  if (revIdx > 0) {
-    R.revenueTable = gHtml.slice(revIdx, revIdx + 1500).replace(/\s+/g, " ");
-  }
+  // 4. All QXDnM values (financial numbers)
+  const qMatches = [...gHtml.matchAll(/class="rsPbEe"[^>]*>([^<]+)[\s\S]{0,600}?class="QXDnM">([^<]+)/g)];
+  R.allFinancialRows = qMatches.map(m => ({ label: m[1].trim(), value: m[2].trim() }));
 
-  // About section with description
-  const aboutIdx = gHtml.indexOf("bLLb2d");
-  if (aboutIdx > 0) {
-    R.aboutSection = gHtml.slice(aboutIdx, aboutIdx + 500).replace(/\s+/g, " ");
-  }
+  // 5. About section full text
+  const aboutMatches = [...gHtml.matchAll(/class="bLLb2d"[^>]*>([^<]+)/g)];
+  R.aboutTexts = aboutMatches.map(m => m[1].trim().slice(0, 300));
 
-  // Sector links
-  const sectorIdx = gHtml.indexOf("/finance/markets/sector");
-  if (sectorIdx > 0) {
-    R.sectorLink = gHtml.slice(Math.max(0, sectorIdx - 50), sectorIdx + 200).replace(/\s+/g, " ");
+  // 6. Sector links
+  const sectorLinks = [...gHtml.matchAll(/\/finance\/markets\/sector\/([^"?&]+)/g)];
+  R.sectorLinks = [...new Set(sectorLinks.map(m => decodeURIComponent(m[1]).replace(/_/g, " ")))];
+
+  // 7. Check for balance sheet / cash flow sections
+  R.hasBalanceSheet = gHtml.includes("Balance sheet");
+  R.hasCashFlow = gHtml.includes("Cash flow");
+
+  // 8. Wider financials section
+  const finStart = gHtml.indexOf("Financials</div>");
+  if (finStart > 0) {
+    const finSection = gHtml.slice(finStart, finStart + 5000);
+    // All table headers in financials section
+    const allHeaders = [...finSection.matchAll(/<th class="yNnsfe[^"]*">([^<]*(?:<[^>]*>[^<]*)*)/g)];
+    R.financialHeaders = allHeaders.map(m => m[1].replace(/<[^>]+>/g, "").trim()).filter(Boolean);
   }
 
   return res.status(200).json(R);
