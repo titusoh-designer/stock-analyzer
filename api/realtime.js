@@ -35,7 +35,10 @@ export default async function handler(req, res) {
       // ★ Current price: try multiple field names
       // During trading: dealPrice or tradePrice is current
       // After hours: closePrice is final close
-      price = +(json.dealPrice || json.tradePrice || json.currentPrice || json.nowVal || json.closePrice || 0);
+      const rawDealPrice = +(json.dealPrice || 0);
+      const rawTradePrice = +(json.tradePrice || 0);
+      const rawCurrentPrice = +(json.currentPrice || 0);
+      const rawClosePrice = +(json.closePrice || 0);
       prevClose = +(json.previousClosePrice || json.basePrice || json.prevPrice || 0);
       open = +(json.openPrice || 0);
       high = +(json.highPrice || 0);
@@ -43,12 +46,18 @@ export default async function handler(req, res) {
       volume = +(json.accumulatedTradingVolume || json.quant || 0);
       name = json.stockName || json.stockNameEng || null;
 
-      // If price equals prevClose and we have high/low that differ, 
-      // it means closePrice was the prev day close — use high/low midpoint as estimate
-      if (price === prevClose && high && low && high !== low) {
-        // closePrice is prev day — no real current price in this API during trading
-        // Don't use this value
-        price = null;
+      // Priority: dealPrice > tradePrice > currentPrice > closePrice
+      // dealPrice/tradePrice are real-time during trading hours
+      if (rawDealPrice > 0) price = rawDealPrice;
+      else if (rawTradePrice > 0) price = rawTradePrice;
+      else if (rawCurrentPrice > 0) price = rawCurrentPrice;
+      else if (rawClosePrice > 0) price = rawClosePrice;
+
+      // Only nullify price if market is CLOSED and we suspect stale data
+      // During market hours (9:00~15:30), trust whatever Naver returns
+      if (!marketOpen && price === prevClose && price > 0 && open === 0) {
+        // Market closed and no open price = likely prev day's close, which is fine for after-hours
+        // Keep the price as is (it's the last traded price)
       }
     }
   } catch(e) { rawData.method1_error = e.message; }
