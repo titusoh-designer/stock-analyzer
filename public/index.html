@@ -2741,38 +2741,39 @@ function renderScanEditList(){
   el.innerHTML=h;
 }
 
-function loadScanCache(){
+async function loadScanCache(){
   updateScanUI();restoreScanDays();
+  const timeEl=document.getElementById("scanTime");
+  // 1) Try server (shared across devices)
+  try{
+    const resp=await fetch("/api/scan-store");
+    const data=await resp.json();
+    // Show cron progress if running
+    if(data.cronInProgress){
+      timeEl.textContent=`자동 스캔 진행 중... ${data.cronProgress||""} (${data.cronAccumulated||0}건)`;
+    }
+    if(data.stored&&data.results&&data.results.length){
+      const result={results:data.results,scannedAt:data.scannedAt||new Date().toISOString(),totalScanned:data.totalScanned||data.results.length};
+      renderScanResults(result);
+      try{localStorage.setItem("scanResults",JSON.stringify(result));}catch(e){}
+      const src=data.source==="cron-6am"?"자동(6AM)":"수동";
+      timeEl.textContent=`${src} · ${new Date(data.scannedAt).toLocaleString("ko-KR")} · ${data.count||data.results.length}건${data.totalScanned?" / "+data.totalScanned+"종목":""}`;
+      return;
+    }
+  }catch(e){console.log("[SCAN] Server load failed, trying localStorage");}
+  // 2) Fallback to localStorage
   const cached=localStorage.getItem("scanResults");
   if(cached){
     try{
       const data=JSON.parse(cached);
-      if(data.scannedAt)renderScanResults(data);
+      if(data.scannedAt){renderScanResults(data);timeEl.textContent=`로컬 캐시 · ${new Date(data.scannedAt).toLocaleString("ko-KR")}`;}
     }catch(e){}
   }
-  checkAutoScan();
 }
 
 function checkAutoScan(){
-  const cached=localStorage.getItem("scanResults");
-  if(cached){
-    try{
-      const data=JSON.parse(cached);
-      const scanDate=new Date(data.scannedAt);
-      // Get today's 7AM KST (= 22:00 UTC previous day)
-      const now=new Date();
-      const kstNow=new Date(now.getTime()+9*3600*1000); // KST
-      const todayKST7am=new Date(kstNow);
-      todayKST7am.setHours(7,0,0,0);
-      const todayKST7amUTC=new Date(todayKST7am.getTime()-9*3600*1000);
-      // If scanned after today's 7AM KST → still fresh
-      if(scanDate>todayKST7amUTC)return;
-      // If it's before 7AM KST today → use yesterday's scan
-      if(kstNow.getHours()<7)return;
-    }catch(e){}
-  }
-  // No cache, or stale → auto scan
-  runScan();
+  // Auto-scan is now handled by server cron (6AM KST daily)
+  // Client only scans when user clicks "▶ 스캔"
 }
 
 async function runScan(){
@@ -2820,25 +2821,35 @@ async function runScan(){
 
     const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length};
 
-    // Try to save — if localStorage full, trim mini data
+    // Save to localStorage
     try{
       localStorage.setItem("scanResults",JSON.stringify(result));
     }catch(storageErr){
-      // Storage full — remove mini chart data to reduce size
       const slim={...result,results:allResults.map(r=>({...r,mini:null}))};
       try{localStorage.setItem("scanResults",JSON.stringify(slim));}
-      catch(e2){/* give up saving, just render */}
+      catch(e2){}
     }
+
+    // Save to server (shared across devices)
+    try{
+      await fetch("/api/scan-store",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          results:allResults,
+          source:"manual"
+        })
+      });
+    }catch(e){console.log("[SCAN] Server save failed");}
 
     renderScanResults(result);
   }catch(postErr){
     console.error("Post-scan error:",postErr);
-    // Still try to show whatever we have
     try{renderScanResults({results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length});}catch(e){}
   }
 
   prog.style.display="none";
-  btn.disabled=false;btn.textContent="🔍 스캔 시작";
+  btn.disabled=false;btn.textContent="▶ 스캔";
 }
 
 function miniChartSvg(mini,change,miniMA20,miniMA22){
@@ -2897,15 +2908,16 @@ function miniChartSvg(mini,change,miniMA20,miniMA22){
 }
 
 function filterScanResults(){
-  const cached=localStorage.getItem("scanResults");
-  if(!cached)return;
-  try{renderScanResults(JSON.parse(cached));}catch(e){}
+  // Try server first, then localStorage
+  loadScanCache();
 }
 function clearScanCache(){
   localStorage.removeItem("scanResults");
+  // Also clear server cache
+  fetch("/api/scan-store",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({results:[],source:"cleared"})}).catch(()=>{});
   document.getElementById("scanResults").innerHTML="";
   document.getElementById("scanEmpty").style.display="block";
-  document.getElementById("scanTime").textContent="캐시 삭제됨 — 다시 스캔하세요";
+  document.getElementById("scanTime").textContent="캐시 삭제됨";
 }
 
 function renderScanResults(data){
