@@ -1,18 +1,18 @@
 {
   "functions": {
-    "api/analyze.js": {
-      "maxDuration": 60
-    },
-    "api/scan.js": {
-      "maxDuration": 60
-    },
-    "api/realtime.js": {
-      "maxDuration": 10
-    },
-    "api/universe.js": {
-      "maxDuration": 30
-    }
+    "api/analyze.js": { "maxDuration": 60 },
+    "api/scan.js": { "maxDuration": 60 },
+    "api/scan-cron.js": { "maxDuration": 60 },
+    "api/scan-store.js": { "maxDuration": 10 },
+    "api/realtime.js": { "maxDuration": 10 },
+    "api/universe.js": { "maxDuration": 30 }
   },
+  "crons": [
+    {
+      "path": "/api/scan-cron",
+      "schedule": "0 21 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/(.*)", "destination": "/public/index.html" }
@@ -22,7 +22,8 @@
       "source": "/api/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" }
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
       ]
     }
   ]
