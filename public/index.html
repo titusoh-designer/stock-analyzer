@@ -1669,7 +1669,7 @@ function svgPatternChart(data,pat,cp,cur,idx){
   const dc=pat.direction==="bullish"?"#4ECCA3":pat.direction==="bearish"?"#E85D75":"#C9A96E";
   const fillC=pat.direction==="bullish"?"78,204,163":pat.direction==="bearish"?"232,93,117":"201,169,110";
   const cs=cur==="KRW"?"₩":"$";
-  const fm=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?(v/1000).toFixed(1)+"K":Number(v).toFixed(v<10?4:2);
+  const fm=v=>v>=1?Number(v).toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(v<0.01?6:v<1?4:2);
 
   // Price range — based on OHLCV data, NOT on AI targets (which can be wildly off)
   const ohlcPrices=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);
@@ -1858,7 +1858,7 @@ function svgPatternChart(data,pat,cp,cur,idx){
 
 // ═══════ CHART SVG ═══════
 function svgChart(data,cp,cur,ai,stockName){
-  const W=900,H=520,P={t:28,r:92,b:44,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
+  const W=900,H=640,P={t:28,r:92,b:80,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b-36;
   const aP=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);if(cp&&isFinite(cp))aP.push(cp);
   (ai?.supports||[]).forEach(s=>aP.push(s));(ai?.resistances||[]).forEach(r=>aP.push(r));
   (ai?.detectedPatterns||[]).forEach(p=>{if(p.targetUp)aP.push(p.targetUp);if(p.targetDown)aP.push(p.targetDown);});
@@ -1880,8 +1880,8 @@ function svgChart(data,cp,cur,ai,stockName){
   const mn=Math.min(...aP)*.994,mx=Math.max(...aP)*1.006;
   const tx=i=>P.l+(i/(data.length-1||1))*cw,ty=p=>P.t+(1-(p-mn)/(mx-mn||1))*ch;
   const bw=Math.max(1.5,Math.min(8,cw/data.length*.55)),cs=cur==="KRW"?"₩":"$";
-  const fm=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?(v/1000).toFixed(1)+"K":v.toFixed(v<10?4:2);
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:540px">`;
+  const fm=v=>v>=1?Number(v).toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(v<0.01?6:v<1?4:2);
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:660px">`;
 
   // Grid
   for(let i=0;i<=6;i++){const p=mn+(mx-mn)*(i/6);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".035"/><text x="${W-P.r+6}" y="${ty(p)+3.5}" fill="#555" font-size="8" font-family="DM Mono,monospace">${fm(p)}</text>`;}
@@ -1967,11 +1967,11 @@ function svgChart(data,cp,cur,ai,stockName){
 
       // Ichimoku legend
       s+=`<rect x="${P.l+4}" y="${H-30}" width="260" height="12" rx="3" fill="rgba(10,10,16,.7)"/>`;
-      s+=`<line x1="${P.l+8}" y1="${H-24}" x2="${P.l+18}" y2="${H-24}" stroke="#E85D75" stroke-width="1"/><text x="${P.l+22}" y="${H-22}" fill="#E85D75" font-size="6.5" font-family="DM Mono,monospace">전환</text>`;
-      s+=`<line x1="${P.l+48}" y1="${H-24}" x2="${P.l+58}" y2="${H-24}" stroke="#85C1E9" stroke-width="1"/><text x="${P.l+62}" y="${H-22}" fill="#85C1E9" font-size="6.5" font-family="DM Mono,monospace">기준</text>`;
-      s+=`<line x1="${P.l+88}" y1="${H-24}" x2="${P.l+98}" y2="${H-24}" stroke="#7DCEA0" stroke-width=".8" stroke-dasharray="3,2"/><text x="${P.l+102}" y="${H-22}" fill="#7DCEA0" font-size="6.5" font-family="DM Mono,monospace">후행</text>`;
-      s+=`<rect x="${P.l+132}" y="${H-28}" width="20" height="6" rx="2" fill="rgba(78,204,163,.2)"/><text x="${P.l+156}" y="${H-22}" fill="#4ECCA3" font-size="6.5" font-family="DM Mono,monospace">양운</text>`;
-      s+=`<rect x="${P.l+178}" y="${H-28}" width="20" height="6" rx="2" fill="rgba(232,93,117,.2)"/><text x="${P.l+202}" y="${H-22}" fill="#E85D75" font-size="6.5" font-family="DM Mono,monospace">음운</text>`;
+      s+=`<line x1="${W-P.r-220}" y1="${H-72+3}" x2="${W-P.r-210}" y2="${H-72+3}" stroke="#E85D75" stroke-width="1"/><text x="${W-P.r-206}" y="${H-72+5}" fill="#E85D75" font-size="6" font-family="DM Mono,monospace" opacity=".6">전환</text>`;
+      s+=`<line x1="${W-P.r-180}" y1="${H-72+3}" x2="${W-P.r-170}" y2="${H-72+3}" stroke="#85C1E9" stroke-width="1"/><text x="${W-P.r-166}" y="${H-72+5}" fill="#85C1E9" font-size="6" font-family="DM Mono,monospace" opacity=".6">기준</text>`;
+      s+=`<line x1="${W-P.r-140}" y1="${H-72+3}" x2="${W-P.r-130}" y2="${H-72+3}" stroke="#7DCEA0" stroke-width=".8" stroke-dasharray="3,2"/><text x="${W-P.r-126}" y="${H-72+5}" fill="#7DCEA0" font-size="6" font-family="DM Mono,monospace" opacity=".6">후행</text>`;
+      s+=`<rect x="${W-P.r-102}" y="${H-72}" width="12" height="5" rx="1.5" fill="rgba(78,204,163,.2)"/><text x="${W-P.r-86}" y="${H-72+5}" fill="#4ECCA3" font-size="6" font-family="DM Mono,monospace" opacity=".6">양운</text>`;
+      s+=`<rect x="${W-P.r-62}" y="${H-72}" width="12" height="5" rx="1.5" fill="rgba(232,93,117,.2)"/><text x="${W-P.r-46}" y="${H-72+5}" fill="#E85D75" font-size="6" font-family="DM Mono,monospace" opacity=".6">음운</text>`;
     }
   }
 
@@ -2059,6 +2059,31 @@ function svgChart(data,cp,cur,ai,stockName){
 
   // Candles (main)
   data.forEach((d,i)=>{if(!d.close||!d.open)return;const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75",bt=ty(Math.max(d.open,d.close)),bb=ty(Math.min(d.open,d.close));if(!isFinite(bt)||!isFinite(bb))return;s+=`<line x1="${x}" y1="${ty(d.high)}" x2="${x}" y2="${ty(d.low)}" stroke="${cl}" stroke-width="1" opacity=".7"/><rect x="${x-bw/2}" y="${bt}" width="${bw}" height="${Math.max(bb-bt,1)}" fill="${cl}" rx=".5" opacity=".85"/>`;});
+
+  // ═══ Volume Bars ═══
+  {
+    const volTop=P.t+ch+6,volH=30;
+    const vols=data.map(d=>d.volume||0);
+    const maxVol=Math.max(...vols)||1;
+    // Separator line
+    s+=`<line x1="${P.l}" y1="${volTop-2}" x2="${W-P.r}" y2="${volTop-2}" stroke="#ffffff" stroke-opacity=".04"/>`;
+    s+=`<text x="${P.l+2}" y="${volTop+7}" fill="#555" font-size="6" font-family="DM Mono,monospace">VOL</text>`;
+    // Volume MA20
+    const volMA=[];
+    for(let i=0;i<vols.length;i++){volMA.push(i>=19?vols.slice(i-19,i+1).reduce((a,b)=>a+b,0)/20:null);}
+    data.forEach((d,i)=>{
+      const v=vols[i];if(!v)return;
+      const x=tx(i),bl=d.close>=d.open,cl=bl?"#4ECCA3":"#E85D75";
+      const barH=Math.max(1,(v/maxVol)*volH);
+      s+=`<rect x="${x-bw/2}" y="${volTop+volH-barH}" width="${bw}" height="${barH}" fill="${cl}" opacity=".4" rx=".5"/>`;
+    });
+    // Volume MA line
+    const vmPts=volMA.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${(volTop+volH-(v/maxVol)*volH).toFixed(1)}`:null).filter(Boolean);
+    if(vmPts.length>1)s+=`<polyline points="${vmPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1" opacity=".4"/>`;
+    // Max volume label
+    const fmVol=v=>v>=1e9?(v/1e9).toFixed(1)+"B":v>=1e6?(v/1e6).toFixed(1)+"M":v>=1e3?(v/1e3).toFixed(0)+"K":v.toString();
+    s+=`<text x="${W-P.r+6}" y="${volTop+8}" fill="#555" font-size="6.5" font-family="DM Mono,monospace">${fmVol(maxVol)}</text>`;
+  }
 
   // ★★★ BUY/SELL SIGNAL SYSTEM ★★★
   if(data.length>=26){
@@ -2223,12 +2248,26 @@ function svgChart(data,cp,cur,ai,stockName){
       s+=`<text x="${x}" y="${y+(sz==="huge"?66:sz==="large"?58:42)}" fill="${col}" font-size="6" font-family="DM Mono,monospace" text-anchor="middle" opacity=".7">${sig.buys.join("+")}</text>`;
     });
 
-    // Signal legend
-    s+=`<text x="${P.l+4}" y="${H-16}" fill="#888" font-size="7" font-family="DM Mono,monospace" opacity=".5">⬆3과반(3/5) ⬆4강한(4/5) ⬆5최강(5/5) ◆강한상승예상 | M.A S.T DMI B.B I.M</text>`;
-    // Sentiment legend
-    s+=`<rect x="${W-P.r-280}" y="${H-24}" width="14" height="7" rx="2" fill="rgba(232,93,117,.12)"/><text x="${W-P.r-264}" y="${H-18}" fill="#666" font-size="6" font-family="DM Mono,monospace">공포</text>`;
-    s+=`<rect x="${W-P.r-240}" y="${H-24}" width="14" height="7" rx="2" fill="rgba(78,204,163,.12)"/><text x="${W-P.r-224}" y="${H-18}" fill="#666" font-size="6" font-family="DM Mono,monospace">욕망</text>`;
-    s+=`<rect x="${W-P.r-200}" y="${H-24}" width="14" height="7" rx="2" fill="transparent" stroke="#33333380"/><text x="${W-P.r-184}" y="${H-18}" fill="#666" font-size="6" font-family="DM Mono,monospace">중립</text>`;
+    // Signal + Sentiment legend (detailed)
+    const ly=H-72; // legend y start
+    // Signal section
+    s+=`<text x="${P.l+4}" y="${ly}" fill="#C9A96E" font-size="6.5" font-weight="600" font-family="DM Mono,monospace" opacity=".7">상승 시그널</text>`;
+    s+=`<text x="${P.l+4}" y="${ly+10}" fill="#90EE90" font-size="6" font-family="DM Mono,monospace" opacity=".5">⬆3 과반(3/5)</text>`;
+    s+=`<text x="${P.l+70}" y="${ly+10}" fill="#4ECCA3" font-size="6" font-family="DM Mono,monospace" opacity=".5">⬆4 강한(4/5)</text>`;
+    s+=`<text x="${P.l+136}" y="${ly+10}" fill="#1B7A43" font-size="6" font-family="DM Mono,monospace" opacity=".5">⬆5 최강(5/5)</text>`;
+    s+=`<text x="${P.l+202}" y="${ly+10}" fill="#C9A96E" font-size="6" font-family="DM Mono,monospace" opacity=".5">◆ 강한상승예상</text>`;
+    // Indicator descriptions
+    s+=`<text x="${P.l+4}" y="${ly+20}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">M.A=MACD상향돌파 S.T=Supertrend전환 DMI=+DI돌파 B.B=BB중심선돌파 I.M=일목구름돌파</text>`;
+    s+=`<text x="${P.l+4}" y="${ly+29}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">◆조건: BB스퀴즈(하위20%) + ATR감소 + 고저수렴 + 거래량1.5x↑ + 양봉 (5조건 동시)</text>`;
+    // Sentiment section
+    s+=`<text x="${P.l+4}" y="${ly+42}" fill="#C9A96E" font-size="6.5" font-weight="600" font-family="DM Mono,monospace" opacity=".7">심리지수</text>`;
+    s+=`<rect x="${P.l+50}" y="${ly+36}" width="10" height="6" rx="1.5" fill="rgba(232,93,117,.15)"/>`;
+    s+=`<text x="${P.l+63}" y="${ly+42}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">공포(0~40)</text>`;
+    s+=`<rect x="${P.l+110}" y="${ly+36}" width="10" height="6" rx="1.5" fill="transparent" stroke="#33333380" stroke-width=".5"/>`;
+    s+=`<text x="${P.l+123}" y="${ly+42}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">중립(40~60)</text>`;
+    s+=`<rect x="${P.l+175}" y="${ly+36}" width="10" height="6" rx="1.5" fill="rgba(78,204,163,.15)"/>`;
+    s+=`<text x="${P.l+188}" y="${ly+42}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">욕망(60~100)</text>`;
+    s+=`<text x="${P.l+4}" y="${ly+52}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">산출: RSI(14) + BB위치 + MA20이격도 + 거래량비율 + ATR변동성 → 5-bar SMA 스무딩</text>`;
 
     // ═══════ 상승예상신호 시스템 ═══════
     if(data.length>=30){
