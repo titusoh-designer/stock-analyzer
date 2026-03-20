@@ -2995,7 +2995,7 @@ function renderScanResults(data){
       qHtml+=`</table>`;
     }
 
-    return`<div class="card" style="border-left:3px solid ${borderCol};padding:14px;margin-bottom:10px;cursor:pointer" onclick="switchTab('analyze');document.getElementById('symInput').value='${safeName} (${r.symbol})';selSym={symbol:'${r.symbol}',source:'${r.source}',name:'${safeName}'};setSrc('${r.source}');fetchData();">
+    return`<div class="card" style="border-left:3px solid ${borderCol};padding:14px;margin-bottom:8px;cursor:pointer" onclick="window.open(location.origin+'?s=${encodeURIComponent(r.symbol)}&src=${r.source}','_blank')">>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
           <div style="min-width:0">
@@ -3332,6 +3332,21 @@ function renderPatterns(){
 
 // Init
 renderWatchlist();
+
+// Auto-load from URL params (?s=005930&src=naver)
+(function(){
+  const params=new URLSearchParams(location.search);
+  const sym=params.get("s"),sr=params.get("src");
+  if(sym){
+    switchTab("analyze");
+    document.getElementById("symInput").value=sym;
+    selSym={symbol:sym,source:sr||"yahoo",name:sym};
+    if(sr)setSrc(sr);
+    fetchData();
+    // Clean URL without reload
+    history.replaceState(null,"",location.pathname);
+  }
+})();
 </script>
 </body>
 </html>
