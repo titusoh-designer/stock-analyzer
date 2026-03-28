@@ -707,9 +707,12 @@ async function fetchData(){
           last.low=Math.min(origLast.low,r.price);
           if(tf==="1d"&&r.volume&&r.volume>origLast.volume)last.volume=r.volume;
           curData.currentPrice=r.price;
-          const d=curData.ohlcv.slice(viewStart,viewEnd);
-          const chartEl=document.getElementById("mainChartWrap");
-          if(chartEl)chartEl.innerHTML=svgChart(d,r.price,curData.currency,window._lastAI,curSym.name);
+          // Only re-render chart if user is viewing latest data (not scrolled to past)
+          if(viewEnd>=curData.ohlcv.length){
+            const d=curData.ohlcv.slice(viewStart,viewEnd);
+            const chartEl=document.getElementById("mainChartWrap");
+            if(chartEl)chartEl.innerHTML=svgChart(d,r.price,curData.currency,window._lastAI,curSym.name);
+          }
           const prev=curData.previousClose||origLast.close;
           const chg=prev?((r.price-prev)/prev*100).toFixed(2):0;
           const cc=chg>=0?"#4ECCA3":"#E85D75";
@@ -1550,7 +1553,8 @@ function render(data,ai){
     // Lightweight chart-only update (skips full render)
     function updateChartView(){
       const d=curData.ohlcv.slice(viewStart,viewEnd);
-      const cp2=curData.currentPrice||d[d.length-1]?.close||0;
+      const isLatest=viewEnd>=curData.ohlcv.length; // 최신 봉이 보이는 중인가
+      const cp2=isLatest?(curData.currentPrice||d[d.length-1]?.close||0):(d[d.length-1]?.close||0);
       const stockFullName2=curData.name||curSym?.name||curData.symbol;
       const stockCode2=curData.symbol||curSym?.symbol||"";
       const stockLabel2=stockFullName2!==stockCode2?`${stockFullName2} (${stockCode2})`:stockFullName2;
