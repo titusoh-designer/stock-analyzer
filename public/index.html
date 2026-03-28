@@ -3810,212 +3810,97 @@ renderWatchlist();
   }
 })();
 
-// ═══════ SENTIMENT DASHBOARD ═══════
-const SENT_DATA={
-  fearGreed:62,label:"탐욕",
-  vix:16.8,vixCh:-1.2,vvix:82.3,
-  futures:[
-    {n:"KOSPI 선물",v:"369.25",ch:0.8},
-    {n:"KOSPI 야간선물",v:"368.50",ch:-0.3,hl:true},
-    {n:"S&P500 선물",v:"5,248",ch:0.4},
-    {n:"나스닥100 선물",v:"18,320",ch:0.7}
-  ],
-  macro:[
-    {n:"USD/KRW",v:"1,348",ch:-0.2},
-    {n:"WTI",v:"$78.42",ch:1.3},
-    {n:"금",v:"$2,178",ch:0.4},
-    {n:"미국10Y",v:"4.21%",ch:0.02}
-  ],
-  indices:[
-    {n:"KOSPI",v:"2,687",ch:1.2},
-    {n:"S&P500",v:"5,234",ch:0.6},
-    {n:"NASDAQ",v:"16,428",ch:1.1},
-    {n:"BTC",v:"$87,200",ch:2.1}
-  ],
-  sectorsUS:[
-    {name:"Tech",ch:2.1,info:"AI사이클 | NVDA, MSFT"},
-    {name:"Health",ch:-0.3,info:"약가규제 | UNH, JNJ"},
-    {name:"Energy",ch:1.5,info:"OPEC+ | XOM, CVX"},
-    {name:"Finance",ch:0.8,info:"금리 | JPM, BAC"},
-    {name:"Consumer",ch:-0.5,info:"소비둔화 | AMZN"}
-  ],
-  sectorsKR:[
-    {name:"반도체",ch:2.8,info:"HBM | 삼성,SK하이닉스"},
-    {name:"2차전지",ch:-1.2,info:"EV둔화 | LG에너지"},
-    {name:"조선",ch:3.2,info:"LNG선 | HD한국조선"},
-    {name:"바이오",ch:0.6,info:"신약파이프라인"},
-    {name:"전력기기",ch:4.1,info:"AI전력 | HD현대일렉"}
-  ],
-  eco:[
-    {n:"CPI",d:"3/12",prev:"3.1%",fc:"2.9%",act:"2.8%",good:true,desc:"소비자물가지수. 예상보다 낮으면 금리인하 기대 ↑"},
-    {n:"FOMC",d:"3/20",prev:"5.50%",fc:"5.50%",act:"5.50%",good:true,desc:"연준 금리 결정. 동결 → 시장 안도"},
-    {n:"고용",d:"3/7",prev:"227K",fc:"200K",act:"275K",good:false,desc:"비농업고용. 예상 상회 → 금리인하 지연 우려"},
-    {n:"PCE",d:"3/29",prev:"2.8%",fc:"2.7%",act:"—",good:null,desc:"개인소비지출물가. 연준 선호 인플레 지표"}
-  ],
-  news:[
-    {t:"연준 금리 동결 시사, 6월 인하 기대 유지",s:"긍정",time:"2h"},
-    {t:"삼성전자 HBM3E 양산 돌입, 실적 상향",s:"긍정",time:"4h"},
-    {t:"중국 경기둔화 지표, 수출주 경계",s:"부정",time:"6h"},
-    {t:"NVDA AI 컨퍼런스 신제품 발표 예정",s:"긍정",time:"8h"},
-    {t:"유럽 통상마찰 확대 우려",s:"부정",time:"12h"}
-  ]
-};
+// ═══════ SENTIMENT DASHBOARD (Live API + Demo Fallback) ═══════
+const SENT_DEMO={fearGreed:50,label:"중립",vix:18,vixCh:0,vvix:80,futures:[{n:"KOSPI200",v:"—",ch:0},{n:"KOSPI 야간선물",v:"—",ch:0,hl:true},{n:"S&P500 선물",v:"—",ch:0},{n:"나스닥100 선물",v:"—",ch:0}],macro:[{n:"USD/KRW",v:"—",ch:0},{n:"WTI",v:"—",ch:0},{n:"금",v:"—",ch:0},{n:"미국10Y",v:"—",ch:0}],indices:[{n:"KOSPI",v:"—",ch:0},{n:"S&P500",v:"—",ch:0},{n:"NASDAQ",v:"—",ch:0},{n:"BTC",v:"—",ch:0}],sectorsUS:[],sectorsKR:[],eco:[{n:"—",d:"—",prev:"—",fc:"—",act:"—",good:null,desc:"API 연동 필요"}],news:[{t:"데이터 로드 실패",s:"중립",time:"—"}]};
 
-function renderSentiment(){
-  const el=document.getElementById("sentBody");
-  if(!el)return;
-  const d=SENT_DATA;
-  const pf2=n=>(n>=0?"+":"")+n.toFixed(1)+"%";
+let _sentCache=null;
+async function renderSentiment(){
+  const el=document.getElementById("sentBody");if(!el)return;
+  el.innerHTML=`<div style="text-align:center;padding:40px 0"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p class="noto" style="color:#666;font-size:11px;margin-top:10px">시장 데이터를 불러오는 중...</p></div>`;
+
+  let d=null,isLive=false;
+  // Try live API
+  if(!_sentCache){
+    try{
+      const resp=await fetch("/api/sentiment");
+      const json=await resp.json();
+      if(json&&json.fearGreed!=null&&!json.error){_sentCache=json;isLive=true;}
+    }catch(e){console.log("[SENT] API fetch failed, using demo");}
+  }else{isLive=_sentCache.source==="live";}
+  d=_sentCache||SENT_DEMO;
+  if(!d.futures)d.futures=SENT_DEMO.futures;
+  if(!d.macro)d.macro=SENT_DEMO.macro;
+  if(!d.indices)d.indices=SENT_DEMO.indices;
+  if(!d.eco||!d.eco.length)d.eco=SENT_DEMO.eco;
+  if(!d.news||!d.news.length)d.news=SENT_DEMO.news;
+  if(!d.sectorsUS)d.sectorsUS=[];
+  if(!d.sectorsKR)d.sectorsKR=[];
+
+  const pf2=n=>(n>=0?"+":"")+Number(n).toFixed(1)+"%";
   const chCol=n=>n>=0?"#4ECCA3":"#E85D75";
-  const ts=new Date().toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
-  document.getElementById("sentTime").textContent="갱신: "+ts;
+  const ts=d.timestamp?new Date(d.timestamp).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):new Date().toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
+  const timeEl=document.getElementById("sentTime");
+  if(timeEl)timeEl.textContent="갱신: "+ts;
 
-  // Fear & Greed Gauge SVG
-  const fv=d.fearGreed/100;
+  const srcBadge=isLive
+    ?`<span class="mono" style="font-size:7px;padding:2px 8px;border-radius:3px;background:rgba(78,204,163,.12);border:1px solid rgba(78,204,163,.25);color:#4ECCA3;font-weight:700">LIVE</span>`
+    :`<span class="mono" style="font-size:7px;padding:2px 8px;border-radius:3px;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.25);color:#eab308;font-weight:700">DEMO</span>`;
+
+  // Fear & Greed
+  const fv=(d.fearGreed||50)/100;
   const fc=d.fearGreed>75?"#E85D75":d.fearGreed>55?"#C9A96E":d.fearGreed>40?"#4ECCA3":"#3b82f6";
-  const fgSvg=`<svg viewBox="0 0 160 100" style="width:120px;display:block;margin:0 auto">
-    <defs><linearGradient id="fgg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3b82f6"/><stop offset="33%" stop-color="#4ECCA3"/><stop offset="66%" stop-color="#C9A96E"/><stop offset="100%" stop-color="#E85D75"/></linearGradient></defs>
-    <path d="M 10 85 A 70 70 0 0 1 150 85" fill="none" stroke="#1a1a28" stroke-width="10" stroke-linecap="round"/>
-    <path d="M 10 85 A 70 70 0 0 1 150 85" fill="none" stroke="url(#fgg)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${fv*220} 220"/>
-    <line x1="80" y1="85" x2="${10+fv*140}" y2="${85-Math.sin(Math.PI*fv)*55}" stroke="${fc}" stroke-width="2"/>
-    <circle cx="80" cy="85" r="3" fill="${fc}"/>
-  </svg>`;
+  const fgSvg=`<svg viewBox="0 0 160 100" style="width:120px;display:block;margin:0 auto"><defs><linearGradient id="fgg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3b82f6"/><stop offset="33%" stop-color="#4ECCA3"/><stop offset="66%" stop-color="#C9A96E"/><stop offset="100%" stop-color="#E85D75"/></linearGradient></defs><path d="M 10 85 A 70 70 0 0 1 150 85" fill="none" stroke="#1a1a28" stroke-width="10" stroke-linecap="round"/><path d="M 10 85 A 70 70 0 0 1 150 85" fill="none" stroke="url(#fgg)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${fv*220} 220"/><line x1="80" y1="85" x2="${10+fv*140}" y2="${85-Math.sin(Math.PI*fv)*55}" stroke="${fc}" stroke-width="2"/><circle cx="80" cy="85" r="3" fill="${fc}"/></svg>`;
+
+  // Scan summary widget
+  const scanW=d.scanSummary?`<div style="margin-top:6px;padding:6px 8px;background:#0a0a14;border-radius:5px;border:1px solid #16162a"><div style="font-size:7.5px;color:#555">시장 온도 (스캐너)</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono" style="font-size:14px;font-weight:800;color:${d.scanSummary.signalRate>10?"#4ECCA3":d.scanSummary.signalRate>5?"#C9A96E":"#E85D75"}">${d.scanSummary.signalRate}%</span><span style="font-size:8px;color:#777">${d.scanSummary.signalCount}/${d.scanSummary.totalScanned}종목</span></div><div style="font-size:8px;color:#555;margin-top:2px">${d.scanSummary.label}</div></div>`:"";
 
   let h=`
-  <!-- Row 1: Fear&Greed + VIX + Futures/Macro -->
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+    ${srcBadge}
+    <span class="mono" style="font-size:8px;color:#555">${isLive?"실시간 데이터":"데모 데이터"}</span>
+    <button onclick="_sentCache=null;renderSentiment()" class="pill" style="margin-left:auto;font-size:8px;padding:2px 8px">↻ 새로고침</button>
+  </div>
   <div class="st-grid st-grid-3">
     <div class="st-card" style="text-align:center;background:linear-gradient(180deg,#0c0c16,#060610)">
       <div class="st-card-t">FEAR & GREED INDEX</div>
       ${fgSvg}
       <div class="mono" style="font-size:28px;font-weight:800;color:${fc};margin-top:4px">${d.fearGreed}</div>
       <div style="font-size:11px;color:${fc};font-weight:600">${d.label}</div>
-      <div style="height:4px;background:#1a1a28;border-radius:2px;margin-top:8px;position:relative">
-        <div style="height:100%;width:100%;border-radius:2px;background:linear-gradient(90deg,#3b82f6,#4ECCA3,#C9A96E,#E85D75)"></div>
-        <div style="position:absolute;top:-3px;left:${d.fearGreed}%;width:2px;height:10px;background:#F0ECE3;border-radius:1px"></div>
-      </div>
+      <div style="height:4px;background:#1a1a28;border-radius:2px;margin-top:8px;position:relative"><div style="height:100%;width:100%;border-radius:2px;background:linear-gradient(90deg,#3b82f6,#4ECCA3,#C9A96E,#E85D75)"></div><div style="position:absolute;top:-3px;left:${d.fearGreed}%;width:2px;height:10px;background:#F0ECE3;border-radius:1px"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:7px;color:#555;margin-top:3px"><span>극공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극탐욕</span></div>
+      ${scanW}
     </div>
-
     <div class="st-card">
-      <div>
-        <div class="st-card-t">VIX (공포지수)</div>
-        <div class="mono" style="font-size:22px;font-weight:800;color:${d.vix<20?"#4ECCA3":"#C9A96E"}">${d.vix}</div>
-        <div class="mono" style="font-size:10px;color:${d.vixCh<0?"#4ECCA3":"#E85D75"}">▼ ${Math.abs(d.vixCh)}</div>
-        <div style="font-size:8px;color:#555;margin-top:4px">${d.vix<15?"매우 낙관":d.vix<20?"안정적":d.vix<30?"경계":"패닉"}</div>
-      </div>
-      <div style="border-top:1px solid #16162a;padding-top:10px;margin-top:10px">
-        <div class="st-card-t">VVIX (VIX의 변동성)</div>
-        <div class="mono" style="font-size:16px;font-weight:700;color:#F0ECE3">${d.vvix}</div>
-        <div style="font-size:8px;color:#555;margin-top:2px">${d.vvix<80?"안정":"변동성 확대 주의"}</div>
-      </div>
+      <div><div class="st-card-t">VIX (공포지수)</div><div class="mono" style="font-size:22px;font-weight:800;color:${d.vix<20?"#4ECCA3":"#C9A96E"}">${d.vix||"—"}</div><div class="mono" style="font-size:10px;color:${d.vixCh<0?"#4ECCA3":"#E85D75"}">${d.vixCh<0?"▼":"▲"} ${Math.abs(d.vixCh||0).toFixed(1)}%</div><div style="font-size:8px;color:#555;margin-top:4px">${d.vix<15?"매우 낙관":d.vix<20?"안정적":d.vix<30?"경계":"패닉"}</div></div>
+      <div style="border-top:1px solid #16162a;padding-top:10px;margin-top:10px"><div class="st-card-t">VVIX (VIX의 변동성)</div><div class="mono" style="font-size:16px;font-weight:700;color:#F0ECE3">${d.vvix||"—"}</div><div style="font-size:8px;color:#555;margin-top:2px">${d.vvix&&d.vvix<80?"안정":"변동성 확대 주의"}</div></div>
     </div>
-
     <div class="st-card">
       <div class="st-card-t">선물 · 환율 · 원자재</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-        ${[...d.futures,...d.macro].map(f=>`
-          <div style="padding:5px 7px;background:${f.hl?"rgba(234,179,8,.04)":"#0a0a14"};border-radius:5px;border:1px solid ${f.hl?"rgba(234,179,8,.15)":"#12121e"}">
-            <div style="font-size:7.5px;color:${f.hl?"#eab308":"#555"}">${f.n}</div>
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2px">
-              <span class="mono" style="font-size:11px;font-weight:700;color:#F0ECE3">${f.v}</span>
-              <span class="mono" style="font-size:9px;font-weight:600;color:${chCol(f.ch)}">${pf2(f.ch)}</span>
-            </div>
-          </div>
-        `).join("")}
+        ${[...(d.futures||[]),...(d.macro||[])].map(f=>`<div style="padding:5px 7px;background:${f.hl?"rgba(234,179,8,.04)":"#0a0a14"};border-radius:5px;border:1px solid ${f.hl?"rgba(234,179,8,.15)":"#12121e"}"><div style="font-size:7.5px;color:${f.hl?"#eab308":"#555"}">${f.n}</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2px"><span class="mono" style="font-size:11px;font-weight:700;color:#F0ECE3">${f.v||"—"}</span><span class="mono" style="font-size:9px;font-weight:600;color:${chCol(f.ch||0)}">${pf2(f.ch||0)}</span></div></div>`).join("")}
       </div>
     </div>
   </div>
-
-  <!-- Row 2: Indices + US Sectors + KR Sectors -->
   <div class="st-grid st-grid-33">
-    <div class="st-card">
-      <div class="st-card-t">주요 지수</div>
-      ${d.indices.map(x=>`
-        <div class="st-row">
-          <span class="k">${x.n}</span>
-          <span class="v" style="color:${chCol(x.ch)}">${x.v} <span style="font-size:8px">${pf2(x.ch)}</span></span>
-        </div>
-      `).join("")}
-    </div>
-
-    <div class="st-card">
-      <div class="st-card-t">🇺🇸 미국 섹터</div>
-      ${d.sectorsUS.map(s=>`
-        <div class="st-row" style="cursor:help" title="${s.info}">
-          <span class="k">${s.name}</span>
-          <span class="v" style="color:${chCol(s.ch)}">${pf2(s.ch)}</span>
-        </div>
-      `).join("")}
-    </div>
-
-    <div class="st-card">
-      <div class="st-card-t">🇰🇷 한국 섹터</div>
-      ${d.sectorsKR.map(s=>`
-        <div class="st-row" style="cursor:help" title="${s.info}">
-          <span class="k">${s.name}</span>
-          <span class="v" style="color:${chCol(s.ch)}">${pf2(s.ch)}</span>
-        </div>
-      `).join("")}
-    </div>
+    <div class="st-card"><div class="st-card-t">주요 지수</div>${(d.indices||[]).map(x=>`<div class="st-row"><span class="k">${x.n}</span><span class="v" style="color:${chCol(x.ch||0)}">${x.v||"—"} <span style="font-size:8px">${pf2(x.ch||0)}</span></span></div>`).join("")}</div>
+    <div class="st-card"><div class="st-card-t">🇺🇸 미국 섹터</div>${d.sectorsUS.length?d.sectorsUS.map(s=>`<div class="st-row" style="cursor:help" title="${s.info||""}"><span class="k">${s.name}</span><span class="v" style="color:${chCol(s.ch||0)}">${pf2(s.ch||0)}</span></div>`).join(""):`<div style="font-size:9px;color:#555;padding:8px 0">데이터 로딩 중...</div>`}</div>
+    <div class="st-card"><div class="st-card-t">🇰🇷 한국 섹터</div>${d.sectorsKR.length?d.sectorsKR.map(s=>`<div class="st-row" style="cursor:help" title="${s.info||""}"><span class="k">${s.name}</span><span class="v" style="color:${chCol(s.ch||0)}">${pf2(s.ch||0)}</span></div>`).join(""):`<div style="font-size:9px;color:#555;padding:8px 0">KRX 업종지수 API 연동 예정</div>`}</div>
   </div>
-
-  <!-- Row 3: Economic Calendar + News -->
   <div class="st-grid st-grid-23">
     <div class="st-card" style="padding:0;overflow:hidden">
-      <div style="padding:8px 12px;border-bottom:1px solid #16162a;display:flex;align-items:center;gap:5px">
-        <span style="color:#3b82f6;font-size:11px">◆</span>
-        <span style="font-size:11px;font-weight:600;color:#F0ECE3">미국 경제지표 캘린더</span>
-      </div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="border-bottom:1px solid #16162a">
-          ${["지표","날짜","이전","예상","발표",""].map(h2=>`<th style="padding:6px 7px;text-align:${h2==="지표"||h2===""?"left":"center"};color:#555;font-size:8px;font-family:'DM Mono',monospace">${h2}</th>`).join("")}
-        </tr></thead>
-        <tbody>${d.eco.map(e=>`
-          <tr style="border-bottom:1px solid #0e0e18" title="${e.desc}">
-            <td style="padding:6px 7px;color:#F0ECE3;font-size:10px;font-weight:600">${e.n}</td>
-            <td style="padding:6px 7px;color:#555;font-size:9px;font-family:'DM Mono',monospace;text-align:center">${e.d}</td>
-            <td style="padding:6px 7px;text-align:center;color:#777;font-size:9px;font-family:'DM Mono',monospace">${e.prev}</td>
-            <td style="padding:6px 7px;text-align:center;color:#777;font-size:9px;font-family:'DM Mono',monospace">${e.fc}</td>
-            <td style="padding:6px 7px;text-align:center;font-weight:700;font-family:'DM Mono',monospace;font-size:9px;color:${e.good===true?"#4ECCA3":e.good===false?"#E85D75":"#777"}">${e.act}</td>
-            <td style="padding:6px 7px"><span style="color:#555;font-size:8px;cursor:help" title="${e.desc}">ⓘ</span></td>
-          </tr>
-        `).join("")}</tbody>
-      </table>
+      <div style="padding:8px 12px;border-bottom:1px solid #16162a;display:flex;align-items:center;gap:5px"><span style="color:#3b82f6;font-size:11px">◆</span><span style="font-size:11px;font-weight:600;color:#F0ECE3">미국 경제지표</span></div>
+      <table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid #16162a">${["지표","날짜","이전","예상","발표",""].map(h2=>`<th style="padding:6px 7px;text-align:${h2==="지표"||h2===""?"left":"center"};color:#555;font-size:8px;font-family:'DM Mono',monospace">${h2}</th>`).join("")}</tr></thead>
+      <tbody>${(d.eco||[]).map(e=>`<tr style="border-bottom:1px solid #0e0e18" title="${e.desc||""}"><td style="padding:6px 7px;color:#F0ECE3;font-size:10px;font-weight:600">${e.n}</td><td style="padding:6px 7px;color:#555;font-size:9px;font-family:'DM Mono',monospace;text-align:center">${e.d}</td><td style="padding:6px 7px;text-align:center;color:#777;font-size:9px;font-family:'DM Mono',monospace">${e.prev}</td><td style="padding:6px 7px;text-align:center;color:#777;font-size:9px;font-family:'DM Mono',monospace">${e.fc}</td><td style="padding:6px 7px;text-align:center;font-weight:700;font-family:'DM Mono',monospace;font-size:9px;color:${e.good===true?"#4ECCA3":e.good===false?"#E85D75":"#777"}">${e.act}</td><td style="padding:6px 7px"><span style="color:#555;font-size:8px;cursor:help" title="${e.desc||""}">ⓘ</span></td></tr>`).join("")}</tbody></table>
     </div>
-
     <div class="st-card">
-      <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px">
-        <span style="color:#C9A96E;font-size:11px">⚡</span>
-        <span style="font-size:11px;font-weight:600;color:#F0ECE3">주요 뉴스</span>
-      </div>
-      ${d.news.map(n=>`
-        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start">
-          <div style="width:5px;height:5px;border-radius:50%;margin-top:5px;flex-shrink:0;background:${n.s==="긍정"?"#4ECCA3":"#E85D75"}"></div>
-          <div style="flex:1">
-            <div style="color:#ccc;font-size:10px;line-height:1.5">${n.t}</div>
-            <div style="margin-top:3px">
-              <span class="st-badge" style="background:${n.s==="긍정"?"rgba(78,204,163,.1)":"rgba(232,93,117,.1)"};color:${n.s==="긍정"?"#4ECCA3":"#E85D75"}">${n.s}</span>
-              <span style="font-size:7px;color:#555;margin-left:4px">${n.time}</span>
-            </div>
-          </div>
-        </div>
-      `).join("")}
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px"><span style="color:#C9A96E;font-size:11px">⚡</span><span style="font-size:11px;font-weight:600;color:#F0ECE3">주요 뉴스</span></div>
+      ${(d.news||[]).map(n=>`<div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start"><div style="width:5px;height:5px;border-radius:50%;margin-top:5px;flex-shrink:0;background:${n.s==="긍정"?"#4ECCA3":"#E85D75"}"></div><div style="flex:1"><div style="color:#ccc;font-size:10px;line-height:1.5">${n.t}</div><div style="margin-top:3px"><span class="st-badge" style="background:${n.s==="긍정"?"rgba(78,204,163,.1)":"rgba(232,93,117,.1)"};color:${n.s==="긍정"?"#4ECCA3":"#E85D75"}">${n.s}</span><span style="font-size:7px;color:#555;margin-left:4px">${n.time}</span></div></div></div>`).join("")}
     </div>
   </div>
-
-  <!-- Sentiment Summary Banner -->
-  <div style="background:linear-gradient(135deg,rgba(59,130,246,.03),rgba(78,204,163,.02));border:1px solid #16162a;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <div style="display:flex;align-items:center;gap:6px">
-      <span style="font-size:14px;color:#C9A96E">⚠</span>
-      <span style="color:#C9A96E;font-size:10px;font-weight:700">투자 유의사항</span>
-    </div>
-    <div style="color:#777;font-size:9px;line-height:1.7;flex:1">시장 센티먼트 데이터는 참고용이며, 실시간 갱신 시점에 따라 차이가 발생할 수 있습니다. 모든 투자 판단은 본인의 분석에 근거해주세요.</div>
-    <div class="mono" style="font-size:7px;color:#444">데모 데이터 · 향후 실시간 API 연동 예정</div>
-  </div>
-  `;
+  ${isLive&&d._meta?`<div style="background:#0a0a14;border:1px solid #16162a;border-radius:6px;padding:8px 12px;margin-top:6px"><div style="font-size:8px;color:#555;margin-bottom:4px">데이터 소스</div><div style="display:flex;flex-wrap:wrap;gap:6px;font-size:7px;color:#444">${Object.entries(d._meta).filter(([k])=>!k.startsWith("_")).map(([k,v])=>`<span title="${v}">• ${k.replace("Source","")}</span>`).join("")}</div></div>`:""}
+  <div style="background:linear-gradient(135deg,rgba(59,130,246,.03),rgba(78,204,163,.02));border:1px solid #16162a;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-top:8px"><span style="color:#C9A96E;font-size:14px">⚠</span><div><div style="color:#C9A96E;font-size:10px;font-weight:700">투자 유의사항</div><div style="color:#777;font-size:9px;line-height:1.7;margin-top:2px">시장 센티먼트 데이터는 참고용입니다. Fear&Greed는 암호화폐 기반(alternative.me), VIX/지수는 Yahoo Finance 기준이며 최대 5분 지연될 수 있습니다.</div></div></div>`;
   el.innerHTML=h;
 }
-
 // ═══════ SIGNAL MATRIX (Live from Scanner) ═══════
 const SIG_DEMO=[
   {sym:"NVDA",mkt:"US",trend:82,mom:70,vol:75,div:90,vola:60,total:78,type:"entry",label:"🟢 진입",reason:"MA 정배열 + RSI 55 반등",price:"$920",ch:2.3,starSignals:[],fund:null},
