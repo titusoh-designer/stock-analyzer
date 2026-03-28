@@ -1107,7 +1107,10 @@ function render(data,ai){
     </div>
   </div>
 
-  <div style="margin-bottom:14px">
+  <!-- Signal Analysis Card (from scanner data) -->
+  <div id="analyzeSignalCard" style="padding:0 20px;margin-bottom:14px"></div>
+
+  <div style="margin-bottom:14px;padding:0 20px">
     <div id="rsiChartWrap" class="chart-box" style="margin-bottom:6px">${svgRSI(o)}</div>
     <div id="macdChartWrap" class="chart-box" style="margin-bottom:6px">${svgMACD(o)}</div>
     <div id="obvChartWrap" class="chart-box" style="margin-bottom:0">${svgOBV(o)}</div>
@@ -1545,6 +1548,9 @@ function render(data,ai){
   h+=`</div>`;
   document.getElementById("analyzeOut").innerHTML=h;
 
+  // Update signal analysis card for current symbol
+  updateAnalyzeSignalCard();
+
   // ── Bind mouse wheel + drag events to chart ──
   const chartEl=document.getElementById("mainChartWrap");
   if(chartEl&&curData){
@@ -1589,7 +1595,7 @@ function render(data,ai){
     };
 
     // Chart dimensions for crosshair mapping (must match svgChart)
-    const chartP={t:28,r:92,b:80,l:8},chartW=900,chartH=640;
+    const chartP={t:28,r:92,b:118,l:8},chartW=900,chartH=700;
 
     // Drag pan
     chartEl.onmousedown=(e)=>{isDragging=true;dragStartX=e.clientX;dragStartViewStart=viewStart;e.preventDefault();};
@@ -2170,7 +2176,7 @@ function svgChart(data,cp,cur,ai,stockName){
   // ═══ Chart Mode Preprocessing ═══
   const isLine=chartMode==="line",isHeikin=chartMode==="heikin";
   const displayData=isHeikin?calcHeikinAshi(data):data;
-  const W=900,H=640,P={t:28,r:92,b:80,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b-36;
+  const W=900,H=700,P={t:28,r:92,b:118,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b-36;
   const aP=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);if(cp&&isFinite(cp))aP.push(cp);
   if(isHeikin)displayData.forEach(d=>{if(d.high>0)aP.push(d.high);if(d.low>0)aP.push(d.low);});
   (ai?.supports||[]).forEach(s=>aP.push(s));(ai?.resistances||[]).forEach(r=>aP.push(r));
@@ -2662,25 +2668,25 @@ function svgChart(data,cp,cur,ai,stockName){
     });
 
     // Signal + Sentiment legend (detailed)
-    const ly=H-72; // legend y start
+    const ly=H-110; // legend y start — increased space
     // Signal section
-    s+=`<text x="${P.l+4}" y="${ly}" fill="#C9A96E" font-size="6.5" font-weight="600" font-family="DM Mono,monospace" opacity=".7">상승 시그널</text>`;
-    s+=`<text x="${P.l+4}" y="${ly+10}" fill="#90EE90" font-size="6" font-family="DM Mono,monospace" opacity=".5">⬆3 과반(3/5)</text>`;
-    s+=`<text x="${P.l+70}" y="${ly+10}" fill="#4ECCA3" font-size="6" font-family="DM Mono,monospace" opacity=".5">⬆4 강한(4/5)</text>`;
-    s+=`<text x="${P.l+136}" y="${ly+10}" fill="#1B7A43" font-size="6" font-family="DM Mono,monospace" opacity=".5">⬆5 최강(5/5)</text>`;
-    s+=`<text x="${P.l+202}" y="${ly+10}" fill="#C9A96E" font-size="6" font-family="DM Mono,monospace" opacity=".5">◆ 강한상승예상</text>`;
+    s+=`<text x="${P.l+4}" y="${ly}" fill="#C9A96E" font-size="10" font-weight="600" font-family="DM Mono,monospace" opacity=".8">상승 시그널</text>`;
+    s+=`<text x="${P.l+4}" y="${ly+15}" fill="#90EE90" font-size="9" font-family="DM Mono,monospace" opacity=".6">⬆3 과반(3/5)</text>`;
+    s+=`<text x="${P.l+100}" y="${ly+15}" fill="#4ECCA3" font-size="9" font-family="DM Mono,monospace" opacity=".6">⬆4 강한(4/5)</text>`;
+    s+=`<text x="${P.l+200}" y="${ly+15}" fill="#1B7A43" font-size="9" font-family="DM Mono,monospace" opacity=".6">⬆5 최강(5/5)</text>`;
+    s+=`<text x="${P.l+300}" y="${ly+15}" fill="#C9A96E" font-size="9" font-family="DM Mono,monospace" opacity=".6">◆ 강한상승예상</text>`;
     // Indicator descriptions
-    s+=`<text x="${P.l+4}" y="${ly+20}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">M.A=MACD상향돌파 S.T=Supertrend전환 DMI=+DI돌파 B.B=BB중심선돌파 I.M=일목구름돌파</text>`;
-    s+=`<text x="${P.l+4}" y="${ly+29}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">◆조건: BB스퀴즈(하위20%) + ATR감소 + 고저수렴 + 거래량1.5x↑ + 양봉 (5조건 동시)</text>`;
+    s+=`<text x="${P.l+4}" y="${ly+30}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">M.A=MACD상향돌파  S.T=Supertrend전환  DMI=+DI돌파  B.B=BB중심선돌파  I.M=일목구름돌파</text>`;
+    s+=`<text x="${P.l+4}" y="${ly+43}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">◆조건: BB스퀴즈(하위20%) + ATR감소 + 고저수렴 + 거래량1.5x↑ + 양봉 (5조건 동시)</text>`;
     // Sentiment section
-    s+=`<text x="${P.l+4}" y="${ly+42}" fill="#C9A96E" font-size="6.5" font-weight="600" font-family="DM Mono,monospace" opacity=".7">심리지수</text>`;
-    s+=`<rect x="${P.l+50}" y="${ly+36}" width="10" height="6" rx="1.5" fill="rgba(232,93,117,.15)"/>`;
-    s+=`<text x="${P.l+63}" y="${ly+42}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">공포(0~40)</text>`;
-    s+=`<rect x="${P.l+110}" y="${ly+36}" width="10" height="6" rx="1.5" fill="transparent" stroke="#33333380" stroke-width=".5"/>`;
-    s+=`<text x="${P.l+123}" y="${ly+42}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">중립(40~60)</text>`;
-    s+=`<rect x="${P.l+175}" y="${ly+36}" width="10" height="6" rx="1.5" fill="rgba(78,204,163,.15)"/>`;
-    s+=`<text x="${P.l+188}" y="${ly+42}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">욕망(60~100)</text>`;
-    s+=`<text x="${P.l+4}" y="${ly+52}" fill="#666" font-size="5.5" font-family="DM Mono,monospace" opacity=".5">산출: RSI(14) + BB위치 + MA20이격도 + 거래량비율 + ATR변동성 → 5-bar SMA 스무딩</text>`;
+    s+=`<text x="${P.l+4}" y="${ly+62}" fill="#C9A96E" font-size="10" font-weight="600" font-family="DM Mono,monospace" opacity=".8">심리지수</text>`;
+    s+=`<rect x="${P.l+70}" y="${ly+54}" width="14" height="8" rx="2" fill="rgba(232,93,117,.15)"/>`;
+    s+=`<text x="${P.l+88}" y="${ly+62}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">공포(0~40)</text>`;
+    s+=`<rect x="${P.l+155}" y="${ly+54}" width="14" height="8" rx="2" fill="transparent" stroke="#33333380" stroke-width=".5"/>`;
+    s+=`<text x="${P.l+173}" y="${ly+62}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">중립(40~60)</text>`;
+    s+=`<rect x="${P.l+245}" y="${ly+54}" width="14" height="8" rx="2" fill="rgba(78,204,163,.15)"/>`;
+    s+=`<text x="${P.l+263}" y="${ly+62}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">욕망(60~100)</text>`;
+    s+=`<text x="${P.l+4}" y="${ly+77}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">산출: RSI(14) + BB위치 + MA20이격도 + 거래량비율 + ATR변동성 → 5-bar SMA 스무딩</text>`;
 
     // ═══════ 상승예상신호 시스템 ═══════
     if(data.length>=30){
@@ -3835,7 +3841,33 @@ renderWatchlist();
 })();
 
 // ═══════ SENTIMENT DASHBOARD (Live API + Demo Fallback) ═══════
-const SENT_DEMO={fearGreed:50,label:"중립",vix:18,vixCh:0,vvix:80,futures:[{n:"KOSPI200",v:"—",ch:0},{n:"KOSPI 야간선물",v:"—",ch:0,hl:true},{n:"S&P500 선물",v:"—",ch:0},{n:"나스닥100 선물",v:"—",ch:0}],macro:[{n:"USD/KRW",v:"—",ch:0},{n:"WTI",v:"—",ch:0},{n:"금",v:"—",ch:0},{n:"미국10Y",v:"—",ch:0}],indices:[{n:"KOSPI",v:"—",ch:0},{n:"S&P500",v:"—",ch:0},{n:"NASDAQ",v:"—",ch:0},{n:"BTC",v:"—",ch:0}],sectorsUS:[],sectorsKR:[],eco:[{n:"—",d:"—",prev:"—",fc:"—",act:"—",good:null,desc:"API 연동 필요"}],news:[{t:"데이터 로드 실패",s:"중립",time:"—"}]};
+// Mini chart for sentiment items (weekly 52wk + MA20 gold + MA100 white)
+const SENT_SYM_MAP={"KOSPI":"^KS11","KOSDAQ":"^KQ11","S&P500":"^GSPC","NASDAQ":"^IXIC","BTC":"BTC-USD","KOSPI200":"^KS11","KOSDAQ150":"^KQ11","S&P500 선물":"ES=F","나스닥100 선물":"NQ=F","USD/KRW":"KRW=X","WTI":"CL=F","금":"GC=F","미국10Y":"^TNX","VIX":"^VIX","VVIX":"^VVIX"};
+function sentMiniSvg(name,miniCharts,ch){
+  const sym=SENT_SYM_MAP[name];
+  if(!sym||!miniCharts||!miniCharts[sym])return"";
+  const mc=miniCharts[sym];
+  const cls=mc.closes;if(!cls||cls.length<5)return"";
+  const W=100,H=32;
+  const allV=[...cls];
+  if(mc.ma20)mc.ma20.forEach(v=>{if(v)allV.push(v);});
+  const mn=Math.min(...allV.filter(v=>v>0))*.998,mx=Math.max(...allV)*1.002,rng=mx-mn||1;
+  const tx=i=>(i/(cls.length-1))*(W-2)+1;
+  const ty=v=>H-2-((v-mn)/rng)*(H-4);
+  const col=(ch||0)>=0?"#4ECCA3":"#E85D75";
+  const id="st_"+Math.random().toString(36).slice(2,6);
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;display:block;margin-top:2px">`;
+  s+=`<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity=".15"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>`;
+  const pts=cls.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`);
+  s+=`<polygon points="${pts.join(" ")} ${W-1},${H} 1,${H}" fill="url(#${id})"/>`;
+  s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.2"/>`;
+  if(mc.ma20){const mp=[];for(let i=0;i<cls.length;i++){if(mc.ma20[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(mc.ma20[i]).toFixed(1)}`);}if(mp.length>2)s+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#C9A96E" stroke-width=".8" stroke-opacity=".6"/>`;}
+  if(mc.ma100){const mp=[];for(let i=0;i<cls.length;i++){if(mc.ma100[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(mc.ma100[i]).toFixed(1)}`);}if(mp.length>2)s+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#F0ECE3" stroke-width=".8" stroke-opacity=".3"/>`;}
+  s+=`</svg>`;
+  return s;
+}
+
+const SENT_DEMO={fearGreed:50,label:"중립",vix:18,vixCh:0,vvix:80,futures:[{n:"KOSPI200",v:"—",ch:0},{n:"KOSDAQ150",v:"—",ch:0},{n:"S&P500 선물",v:"—",ch:0},{n:"나스닥100 선물",v:"—",ch:0}],macro:[{n:"USD/KRW",v:"—",ch:0},{n:"WTI",v:"—",ch:0},{n:"금",v:"—",ch:0},{n:"미국10Y",v:"—",ch:0}],indices:[{n:"KOSPI",v:"—",ch:0},{n:"KOSDAQ",v:"—",ch:0},{n:"S&P500",v:"—",ch:0},{n:"NASDAQ",v:"—",ch:0},{n:"BTC",v:"—",ch:0}],sectorsUS:[],sectorsKR:[],eco:[{n:"—",d:"—",prev:"—",fc:"—",act:"—",good:null,desc:"API 연동 필요"}],news:[{t:"데이터 로드 실패",s:"중립",time:"—"}]};
 
 let _sentCache=null;
 async function renderSentiment(){
@@ -3904,18 +3936,18 @@ async function renderSentiment(){
       ${scanW}
     </div>
     <div class="st-card">
-      <div><div class="st-card-t">VIX (공포지수)</div><div class="mono" style="font-size:22px;font-weight:800;color:${d.vix<20?"#4ECCA3":"#C9A96E"}">${d.vix||"—"}</div><div class="mono" style="font-size:10px;color:${d.vixCh<0?"#4ECCA3":"#E85D75"}">${d.vixCh<0?"▼":"▲"} ${Math.abs(d.vixCh||0).toFixed(1)}%</div><div style="font-size:8px;color:#555;margin-top:4px">${d.vix<15?"매우 낙관":d.vix<20?"안정적":d.vix<30?"경계":"패닉"}</div></div>
-      <div style="border-top:1px solid #16162a;padding-top:10px;margin-top:10px"><div class="st-card-t">VVIX (VIX의 변동성)</div><div class="mono" style="font-size:16px;font-weight:700;color:#F0ECE3">${d.vvix||"—"}</div><div style="font-size:8px;color:#555;margin-top:2px">${d.vvix&&d.vvix<80?"안정":"변동성 확대 주의"}</div></div>
+      <div><div class="st-card-t">VIX (공포지수)</div><div style="display:flex;align-items:center;gap:8px"><div><div class="mono" style="font-size:22px;font-weight:800;color:${d.vix<20?"#4ECCA3":"#C9A96E"}">${d.vix||"—"}</div><div class="mono" style="font-size:10px;color:${d.vixCh<0?"#4ECCA3":"#E85D75"}">${d.vixCh<0?"▼":"▲"} ${Math.abs(d.vixCh||0).toFixed(1)}%</div></div><div style="flex:1">${sentMiniSvg("VIX",d.miniCharts,d.vixCh)}</div></div><div style="font-size:9px;color:#555;margin-top:4px">${d.vix<15?"매우 낙관":d.vix<20?"안정적":d.vix<30?"경계":"패닉"}</div></div>
+      <div style="border-top:1px solid #16162a;padding-top:10px;margin-top:10px"><div class="st-card-t">VVIX (VIX의 변동성)</div><div style="display:flex;align-items:center;gap:8px"><div class="mono" style="font-size:16px;font-weight:700;color:#F0ECE3">${d.vvix||"—"}</div><div style="flex:1">${sentMiniSvg("VVIX",d.miniCharts,0)}</div></div><div style="font-size:9px;color:#555;margin-top:2px">${d.vvix&&d.vvix<80?"안정":"변동성 확대 주의"}</div></div>
     </div>
     <div class="st-card">
       <div class="st-card-t">선물 · 환율 · 원자재</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-        ${[...(d.futures||[]),...(d.macro||[])].map(f=>`<div style="padding:5px 7px;background:${f.hl?"rgba(234,179,8,.04)":"#0a0a14"};border-radius:5px;border:1px solid ${f.hl?"rgba(234,179,8,.15)":"#12121e"}"><div style="font-size:7.5px;color:${f.hl?"#eab308":"#555"}">${f.n}</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2px"><span class="mono" style="font-size:11px;font-weight:700;color:#F0ECE3">${f.v||"—"}</span><span class="mono" style="font-size:9px;font-weight:600;color:${chCol(f.ch||0)}">${pf2(f.ch||0)}</span></div></div>`).join("")}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+        ${[...(d.futures||[]),...(d.macro||[])].map(f=>`<div style="padding:6px 8px;background:${f.hl?"rgba(234,179,8,.04)":"#0a0a14"};border-radius:6px;border:1px solid ${f.hl?"rgba(234,179,8,.15)":"#12121e"}"><div style="font-size:9px;color:${f.hl?"#eab308":"#555"}">${f.n}</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2px"><span class="mono" style="font-size:12px;font-weight:700;color:#F0ECE3">${f.v||"—"}</span><span class="mono" style="font-size:10px;font-weight:600;color:${chCol(f.ch||0)}">${pf2(f.ch||0)}</span></div>${sentMiniSvg(f.n,d.miniCharts,f.ch)}</div>`).join("")}
       </div>
     </div>
   </div>
   <div class="st-grid st-grid-33">
-    <div class="st-card"><div class="st-card-t">주요 지수</div>${(d.indices||[]).map(x=>`<div class="st-row"><span class="k">${x.n}</span><span class="v" style="color:${chCol(x.ch||0)}">${x.v||"—"} <span style="font-size:8px">${pf2(x.ch||0)}</span></span></div>`).join("")}</div>
+    <div class="st-card"><div class="st-card-t">주요 지수</div>${(d.indices||[]).map(x=>`<div class="st-row" style="align-items:center"><span class="k">${x.n}</span><div style="flex:1;text-align:center">${sentMiniSvg(x.n,d.miniCharts,x.ch)}</div><span class="v" style="color:${chCol(x.ch||0)}">${x.v||"—"} <span style="font-size:9px">${pf2(x.ch||0)}</span></span></div>`).join("")}</div>
     <div class="st-card"><div class="st-card-t">🇺🇸 미국 섹터</div>${d.sectorsUS.length?d.sectorsUS.map(s=>`<div class="st-row" style="cursor:help" title="${s.info||""}"><span class="k">${s.name}</span><span class="v" style="color:${chCol(s.ch||0)}">${pf2(s.ch||0)}</span></div>`).join(""):`<div style="font-size:9px;color:#555;padding:8px 0">데이터 로딩 중...</div>`}</div>
     <div class="st-card"><div class="st-card-t">🇰🇷 한국 섹터</div>${d.sectorsKR.length?d.sectorsKR.map(s=>`<div class="st-row" style="cursor:help" title="${s.info||""}"><span class="k">${s.name}</span><span class="v" style="color:${chCol(s.ch||0)}">${pf2(s.ch||0)}</span></div>`).join(""):`<div style="font-size:9px;color:#555;padding:8px 0">KRX 업종지수 API 연동 예정</div>`}</div>
   </div>
@@ -3990,6 +4022,67 @@ function sigMiniChart(sig,W,H){
   const line2=pts2.map((v,i)=>`${(i/51*(W-4)+2).toFixed(1)},${(H-4-(v-mn2)/(mx2-mn2||1)*(H-8)).toFixed(1)}`).join(" ");
   const id2="sm_"+Math.random().toString(36).slice(2,8);
   return`<svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px"><defs><linearGradient id="${id2}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity=".12"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs><polygon points="${line2} ${W-2},${H} 2,${H}" fill="url(#${id2})"/><polyline points="${line2}" fill="none" stroke="${col}" stroke-width="1.5"/></svg>`;
+}
+
+// Convert scan result → 5-dimension signal score (with continuous indicators when available)
+function scanToSignal(r){
+  const sigs=r.starSignals||[];
+  const bestA=sigs.filter(s=>s.type==="A").sort((a,b)=>b.count-a.count)[0];
+  const bestC=sigs.find(s=>s.type==="C");
+  const aS=bestA?bestA.signals:[];
+  const aC=bestA?bestA.count:0;
+  const ind=r.indicators||{};
+
+  // Trend (35%)
+  let trend;
+  if(ind.maAlign!=null&&ind.adx!=null){
+    trend=Math.round(Math.max(0,Math.min(60,(ind.maAlign+100)/200*60))+Math.min(30,ind.adx/2)+Math.max(-10,Math.min(10,(r.change||0)*3)));
+  }else{
+    trend=30;if(aS.includes("S.T"))trend+=20;if(aS.includes("I.M"))trend+=20;if(aS.includes("B.B"))trend+=15;trend+=Math.max(-15,Math.min(15,(r.change||0)*4));
+  }
+  trend=Math.max(0,Math.min(100,trend));
+
+  // Momentum (25%)
+  let mom;
+  if(ind.rsi!=null&&ind.macdHist!=null){
+    const rsiNorm=ind.rsi<30?Math.max(0,(ind.rsi-10)/20*30):ind.rsi>70?Math.min(100,70+(ind.rsi-70)/30*30):30+((ind.rsi-30)/40*40);
+    const macdNorm=Math.max(0,Math.min(100,50+ind.macdHist*200));
+    mom=Math.round(rsiNorm*0.5+macdNorm*0.5);
+  }else{
+    mom=30;if(aS.includes("M.A"))mom+=25;if(aS.includes("DMI"))mom+=20;mom+=Math.max(-20,Math.min(25,(r.change||0)*5));
+  }
+  mom=Math.max(0,Math.min(100,mom));
+
+  // Volume (15%)
+  let vol;
+  if(ind.volRatio!=null){vol=Math.round(Math.max(0,Math.min(100,ind.volRatio*40+10)));}
+  else{vol=35;if(bestC){const vs=bestC.signals.find(s=>s.startsWith("Vol×"));if(vs)vol+=Math.min(40,parseFloat(vs.replace("Vol×",""))*20);vol+=15;}vol+=aC*5;}
+  vol=Math.max(0,Math.min(100,vol));
+
+  // Divergence (15%)
+  let div;
+  if(ind.bbWidth!=null){div=Math.round(Math.max(0,Math.min(80,80-ind.bbWidth*5)));if(bestC)div+=20;if(aC>=4)div+=10;}
+  else{div=40;if(bestC){if(bestC.signals.includes("BB수렴"))div+=15;if(bestC.signals.includes("범위↓"))div+=15;div+=10;}if(aC>=4)div+=15;if(aC>=5)div+=10;}
+  div=Math.max(0,Math.min(100,div));
+
+  // Volatility (10%)
+  let vola;
+  if(ind.atr!=null&&ind.bbWidth!=null){vola=Math.round(Math.max(0,Math.min(100,70-ind.bbWidth*3)));if(bestC&&bestC.signals.includes("ATR↓"))vola+=15;}
+  else{vola=45;if(bestC){if(bestC.signals.includes("ATR↓"))vola+=20;if(bestC.signals.includes("BB수렴"))vola+=15;}if(aC<=2)vola-=10;}
+  vola=Math.max(0,Math.min(100,vola));
+
+  const total=Math.round(trend*.35+mom*.25+vol*.15+div*.15+vola*.10);
+  let type,label;if(total>=70){type="entry";label="🟢 진입";}else if(total>=55){type="watch";label="🔵 관심";}else if(total>=40){type="exit";label="🟡 익절";}else{type="danger";label="🔴 경고";}
+  const reasons=[];
+  if(aS.length)reasons.push(aS.join("+")+` (${aC}/5)`);
+  if(bestC)reasons.push("◆강한상승예상");
+  if(ind.rsi!=null)reasons.push("RSI "+ind.rsi.toFixed(0));
+  if(r.change>3)reasons.push("급등 "+r.change.toFixed(1)+"%");
+  if(r.change<-3)reasons.push("급락 "+r.change.toFixed(1)+"%");
+  if(r.fund?.per&&r.fund.per<15)reasons.push("PER "+r.fund.per.toFixed(0)+"x");
+  const cs=r.currency==="KRW"?"₩":"$",fp=v=>v>=10000?Number(v).toLocaleString():v>=1?Number(v).toFixed(2):Number(v).toFixed(4);
+  const mkt=r.source==="naver"?"KRX":r.source==="coingecko"?"CRYPTO":"US";
+  return{sym:r.name||r.symbol,code:r.symbol,mkt,source:r.source,trend,mom,vol,div,vola,total,type,label,reason:reasons.join(" · ")||"시그널 감지",price:cs+fp(r.currentPrice||0),ch:r.change||0,fund:r.fund,daysAgo:sigs[0]?.daysAgo||0,starSignals:sigs,indicators:ind,mini:r.mini||null,miniMA20:r.miniMA20||null,miniMA22:r.miniMA22||null};
 }
 
 let _sigCache=null;
@@ -4087,9 +4180,49 @@ function toggleSigDetail(i){const det=document.getElementById("sigDetail_"+i);co
 function goSigAnalyze(sym,mkt){
   const isKR=mkt==="KRX";const isCrypto=mkt==="CRYPTO";
   const sr=isKR?"naver":isCrypto?"coingecko":"yahoo";
-  // Open in new window
   const url=`${location.origin}?s=${encodeURIComponent(sym)}&src=${sr}`;
   window.open(url,"_blank");
+}
+
+// ═══ Analyze Tab: Signal Summary Card ═══
+async function updateAnalyzeSignalCard(){
+  const el=document.getElementById("analyzeSignalCard");
+  if(!el||!curSym)return;
+  const sym=curSym.symbol;
+  // Load scan cache
+  if(!_sigCache){try{const resp=await fetch("/api/scan-store");const data=await resp.json();if(data.stored&&data.results&&data.results.length)_sigCache={results:data.results,scannedAt:data.scannedAt,totalScanned:data.totalScanned,source:data.source};}catch(e){}}
+  if(!_sigCache||!_sigCache.results)return;
+  // Find current symbol
+  const found=_sigCache.results.find(r=>(r.symbol||"").replace(/\.(KS|KQ)$/,"")===sym||(r.name||"")===sym);
+  if(!found){el.innerHTML=`<div class="card" style="padding:10px 14px;opacity:.5"><span style="font-size:11px;color:#555">시그널 스캐너 데이터 없음 — 스캐너에서 스캔 후 확인 가능</span></div>`;return;}
+  const sig=scanToSignal(found);
+  const tc={entry:"#4ECCA3",exit:"#C9A96E",danger:"#E85D75",watch:"#3b82f6"};
+  const tbg={entry:"rgba(78,204,163,.05)",exit:"rgba(201,169,110,.05)",danger:"rgba(232,93,117,.05)",watch:"rgba(59,130,246,.05)"};
+  const tbd={entry:"rgba(78,204,163,.2)",exit:"rgba(201,169,110,.2)",danger:"rgba(232,93,117,.2)",watch:"rgba(59,130,246,.2)"};
+  const cc=v=>v>=70?"#4ECCA3":v>=50?"#C9A96E":"#E85D75";
+  const bar=(val,lbl,color)=>`<div style="display:flex;align-items:center;gap:6px;font-size:11px"><span class="mono" style="color:#555;width:70px">${lbl}</span><div style="flex:1;height:5px;background:#0a0a14;border-radius:3px;overflow:hidden"><div style="width:${val}%;height:100%;background:${color};border-radius:3px"></div></div><span class="mono" style="color:#888;width:24px;text-align:right">${val}</span></div>`;
+  el.innerHTML=`
+  <div class="card" style="padding:0;overflow:hidden;border-color:${tbd[sig.type]||"#16162a"};background:linear-gradient(135deg,${tbg[sig.type]||"transparent"},#0c0c16)">
+    <div style="padding:14px 16px;display:flex;align-items:center;gap:14px">
+      <div style="width:50px;height:50px;border-radius:12px;background:${tbg[sig.type]||"transparent"};border:1px solid ${tbd[sig.type]||"#16162a"};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <span class="mono" style="font-size:20px;font-weight:900;color:${tc[sig.type]||"#555"}">${sig.total}</span>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:14px;font-weight:700;color:#F0ECE3">매매 시그널</span>
+          <span style="padding:3px 10px;border-radius:5px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:${tbg[sig.type]||"transparent"};color:${tc[sig.type]||"#555"};border:1px solid ${tbd[sig.type]||"#16162a"}">${sig.label}</span>
+          <span class="mono" style="font-size:9px;color:#555">LIVE (스캐너 결과)</span>
+        </div>
+        <div style="font-size:11px;color:#777;line-height:1.5">${sig.reason}</div>
+      </div>
+      <div style="flex-shrink:0;width:200px">${sigMiniChart(sig,200,56)}</div>
+    </div>
+    <div style="border-top:1px solid ${tbd[sig.type]||"#16162a"};padding:12px 16px;background:rgba(6,6,16,.3)">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px">
+        ${[["추세",sig.trend],["모멘텀",sig.mom],["거래량",sig.vol],["다이버전스",sig.div],["변동성",sig.vola]].map(([l,v])=>`<div style="text-align:center"><div style="font-size:9px;color:#555;margin-bottom:3px">${l}</div><div class="mono" style="font-size:16px;font-weight:800;color:${cc(v)}">${v}</div><div style="height:3px;background:#0a0a14;border-radius:2px;margin-top:3px"><div style="width:${v}%;height:100%;background:${cc(v)};border-radius:2px"></div></div></div>`).join("")}
+      </div>
+    </div>
+  </div>`;
 }
 </script>
 </body>
