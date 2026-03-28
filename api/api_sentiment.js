@@ -126,12 +126,44 @@ export default async function handler(req, res) {
     const vix = get("^VIX");
     const vvix = get("^VVIX");
 
+    // ═══ Self-calculated Stock Market Fear & Greed ═══
+    // Based on: VIX(40%) + S&P momentum(25%) + Treasury(15%) + Gold safe-haven(20%)
+    let stockFG = 50, stockFGLabel = "중립";
+    {
+      // 1. VIX component (40%): VIX 12→90점, VIX 35→10점
+      const vixVal = vix.price || 20;
+      const vixScore = Math.max(0, Math.min(100, 110 - vixVal * 3));
+
+      // 2. S&P500 momentum (25%): 일간 변동률 기반
+      const spChange = get("^GSPC").change || 0;
+      const momScore = Math.max(0, Math.min(100, 50 + spChange * 15));
+
+      // 3. Treasury yield direction (15%): 금리 급등 = 공포
+      const tnyChange = get("^TNX").change || 0;
+      const tnyScore = Math.max(0, Math.min(100, 50 - tnyChange * 10));
+
+      // 4. Gold safe-haven (20%): 금 가격 급등 = 공포 (안전자산 수요)
+      const goldChange = get("GC=F").change || 0;
+      const goldScore = Math.max(0, Math.min(100, 50 - goldChange * 8));
+
+      stockFG = Math.round(vixScore * 0.4 + momScore * 0.25 + tnyScore * 0.15 + goldScore * 0.20);
+      stockFG = Math.max(0, Math.min(100, stockFG));
+      stockFGLabel = stockFG < 20 ? "극심한 공포" : stockFG < 40 ? "공포" : stockFG < 60 ? "중립" : stockFG < 80 ? "탐욕" : "극심한 탐욕";
+    }
+
     const response = {
       timestamp: new Date().toISOString(),
       source: "live",
 
-      fearGreed,
-      label: fearLabel,
+      // Stock market F&G (자체 산출)
+      fearGreed: stockFG,
+      label: stockFGLabel,
+      fearGreedSource: "자체산출 (VIX+S&P모멘텀+금리+금)",
+
+      // Crypto F&G (alternative.me, 참고용)
+      cryptoFG: fearGreed,
+      cryptoFGLabel: fearLabel,
+      cryptoFGSource: "alternative.me (BTC 기반)",
 
       vix: vix.price || 0,
       vixCh: vix.change || 0,
