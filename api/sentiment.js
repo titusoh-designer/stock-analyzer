@@ -44,6 +44,42 @@ export default async function handler(req, res) {
     return results;
   }
 
+  // ═══ Helper: Fetch weekly mini charts (52wk closes + MA20 + MA100) ═══
+  async function fetchMiniCharts(symbols) {
+    const charts = {};
+    const promises = symbols.map(async (sym) => {
+      try {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=2y&interval=1wk&includePrePost=false`;
+        const resp = await fetch(url, { headers: { "User-Agent": UA } });
+        const json = await resp.json();
+        const r = json.chart?.result?.[0];
+        if (!r) return;
+        const quotes = r.indicators?.quote?.[0] || {};
+        const allCloses = (quotes.close || []).filter(v => v != null);
+        if (allCloses.length < 10) return;
+        // Last 52 weeks
+        const wkCloses = allCloses.slice(-52);
+        // Calculate MA20 (weekly) over full data, then slice
+        const ma20Full = [];
+        for (let j = 0; j < allCloses.length; j++) {
+          ma20Full.push(j >= 19 ? allCloses.slice(j-19,j+1).reduce((a,b)=>a+b,0)/20 : null);
+        }
+        // MA100 (weekly ~= monthly20 equivalent) over full data
+        const ma100Full = [];
+        for (let j = 0; j < allCloses.length; j++) {
+          ma100Full.push(j >= 99 ? allCloses.slice(j-99,j+1).reduce((a,b)=>a+b,0)/100 : null);
+        }
+        charts[sym] = {
+          closes: wkCloses.map(v => +v.toFixed(2)),
+          ma20: ma20Full.slice(-52).map(v => v ? +v.toFixed(2) : null),
+          ma100: ma100Full.slice(-52).map(v => v ? +v.toFixed(2) : null)
+        };
+      } catch (e) { /* skip */ }
+    });
+    await Promise.all(promises);
+    return charts;
+  }
+
   // ═══ Helper: Format price for display ═══
   function fmtPrice(v, prefix = "", suffix = "") {
     if (v == null) return "—";
@@ -147,6 +183,10 @@ export default async function handler(req, res) {
     const allSectorSyms = [...sectorSymbols.US.map(s=>s.sym), ...sectorSymbols.KR.map(s=>s.sym)];
     const sectorData = await yahooQuote(allSectorSyms);
 
+    // ═══ 5. Mini charts (weekly 52wk for key symbols) ═══
+    const chartSymbols = ["^VIX", "^VVIX", "ES=F", "NQ=F", "KRW=X", "CL=F", "GC=F", "^TNX", "^KS11", "^KQ11", "^GSPC", "^IXIC", "BTC-USD"];
+    const miniCharts = await fetchMiniCharts(chartSymbols);
+
     // ═══ Assemble response ═══
     const get = (sym) => yData[sym] || { price: 0, change: 0 };
     const vix = get("^VIX");
@@ -246,6 +286,9 @@ export default async function handler(req, res) {
       news: [
         { t: "뉴스 API 연동 준비 중", s: "중립", time: "—" }
       ],
+
+      // Mini charts for all key symbols (weekly 52wk)
+      miniCharts: miniCharts || {},
 
       // Scan-based market temperature (if scan data available)
       scanSummary: null,
