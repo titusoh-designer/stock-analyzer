@@ -1,13 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
-// Vercel Serverless — Stock/Crypto Data API
+// Vercel Serverless — Stock/Crypto Data API v6
 // 
-// Architecture (Option B — confirmed):
-//   Yahoo Finance (메인): ALL chart OHLCV data (한국/미국/코인)
-//   Naver (보조):         ① 한국 종목명  ② 한국 실시간 (realtime.js)
-//
-// Korean stocks: source=naver → Yahoo 005930.KS / 065350.KQ
-// US stocks:     source=yahoo → Yahoo AAPL, TSLA
-// Crypto:        source=yahoo → Yahoo BTC-USD, ETH-USD
+// Changes from v5:
+//   ① Korean chart OHLCV: Naver 1순위 → Yahoo 폴백
+//   ② US fundamentals: Yahoo v10 quoteSummary 1순위 → Google 폴백
+//   ③ .KS/.KQ 자동 구분 강화
 // ═══════════════════════════════════════════════════════════════
 
 export default async function handler(req, res) {
@@ -18,93 +15,62 @@ export default async function handler(req, res) {
   const { symbol, source, interval } = req.query;
   if (!symbol) return res.status(400).json({ error: "symbol is required" });
 
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+  const UA_M = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)";
+
   try {
-    // ── Determine Yahoo ticker ──
     const isKR = source === "naver";
-    let yahooTicker = symbol;
+    const code = isKR ? symbol.replace(/[^0-9]/g, "") : symbol;
+    const int = interval || "1d";
+    const isIntraday = ["1m","5m","10m","15m","30m","60m","4h"].includes(int);
 
+    let ohlcv = [];
+    let meta = {};
+    let stockName = symbol;
+    let currency = isKR ? "KRW" : "USD";
+    let chartSource = "yahoo";
+
+    // ═══════════════════════════════════════════
+    // ① Korean OHLCV: Naver 1순위 → Yahoo 폴백
+    // ═══════════════════════════════════════════
     if (isKR) {
-      // Korean stock: try .KS (KOSPI) first, then .KQ (KOSDAQ)
-      const code = symbol.replace(/[^0-9]/g, "");
-      yahooTicker = await resolveKRTicker(code);
-    }
+      // Try Naver chart API first
+      try {
+        const naverData = await fetchNaverChart(code, int);
+        if (naverData && naverData.length >= 5) {
+          ohlcv = naverData;
+          chartSource = "naver-chart";
+        }
+      } catch (e) { console.log("[NAVER CHART] fallback to Yahoo:", e.message); }
 
-    // ── Yahoo range/interval mapping ──
-    const rangeMap = {
-      "1m": "7d", "5m": "60d", "10m": "60d", "15m": "60d", "30m": "60d",
-      "60m": "6mo", "4h": "6mo",
-      "1d": "5y", "1wk": "10y", "1mo": "max"
-    };
-    const intMap = {
-      "1m": "1m", "5m": "5m", "10m": "15m", "15m": "15m", "30m": "30m",
-      "60m": "60m", "4h": "60m",
-      "1d": "1d", "1wk": "1wk", "1mo": "1mo"
-    };
-    const range = rangeMap[interval] || "2y";
-    const int = intMap[interval] || interval || "1d";
-    const isIntraday = ["1m","5m","10m","15m","30m","60m","4h"].includes(interval);
-
-    // ── Fetch from Yahoo Finance ──
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?range=${range}&interval=${int}&includePrePost=false`;
-    const resp = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
-    });
-    const json = await resp.json();
-
-    if (json.chart?.error) throw new Error(json.chart.error.description || "Yahoo API error");
-
-    const result = json.chart?.result?.[0];
-    if (!result) throw new Error("No data returned from Yahoo");
-
-    const timestamps = result.timestamp || [];
-    const quote = result.indicators?.quote?.[0] || {};
-    const meta = result.meta || {};
-
-    // ── Parse OHLCV ──
-    let ohlcv = timestamps.map((ts, i) => ({
-      date: isIntraday
-        ? new Date(ts * 1000).toISOString().replace("T", " ").slice(0, 16)
-        : new Date(ts * 1000).toISOString().split("T")[0],
-      open: quote.open?.[i] ?? 0,
-      high: quote.high?.[i] ?? 0,
-      low: quote.low?.[i] ?? 0,
-      close: quote.close?.[i] ?? 0,
-      volume: quote.volume?.[i] ?? 0
-    })).filter(d => d.close > 0);
-
-    // ── Aggregate 60m → 4h candles ──
-    if (interval === "4h" && ohlcv.length > 0) {
-      const agg = [];
-      for (let i = 0; i < ohlcv.length; i += 4) {
-        const chunk = ohlcv.slice(i, i + 4);
-        agg.push({
-          date: chunk[0].date,
-          open: chunk[0].open,
-          high: Math.max(...chunk.map(c => c.high)),
-          low: Math.min(...chunk.map(c => c.low)),
-          close: chunk[chunk.length - 1].close,
-          volume: chunk.reduce((s, c) => s + c.volume, 0)
-        });
+      // Fallback: Yahoo
+      if (!ohlcv.length) {
+        const yahooTicker = await resolveKRTicker(code);
+        const yData = await fetchYahooChart(yahooTicker, int);
+        ohlcv = yData.ohlcv;
+        meta = yData.meta;
+        chartSource = "yahoo";
       }
-      ohlcv = agg;
+
+      // Get Korean name from Naver
+      const krName = await getKRName(code);
+      if (krName) stockName = krName;
+      currency = "KRW";
+    } else {
+      // US / Crypto: Yahoo only
+      const yData = await fetchYahooChart(symbol, int);
+      ohlcv = yData.ohlcv;
+      meta = yData.meta;
+      stockName = meta.longName || meta.shortName || symbol;
+      currency = meta.currency || "USD";
     }
 
     if (!ohlcv.length) throw new Error("데이터 없음 — 종목코드를 확인하세요");
 
-    // ── Build response ──
-    let stockName = meta.longName || meta.shortName || symbol;
-    const currency = isKR ? "KRW" : (meta.currency || "USD");
-
-    // Korean stocks: get proper Korean name from Naver
-    if (isKR) {
-      const code = symbol.replace(/[^0-9]/g, "");
-      const krName = await getKRName(code);
-      if (krName) stockName = krName;
-    }
-
     const data = {
       source: isKR ? "naver" : "yahoo",
-      symbol: isKR ? symbol.replace(/[^0-9]/g, "") : (meta.symbol || symbol),
+      chartSource,
+      symbol: isKR ? code : (meta.symbol || symbol),
       currency,
       currentPrice: meta.regularMarketPrice || ohlcv[ohlcv.length - 1]?.close,
       previousClose: meta.previousClose || meta.chartPreviousClose,
@@ -115,9 +81,10 @@ export default async function handler(req, res) {
       fetchedAt: new Date().toISOString()
     };
 
-    // ── Fundamentals (Korean=Naver, US=Google Finance scraping) ──
+    // ═══════════════════════════════════════════
+    // ② Fundamentals
+    // ═══════════════════════════════════════════
     try {
-      // KRX industry code → sector name mapping
       const krxSectors = {
         "278":"반도체","298":"가정용기기와용품","266":"전자제품","274":"디스플레이장비및부품",
         "281":"IT하드웨어","285":"반도체장비","263":"소프트웨어","267":"무선통신서비스",
@@ -136,15 +103,12 @@ export default async function handler(req, res) {
       };
 
       if (isKR) {
-        const code = symbol.replace(/[^0-9]/g, "");
-
-        // 1) Integration: PER, PBR, EPS, BPS, 시총, 배당, 업종코드, 동종기업
-        const intResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/integration`);
+        // ── Korean: Naver (unchanged, reliable) ──
+        const intResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/integration`, { headers: { "User-Agent": UA_M } });
         if (intResp.ok) {
           const ij = await intResp.json();
           const infos = {};
           (ij.totalInfos || []).forEach(i => { infos[i.code] = i.value; });
-
           data.fundamentals = {
             marketCap: parseMcap(infos.marketValue),
             per: pn(infos.per), forwardPer: pn(infos.cnsPer),
@@ -155,12 +119,8 @@ export default async function handler(req, res) {
             fiftyTwoWeekLow: pn(infos.lowPriceOf52Weeks),
             foreignRate: infos.foreignRate || null
           };
-
-          // Sector from industryCode mapping
           data.sector = krxSectors[ij.industryCode] || null;
           data.industryCode = ij.industryCode || null;
-
-          // Peer companies from industryCompareInfo
           if (Array.isArray(ij.industryCompareInfo) && ij.industryCompareInfo.length) {
             data.peers = ij.industryCompareInfo.slice(0, 5).map(p => ({
               name: p.stockName, code: p.itemCode, price: p.closePrice, change: p.fluctuationsRatio
@@ -168,8 +128,8 @@ export default async function handler(req, res) {
           }
         }
 
-        // 2) Annual: Parse ALL rows (ROE, 부채비율, 영업이익률, EPS, PER, PBR...)
-        const aResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/annual`);
+        // Annual + Quarter from Naver (unchanged)
+        const aResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/annual`, { headers: { "User-Agent": UA_M } });
         if (aResp.ok) {
           const aj = await aResp.json();
           const fi = aj.financeInfo;
@@ -179,7 +139,6 @@ export default async function handler(req, res) {
             fi.rowList.forEach(r => { rows[r.title] = r.columns; });
             const getVal = (rowName, key) => rows[rowName]?.[key]?.value ? pn(rows[rowName][key].value) : null;
             const latestKey = titles[titles.length - 1]?.key;
-
             data.annual = titles.map(t => ({
               year: t.title.replace(/\./g, ""), revenue: getVal("매출액", t.key),
               operatingProfit: getVal("영업이익", t.key), earnings: getVal("당기순이익", t.key),
@@ -189,21 +148,15 @@ export default async function handler(req, res) {
               bps: getVal("BPS", t.key), pbr: getVal("PBR", t.key),
               dividend: getVal("주당배당금", t.key)
             }));
-
-            // Enrich fundamentals from latest annual
             if (latestKey && data.fundamentals) {
               const f = data.fundamentals;
               f.roe = getVal("ROE", latestKey) ? getVal("ROE", latestKey) / 100 : null;
               f.debtToEquity = getVal("부채비율", latestKey);
               f.operatingMargins = getVal("영업이익률", latestKey) ? getVal("영업이익률", latestKey) / 100 : null;
-              f.profitMargins = getVal("순이익률", latestKey) ? getVal("순이익률", latestKey) / 100 : null;
-              f.retainedEarnings = getVal("유보율", latestKey);
             }
           }
         }
-
-        // 3) Quarterly: Parse ALL rows
-        const qResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/quarter`);
+        const qResp = await fetch(`https://m.stock.naver.com/api/stock/${code}/finance/quarter`, { headers: { "User-Agent": UA_M } });
         if (qResp.ok) {
           const qj = await qResp.json();
           const fi = qj.financeInfo;
@@ -212,7 +165,6 @@ export default async function handler(req, res) {
             const rows = {};
             fi.rowList.forEach(r => { rows[r.title] = r.columns; });
             const getVal = (rowName, key) => rows[rowName]?.[key]?.value ? pn(rows[rowName][key].value) : null;
-
             data.quarterly = titles.map(t => ({
               quarter: t.title.replace(/\./g, ""),
               revenue: getVal("매출액", t.key) ? getVal("매출액", t.key) * 1e6 : null,
@@ -225,109 +177,139 @@ export default async function handler(req, res) {
         }
 
       } else {
-        // ★ US stocks: Google Finance HTML scraping + Yahoo chart meta
+        // ════════════════════════════════════════════
+        // ★ US: Yahoo v10 quoteSummary 1순위 → Google 폴백
+        // ════════════════════════════════════════════
         data.fundamentals = {
           marketCap: null, per: null, pbr: null, eps: null,
           dividendYield: null, roe: null, operatingMargins: null,
           fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh || null,
           fiftyTwoWeekLow: meta.fiftyTwoWeekLow || null
         };
+
+        let yahooV10Success = false;
         try {
-          const exchanges = ["NASDAQ", "NYSE", "NYSEARCA"];
-          let gHtml = null, gExchange = "";
-          for (const ex of exchanges) {
-            const gResp = await fetch(`https://www.google.com/finance/quote/${encodeURIComponent(symbol)}:${ex}`, {
-              headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept-Language": "en-US,en;q=0.9" }
-            });
-            if (gResp.ok) { gHtml = await gResp.text(); if (gHtml.length > 10000) { gExchange = ex; break; } }
+          const modules = "defaultKeyStatistics,financialData,incomeStatementHistory,balanceSheetHistory,cashflowStatementHistory,summaryProfile,summaryDetail";
+          const v10Url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
+          const v10Resp = await fetch(v10Url, { headers: { "User-Agent": UA } });
+          const v10Json = await v10Resp.json();
+          const qr = v10Json?.quoteSummary?.result?.[0];
+
+          if (qr) {
+            const ks = qr.defaultKeyStatistics || {};
+            const fd = qr.financialData || {};
+            const sd = qr.summaryDetail || {};
+            const sp = qr.summaryProfile || {};
+
+            // Key metrics
+            const rv = v => v?.raw ?? v?.fmt ? parseFloat(String(v.fmt).replace(/[^0-9.\-]/g, "")) : null;
+            data.fundamentals.per = rv(ks.forwardPE) || rv(sd.trailingPE);
+            data.fundamentals.pbr = rv(ks.priceToBook);
+            data.fundamentals.eps = rv(ks.trailingEps) || rv(fd.earningsPerShare);
+            data.fundamentals.marketCap = rv(sd.marketCap);
+            data.fundamentals.dividendYield = rv(sd.dividendYield);
+            data.fundamentals.roe = rv(fd.returnOnEquity);
+            data.fundamentals.operatingMargins = rv(fd.operatingMargins);
+            data.fundamentals.profitMargins = rv(fd.profitMargins);
+            data.fundamentals.debtToEquity = rv(fd.debtToEquity);
+            data.fundamentals.beta = rv(ks.beta);
+            data.fundamentals.targetPrice = rv(fd.targetMeanPrice);
+            data.fundamentals.bps = rv(ks.bookValue);
+
+            // Sector + Industry
+            data.sector = sp.sector || null;
+            data.industry = sp.industry || null;
+            data.businessSummary = sp.longBusinessSummary ? sp.longBusinessSummary.slice(0, 300) : null;
+
+            // Annual financials from incomeStatementHistory
+            const ish = qr.incomeStatementHistory?.incomeStatementHistory || [];
+            const bsh = qr.balanceSheetHistory?.balanceSheetStatements || [];
+            const cfh = qr.cashflowStatementHistory?.cashflowStatements || [];
+            if (ish.length) {
+              data.annual = ish.slice(0, 4).map((s, idx) => {
+                const bs = bsh[idx] || {};
+                return {
+                  year: s.endDate?.fmt?.slice(0, 4) || "",
+                  revenue: rv(s.totalRevenue),
+                  operatingProfit: rv(s.operatingIncome),
+                  earnings: rv(s.netIncome),
+                  opm: rv(s.totalRevenue) && rv(s.operatingIncome) ? (rv(s.operatingIncome) / rv(s.totalRevenue) * 100) : null,
+                  eps: rv(s.netIncome) && rv(ks.sharesOutstanding) ? rv(s.netIncome) / rv(ks.sharesOutstanding) : null,
+                  debtRatio: rv(bs.totalLiab) && rv(bs.totalStockholderEquity) && rv(bs.totalStockholderEquity) > 0
+                    ? (rv(bs.totalLiab) / rv(bs.totalStockholderEquity) * 100) : null
+                };
+              }).reverse();
+            }
+
+            // US financials display (for existing UI compatibility)
+            if (ish.length) {
+              const latest = ish[0];
+              const latestBs = bsh[0] || {};
+              const latestCf = cfh[0] || {};
+              const fmtB = v => { if (!v) return null; const n = rv(v); if (!n) return null; return Math.abs(n) >= 1e9 ? (n/1e9).toFixed(2)+"B" : Math.abs(n) >= 1e6 ? (n/1e6).toFixed(2)+"M" : String(n); };
+              data.usFinancials = {
+                period: latest.endDate?.fmt || null,
+                income: {
+                  "Revenue": fmtB(latest.totalRevenue),
+                  "Operating expense": fmtB(latest.totalOperatingExpenses),
+                  "Net income": fmtB(latest.netIncome),
+                  "EBITDA": fmtB(latest.ebitda),
+                  "Earnings per share": rv(ks.trailingEps)?.toFixed(2),
+                  "Net profit margin": fd.profitMargins?.fmt,
+                  "Effective tax rate": latest.incomeBeforeTax && latest.incomeTaxExpense
+                    ? ((rv(latest.incomeTaxExpense)/rv(latest.incomeBeforeTax))*100).toFixed(1)+"%" : null
+                },
+                balance: {
+                  "Total assets": fmtB(latestBs.totalAssets),
+                  "Total liabilities": fmtB(latestBs.totalLiab),
+                  "Total equity": fmtB(latestBs.totalStockholderEquity),
+                  "Cash and short-term investments": fmtB(latestBs.cash),
+                  "Price to book": ks.priceToBook?.fmt,
+                  "Return on assets": fd.returnOnAssets?.fmt,
+                  "Return on capital": fd.returnOnEquity?.fmt
+                },
+                cashflow: {
+                  "Cash from operations": fmtB(latestCf.totalCashFromOperatingActivities),
+                  "Cash from investing": fmtB(latestCf.totalCashflowsFinancingActivities),
+                  "Free cash flow": fmtB(latestCf.freeCashFlow)
+                }
+              };
+            }
+
+            data.fundSource = "yahoo-v10";
+            yahooV10Success = true;
           }
-          if (gHtml) {
-            // P6K39c = key stats values
-            const gVal = (label) => {
-              const re = new RegExp(label + '[\\s\\S]{0,500}?class="P6K39c">([^<]+)', 'i');
-              const m = gHtml.match(re); return m ? m[1].trim() : null;
-            };
-            // QXDnM = financial table values (by row label)
-            const gRow = (label) => {
-              const re = new RegExp(label + '[\\s\\S]{0,600}?class="QXDnM">([^<]+)', 'i');
-              const m = gHtml.match(re); return m ? m[1].trim() : null;
-            };
+        } catch (e) { console.log("[YAHOO V10] Failed:", e.message); }
 
-            // Key Stats
-            const rawPE = gVal("P/E ratio"), rawMcap = gVal("Market cap"), rawDiv = gVal("Dividend yield");
-            const rawEmployees = gVal("Employees"), rawFounded = gVal("Founded");
-
-            if (rawPE) data.fundamentals.per = pn(rawPE);
-            if (rawDiv && rawDiv.includes("%")) data.fundamentals.dividendYield = pn(rawDiv) / 100;
-            if (rawMcap) {
-              if (rawMcap.includes("T")) data.fundamentals.marketCap = pn(rawMcap) * 1e12;
-              else if (rawMcap.includes("B")) data.fundamentals.marketCap = pn(rawMcap) * 1e9;
-              else if (rawMcap.includes("M")) data.fundamentals.marketCap = pn(rawMcap) * 1e6;
+        // ── Google Finance fallback (if Yahoo v10 failed) ──
+        if (!yahooV10Success) {
+          try {
+            const exchanges = ["NASDAQ", "NYSE", "NYSEARCA"];
+            let gHtml = null, gExchange = "";
+            for (const ex of exchanges) {
+              const gResp = await fetch(`https://www.google.com/finance/quote/${encodeURIComponent(symbol)}:${ex}`, {
+                headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" }
+              });
+              if (gResp.ok) { gHtml = await gResp.text(); if (gHtml.length > 10000) { gExchange = ex; break; } }
             }
-
-            // Parse ALL 3 tables: Income / Balance / Cash Flow
-            const tables = [...gHtml.matchAll(/<table class="slpEwd">([\s\S]*?)<\/table>/g)];
-            const parseTbl = (html) => {
-              const hdr = html.match(/<th class="yNnsfe">([^<]+)/);
-              const rows = [...html.matchAll(/class="rsPbEe"[^>]*>([^<]+)[\s\S]{0,600}?class="QXDnM">([^<]+)/g)];
-              return { period: hdr ? hdr[1].trim() : null, data: Object.fromEntries(rows.map(m => [m[1].trim(), m[2].trim()])) };
-            };
-
-            let incomeStmt = null, balanceSheet = null, cashFlow = null;
-            if (tables[0]) incomeStmt = parseTbl(tables[0][1]);
-            if (tables[1]) balanceSheet = parseTbl(tables[1][1]);
-            if (tables[2]) cashFlow = parseTbl(tables[2][1]);
-
-            // Enrich fundamentals from tables
-            if (incomeStmt?.data) {
-              const d = incomeStmt.data;
-              if (d["Earnings per share"]) data.fundamentals.eps = pn(d["Earnings per share"]);
-              if (d["Net profit margin"]) { const v = pn(d["Net profit margin"]); data.fundamentals.profitMargins = v > 1 ? v / 100 : v; }
-              if (d["EBITDA"]) data.fundamentals.ebitda = d["EBITDA"];
-              if (d["Effective tax rate"]) data.fundamentals.taxRate = d["Effective tax rate"];
-              // Calculate operating margin: (Revenue - OpEx) / Revenue
-              if (d["Revenue"] && d["Operating expense"]) {
-                const rev = pn(d["Revenue"]) * (d["Revenue"].includes("B") ? 1e9 : d["Revenue"].includes("M") ? 1e6 : 1);
-                const opex = pn(d["Operating expense"]) * (d["Operating expense"].includes("B") ? 1e9 : d["Operating expense"].includes("M") ? 1e6 : 1);
-                if (rev > 0) data.fundamentals.operatingMargins = (rev - opex) / rev;
+            if (gHtml) {
+              const gVal = (label) => { const re = new RegExp(label + '[\\s\\S]{0,500}?class="P6K39c">([^<]+)', 'i'); const m = gHtml.match(re); return m ? m[1].trim() : null; };
+              const rawPE = gVal("P/E ratio"), rawMcap = gVal("Market cap"), rawDiv = gVal("Dividend yield");
+              if (rawPE && !data.fundamentals.per) data.fundamentals.per = pn(rawPE);
+              if (rawDiv && rawDiv.includes("%") && !data.fundamentals.dividendYield) data.fundamentals.dividendYield = pn(rawDiv) / 100;
+              if (rawMcap && !data.fundamentals.marketCap) {
+                if (rawMcap.includes("T")) data.fundamentals.marketCap = pn(rawMcap) * 1e12;
+                else if (rawMcap.includes("B")) data.fundamentals.marketCap = pn(rawMcap) * 1e9;
+                else if (rawMcap.includes("M")) data.fundamentals.marketCap = pn(rawMcap) * 1e6;
               }
+              if (!data.sector) { const sm = gHtml.match(/\/finance\/markets\/sector\/([^"?&]+)/i); if (sm) data.sector = decodeURIComponent(sm[1]).replace(/_/g, " "); }
+              if (!data.businessSummary) { const dm = [...gHtml.matchAll(/class="bLLb2d"[^>]*>([^<]{30,})/gi)]; if (dm.length) data.businessSummary = dm[dm.length-1][1].trim().slice(0,300); }
+              if (!data.fundSource) data.fundSource = "google-finance";
             }
-            if (balanceSheet?.data) {
-              const d = balanceSheet.data;
-              if (d["Price to book"]) data.fundamentals.pbr = pn(d["Price to book"]);
-              if (d["Return on assets"]) data.fundamentals.roa = pn(d["Return on assets"]);
-              if (d["Return on capital"]) { const v = pn(d["Return on capital"]); data.fundamentals.roe = v > 1 ? v / 100 : v; }
-              if (d["Total liabilities"] && d["Total equity"]) {
-                const liab = pn(d["Total liabilities"]), eq = pn(d["Total equity"]);
-                if (eq > 0) data.fundamentals.debtToEquity = (liab / eq) * 100;
-              }
-            }
-
-            // Store full financials for display
-            data.usFinancials = {
-              period: incomeStmt?.period || null,
-              income: incomeStmt?.data || null,
-              balance: balanceSheet?.data || null,
-              cashflow: cashFlow?.data || null,
-              employees: rawEmployees, founded: rawFounded
-            };
-
-            // Sector
-            const secMatch = gHtml.match(/\/finance\/markets\/sector\/([^"?&]+)/i);
-            if (secMatch) data.sector = decodeURIComponent(secMatch[1]).replace(/_/g, " ");
-
-            // Description
-            const descMatches = [...gHtml.matchAll(/class="bLLb2d"[^>]*>([^<]{30,})/gi)];
-            if (descMatches.length) data.businessSummary = descMatches[descMatches.length - 1][1].trim().slice(0, 300);
-
-            data.industry = gExchange;
-            data.fundSource = "google-finance";
-          }
-        } catch(ge) { console.log("[GFIN ERROR]", ge.message); }
-        if (!data.sector) data.sector = null;
-        if (!data.industry) data.industry = null;
+          } catch (ge) { console.log("[GFIN FALLBACK]", ge.message); }
+        }
       }
-    } catch (e) { console.log("[FUND ERROR]", yahooTicker, e.message); }
+    } catch (e) { console.log("[FUND ERROR]", e.message); }
 
     return res.status(200).json(data);
 
@@ -336,24 +318,116 @@ export default async function handler(req, res) {
   }
 }
 
-// ── Helper: Resolve Korean stock code to Yahoo ticker (.KS or .KQ) ──
+// ═══════════════════════════════════════════
+// Helper: Naver Chart API (Korean stocks)
+// ═══════════════════════════════════════════
+async function fetchNaverChart(code, interval) {
+  const periodMap = {
+    "1m": "minute", "5m": "minute5", "10m": "minute10", "30m": "minute30",
+    "60m": "minute60", "4h": "minute240",
+    "1d": "day", "1wk": "week", "1mo": "month"
+  };
+  const countMap = {
+    "1m": 500, "5m": 500, "10m": 500, "30m": 500,
+    "60m": 500, "4h": 500,
+    "1d": 1300, "1wk": 520, "1mo": 120
+  };
+  const period = periodMap[interval] || "day";
+  const count = countMap[interval] || 500;
+  const UA_M = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)";
+
+  // Naver chart API
+  const url = `https://m.stock.naver.com/api/stock/${code}/chart?periodType=${period}&count=${count}`;
+  const resp = await fetch(url, { headers: { "User-Agent": UA_M } });
+  if (!resp.ok) throw new Error("Naver chart API failed: " + resp.status);
+  const json = await resp.json();
+
+  if (!Array.isArray(json) || json.length < 5) throw new Error("Naver chart data insufficient");
+
+  return json.map(d => ({
+    date: d.localDate || d.dt || "",
+    open: parseFloat(d.openPrice || d.open || 0),
+    high: parseFloat(d.highPrice || d.high || 0),
+    low: parseFloat(d.lowPrice || d.low || 0),
+    close: parseFloat(d.closePrice || d.close || 0),
+    volume: parseInt(d.accumulatedTradingVolume || d.volume || 0)
+  })).filter(d => d.close > 0);
+}
+
+// ═══════════════════════════════════════════
+// Helper: Yahoo Finance v8 Chart
+// ═══════════════════════════════════════════
+async function fetchYahooChart(ticker, interval) {
+  const rangeMap = {
+    "1m": "7d", "5m": "60d", "10m": "60d", "15m": "60d", "30m": "60d",
+    "60m": "6mo", "4h": "6mo",
+    "1d": "5y", "1wk": "10y", "1mo": "max"
+  };
+  const intMap = {
+    "1m": "1m", "5m": "5m", "10m": "15m", "15m": "15m", "30m": "30m",
+    "60m": "60m", "4h": "60m",
+    "1d": "1d", "1wk": "1wk", "1mo": "1mo"
+  };
+  const range = rangeMap[interval] || "2y";
+  const int = intMap[interval] || interval || "1d";
+  const isIntraday = ["1m","5m","10m","15m","30m","60m","4h"].includes(interval);
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${range}&interval=${int}&includePrePost=false`;
+  const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+  const json = await resp.json();
+  if (json.chart?.error) throw new Error(json.chart.error.description || "Yahoo API error");
+  const result = json.chart?.result?.[0];
+  if (!result) throw new Error("No data from Yahoo");
+
+  const timestamps = result.timestamp || [];
+  const quote = result.indicators?.quote?.[0] || {};
+  const meta = result.meta || {};
+
+  let ohlcv = timestamps.map((ts, i) => ({
+    date: isIntraday
+      ? new Date(ts * 1000).toISOString().replace("T", " ").slice(0, 16)
+      : new Date(ts * 1000).toISOString().split("T")[0],
+    open: quote.open?.[i] ?? 0,
+    high: quote.high?.[i] ?? 0,
+    low: quote.low?.[i] ?? 0,
+    close: quote.close?.[i] ?? 0,
+    volume: quote.volume?.[i] ?? 0
+  })).filter(d => d.close > 0);
+
+  // Aggregate 60m → 4h
+  if (interval === "4h" && ohlcv.length > 0) {
+    const agg = [];
+    for (let i = 0; i < ohlcv.length; i += 4) {
+      const chunk = ohlcv.slice(i, i + 4);
+      agg.push({
+        date: chunk[0].date, open: chunk[0].open,
+        high: Math.max(...chunk.map(c => c.high)),
+        low: Math.min(...chunk.map(c => c.low)),
+        close: chunk[chunk.length - 1].close,
+        volume: chunk.reduce((s, c) => s + c.volume, 0)
+      });
+    }
+    ohlcv = agg;
+  }
+
+  return { ohlcv, meta };
+}
+
+// ═══════════════════════════════════════════
+// Helper: Resolve Korean .KS / .KQ
+// ═══════════════════════════════════════════
 async function resolveKRTicker(code) {
-  // Try .KS (KOSPI) first, then .KQ (KOSDAQ)
   for (const suffix of [".KS", ".KQ"]) {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=1d&interval=1d`;
       const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
       const json = await resp.json();
-      if (!json.chart?.error && json.chart?.result?.[0]?.timestamp?.length) {
-        return code + suffix;
-      }
+      if (!json.chart?.error && json.chart?.result?.[0]?.timestamp?.length) return code + suffix;
     } catch (e) { continue; }
   }
-  // Default to .KS if both fail (will error later with descriptive message)
   return code + ".KS";
 }
 
-// ── Helper: Get Korean stock name from Naver mobile API ──
 async function getKRName(code) {
   try {
     const resp = await fetch(`https://m.stock.naver.com/api/stock/${code}/basic`, {
@@ -361,7 +435,5 @@ async function getKRName(code) {
     });
     const json = await resp.json();
     return json?.stockName || null;
-  } catch (e) {
-    return null;
-  }
+  } catch (e) { return null; }
 }
