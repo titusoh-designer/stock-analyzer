@@ -275,7 +275,7 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 <div id="tabSentiment" style="display:none">
   <div class="f-scan-header">
     <div class="f-scan-title">시장 센티먼트</div>
-    <span class="mono" style="font-size:7px;padding:2px 8px;border-radius:3px;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.25);color:#eab308;font-weight:700;margin-left:6px">DEMO</span>
+    <span id="sentStatusBadge" class="mono" style="font-size:7px;padding:2px 8px;border-radius:3px;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.25);color:#eab308;font-weight:700;margin-left:6px">로딩...</span>
     <div class="f-scan-sub">Fear & Greed · VIX · 선물 · 환율 · 섹터 · 경제지표</div>
     <div id="sentTime" class="mono" style="font-size:8px;color:#555;margin-left:auto"></div>
   </div>
@@ -3841,6 +3841,13 @@ async function renderSentiment(){
   const ts=d.timestamp?new Date(d.timestamp).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):new Date().toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
   const timeEl=document.getElementById("sentTime");
   if(timeEl)timeEl.textContent="갱신: "+ts;
+
+  // Update tab header badge (LIVE/DEMO)
+  const hdrBadge=document.getElementById("sentStatusBadge");
+  if(hdrBadge){
+    if(isLive){hdrBadge.textContent="LIVE";hdrBadge.style.background="rgba(78,204,163,.12)";hdrBadge.style.borderColor="rgba(78,204,163,.25)";hdrBadge.style.color="#4ECCA3";}
+    else{hdrBadge.textContent="DEMO";hdrBadge.style.background="rgba(234,179,8,.12)";hdrBadge.style.borderColor="rgba(234,179,8,.25)";hdrBadge.style.color="#eab308";}
+  }
 
   const srcBadge=isLive
     ?`<span class="mono" style="font-size:7px;padding:2px 8px;border-radius:3px;background:rgba(78,204,163,.12);border:1px solid rgba(78,204,163,.25);color:#4ECCA3;font-weight:700">LIVE</span>`
