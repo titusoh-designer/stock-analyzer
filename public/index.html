@@ -22,8 +22,9 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 #searchDrop{display:none;position:absolute;top:100%;left:0;right:0;background:#0c0c16;border:1px solid #1e1e2e;border-radius:0 0 8px 8px;border-top:none;z-index:200;max-height:280px;overflow-y:auto}
 .drop-item{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;cursor:pointer;border-bottom:1px solid #12121e;font-size:10px;transition:background 0.1s}
 .drop-item:hover{background:#12121e}
-.f-nav{display:flex;gap:0;margin-left:auto}
-.f-nav-item{padding:12px 16px;font-size:9px;color:#555;border-bottom:2px solid transparent;cursor:pointer;height:44px;display:flex;align-items:center;font-family:'DM Mono',monospace;transition:all .15s}
+.f-nav{display:flex;gap:0;margin-left:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.f-nav::-webkit-scrollbar{display:none}
+.f-nav-item{padding:12px 12px;font-size:9px;color:#555;border-bottom:2px solid transparent;cursor:pointer;height:44px;display:flex;align-items:center;font-family:'DM Mono',monospace;transition:all .15s;white-space:nowrap;flex-shrink:0}
 .f-nav-item.on{color:#C9A96E;border-color:#C9A96E;background:rgba(201,169,110,.03)}
 .f-nav-item:hover{color:#C9A96E80}
 
@@ -112,7 +113,10 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 .fade{animation:fadeIn 0.25s ease}
 @media(max-width:768px){
-  .f-topbar{padding:0 12px;height:40px}
+  .f-topbar{padding:0 8px;height:40px}
+  .f-logo{font-size:9px;margin-right:8px}
+  .f-search-area{max-width:160px}
+  .f-nav-item{padding:10px 8px;font-size:8px}
   .f-ticker{padding:6px 12px;gap:8px}
   .f-body{padding:8px 12px 16px}
   .f-panels{grid-template-columns:1fr}
@@ -271,6 +275,7 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 <div id="tabSentiment" style="display:none">
   <div class="f-scan-header">
     <div class="f-scan-title">시장 센티먼트</div>
+    <span class="mono" style="font-size:7px;padding:2px 8px;border-radius:3px;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.25);color:#eab308;font-weight:700;margin-left:6px">DEMO</span>
     <div class="f-scan-sub">Fear & Greed · VIX · 선물 · 환율 · 섹터 · 경제지표</div>
     <div id="sentTime" class="mono" style="font-size:8px;color:#555;margin-left:auto"></div>
   </div>
@@ -309,8 +314,8 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 let src="yahoo",tf="1d",curData=null,curSym=null,selSym=null;
 let viewStart=0,viewEnd=260;
 let showIchimoku=false;
-let chartMode="candle"; // "candle" | "line" | "heikin"
-let overlays={rsi:false,bb:true,vol:true,stoch:false,adx:false,obv:false,ichi:false};
+let chartMode=localStorage.getItem("chartMode")||"candle";
+let overlays=JSON.parse(localStorage.getItem("overlays")||'{"rsi":false,"bb":true,"vol":true,"stoch":false,"adx":false,"obv":false,"ichi":false}');
 let autoRefreshTimer=null;
 let isDragging=false,dragStartX=0,dragStartViewStart=0;
 let watchlist=JSON.parse(localStorage.getItem("wl")||"[]");
@@ -333,6 +338,13 @@ function switchTab(t){
 // Search Enter key
 document.getElementById("symInput").addEventListener("keydown",e=>{if(e.key==="Enter")fetchData();});
 
+// ═══ Restore saved chart mode + overlay button states ═══
+(function initChartUI(){
+  document.querySelectorAll("#cmBar .cm-btn").forEach(b=>b.classList.toggle("on",b.dataset.m===chartMode));
+  document.querySelectorAll("#cmBar .ov-btn").forEach(b=>{if(b.dataset.o)b.classList.toggle("on",!!overlays[b.dataset.o]);});
+  if(overlays.ichi)showIchimoku=true;
+})();
+
 // ═══════ CONTROLS ═══════
 function setSrc(s){src=s;document.querySelectorAll("#srcBar .src-btn").forEach(b=>b.classList.toggle("on",b.dataset.s===s));}
 function setTf(t){tf=t;document.querySelectorAll("#tfBar .tf-btn").forEach(b=>b.classList.toggle("on",b.dataset.t===t));if(curData)fetchData();}
@@ -340,19 +352,33 @@ function resetView(totalLen){viewStart=Math.max(0,totalLen-260);viewEnd=totalLen
 function reRender(){if(curData)render(curData,null);}
 function setChartMode(m){
   chartMode=m;
+  localStorage.setItem("chartMode",m);
   document.querySelectorAll("#cmBar .cm-btn").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
   reRender();
 }
 function toggleOv(k){
   overlays[k]=!overlays[k];
-  // Sync legacy flag
   if(k==="ichi")showIchimoku=overlays.ichi;
+  localStorage.setItem("overlays",JSON.stringify(overlays));
   document.querySelectorAll("#cmBar .ov-btn").forEach(b=>{
     if(b.dataset.o===k)b.classList.toggle("on",overlays[k]);
   });
   reRender();
 }
 // Heikin-Ashi 계산 (OHLCV 배열 → HA OHLCV 배열)
+// ═══ Shared RSI Series (used by svgChart overlay + svgRSI) ═══
+function calcRSISeries(cls,n=14){
+  if(cls.length<=n)return[];
+  const r=[];let ag=0,al=0;
+  for(let i=1;i<=n;i++){const d=cls[i]-cls[i-1];d>0?ag+=d:al+=Math.abs(d);}
+  ag/=n;al/=n;
+  for(let i=0;i<cls.length;i++){
+    if(i<n){r.push(null);continue;}
+    if(i>n){const d=cls[i]-cls[i-1];ag=(ag*(n-1)+(d>0?d:0))/n;al=(al*(n-1)+(d<0?Math.abs(d):0))/n;}
+    r.push(al===0?100:+(100-100/(1+ag/al)).toFixed(1));
+  }
+  return r;
+}
 function calcHeikinAshi(ohlcv){
   const ha=[];
   for(let i=0;i<ohlcv.length;i++){
@@ -1408,7 +1434,6 @@ function render(data,ai){
         
         // Title + Legend
         svg+=`<text x="${BP.l+4}" y="14" fill="#F0ECE3" font-size="10" font-weight="600" font-family="DM Mono,monospace">${title}</text>`;
-        svg+=`<text x="${BP.l+4}" y="14" fill="#F0ECE3" font-size="10" font-weight="600" font-family="DM Mono,monospace">${title}</text>`;
         // Current multiple badge
         svg+=`<rect x="${BW-BP.r-80}" y="4" width="76" height="14" rx="4" fill="rgba(59,130,246,.1)" stroke="rgba(59,130,246,.25)"/>`;
         svg+=`<text x="${BW-BP.r-42}" y="14" fill="#3b82f6" font-size="8" font-weight="600" font-family="DM Mono,monospace" text-anchor="middle">현재 ${curMultiple.toFixed(1)}배</text>`;
@@ -2142,6 +2167,7 @@ function svgChart(data,cp,cur,ai,stockName){
   const displayData=isHeikin?calcHeikinAshi(data):data;
   const W=900,H=640,P={t:28,r:92,b:80,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b-36;
   const aP=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);if(cp&&isFinite(cp))aP.push(cp);
+  if(isHeikin)displayData.forEach(d=>{if(d.high>0)aP.push(d.high);if(d.low>0)aP.push(d.low);});
   (ai?.supports||[]).forEach(s=>aP.push(s));(ai?.resistances||[]).forEach(r=>aP.push(r));
   (ai?.detectedPatterns||[]).forEach(p=>{if(p.targetUp)aP.push(p.targetUp);if(p.targetDown)aP.push(p.targetDown);});
   // Include MA values in price range so they're visible on chart
@@ -2377,15 +2403,7 @@ function svgChart(data,cp,cur,ai,stockName){
 
   // RSI overlay on main chart
   if(overlays.rsi&&data.length>14){
-    const rsiS=[];
-    {let ag=0,al=0;const cls3=data.map(d=>d.close||0);
-    for(let i=1;i<=14&&i<cls3.length;i++){const d=cls3[i]-cls3[i-1];d>0?ag+=d:al+=Math.abs(d);}
-    ag/=14;al/=14;
-    for(let i=0;i<cls3.length;i++){
-      if(i<14){rsiS.push(null);continue;}
-      if(i>14){const d=cls3[i]-cls3[i-1];ag=(ag*13+(d>0?d:0))/14;al=(al*13+(d<0?Math.abs(d):0))/14;}
-      rsiS.push(al===0?100:100-100/(1+ag/al));
-    }}
+    const rsiS=calcRSISeries(data.map(d=>d.close||0));
     const rPts=rsiS.map((v,i)=>v!=null?`${tx(i).toFixed(1)},${rTy(v).toFixed(1)}`:null).filter(Boolean);
     if(rPts.length>1){
       s+=`<rect x="${P.l}" y="${rTy(100)}" width="${cw}" height="${rTy(70)-rTy(100)}" fill="rgba(167,139,250,.03)"/>`;
@@ -2828,7 +2846,7 @@ function findDivergences(priceSeries, indicatorSeries, txFn, tyPriceFn, tyIndFn)
 // ═══════ RSI CHART (with price overlay + divergence) ═══════
 function svgRSI(data){
   const cls=data.map(d=>d.close||0).filter(v=>v>0);if(cls.length<15)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI: 15봉 이상 필요</div>`;
-  const n=14,rs=[];for(let e=n;e<=cls.length;e++){let g=0,l=0;for(let i=1;i<=n;i++){const d=cls[e-n+i]-cls[e-n+i-1];d>0?g+=d:l+=Math.abs(d);}let ag=g/n,al=l/n;for(let i=n+1;i<e;i++){const d=cls[i]-cls[i-1];ag=(ag*(n-1)+(d>0?d:0))/n;al=(al*(n-1)+(d<0?Math.abs(d):0))/n;}const rv=al===0?100:+(100-100/(1+ag/al)).toFixed(1);if(isFinite(rv))rs.push(rv);}
+  const rs=calcRSISeries(cls).filter(v=>v!=null&&isFinite(v));
   if(rs.length<2)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI 계산 불가</div>`;
   const W=900,H=110,P={t:18,r:92,b:14,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const tx=i=>P.l+(i/(rs.length-1||1))*cw,ty=v=>P.t+(1-v/100)*ch;
@@ -3998,148 +4016,59 @@ function renderSentiment(){
   el.innerHTML=h;
 }
 
-// ═══════ SIGNAL MATRIX ═══════
-const SIG_DATA=[
-  {sym:"NVDA",mkt:"US",trend:82,mom:70,vol:75,div:90,vola:60,total:78,type:"entry",label:"🟢 진입",reason:"MA 정배열 + RSI 55 반등 + 거래량 증가세",price:"$920",ch:2.3},
-  {sym:"삼성전자",mkt:"KRX",trend:55,mom:62,vol:70,div:85,vola:50,total:62,type:"watch",label:"🔵 관심",reason:"월봉20 지지 + 외인 순매수 전환",price:"₩68,200",ch:-0.5},
-  {sym:"BTC",mkt:"CRYPTO",trend:78,mom:72,vol:80,div:65,vola:55,total:73,type:"entry",label:"🟢 진입",reason:"MACD 골든크로스 + 거래량 급증 + ETF 유입",price:"$87,200",ch:3.1},
-  {sym:"TSLA",mkt:"US",trend:22,mom:30,vol:35,div:40,vola:70,total:32,type:"danger",label:"🔴 경고",reason:"MA 역배열 + 200일선 이탈 + 거래량 감소",price:"$178",ch:-4.2},
-  {sym:"AAPL",mkt:"US",trend:68,mom:55,vol:50,div:80,vola:45,total:61,type:"exit",label:"🟡 익절",reason:"추세선 저항 접근 + MACD 하락 전환",price:"$182",ch:0.8},
-  {sym:"SK하이닉스",mkt:"KRX",trend:75,mom:68,vol:72,div:78,vola:55,total:71,type:"entry",label:"🟢 진입",reason:"HBM3E 수주 확대 + BB 상단 돌파",price:"₩198,500",ch:3.4},
-  {sym:"ETH",mkt:"CRYPTO",trend:65,mom:58,vol:60,div:55,vola:62,total:60,type:"watch",label:"🔵 관심",reason:"ETH ETF 승인 기대 + 횡보 탈출 시도",price:"$3,350",ch:1.2},
-  {sym:"두산에너빌리티",mkt:"KRX",trend:72,mom:65,vol:82,div:60,vola:58,total:68,type:"entry",label:"🟢 진입",reason:"SMR 원전 수주 모멘텀 + 거래량 폭증",price:"₩21,500",ch:5.1}
+// ═══════ SIGNAL MATRIX (Live from Scanner) ═══════
+const SIG_DEMO=[
+  {sym:"NVDA",mkt:"US",trend:82,mom:70,vol:75,div:90,vola:60,total:78,type:"entry",label:"🟢 진입",reason:"MA 정배열 + RSI 55 반등",price:"$920",ch:2.3,starSignals:[],fund:null},
+  {sym:"삼성전자",mkt:"KRX",trend:55,mom:62,vol:70,div:85,vola:50,total:62,type:"watch",label:"🔵 관심",reason:"월봉20 지지 + 외인 순매수",price:"₩68,200",ch:-0.5,starSignals:[],fund:null},
+  {sym:"BTC",mkt:"CRYPTO",trend:78,mom:72,vol:80,div:65,vola:55,total:73,type:"entry",label:"🟢 진입",reason:"MACD 골든크로스",price:"$87,200",ch:3.1,starSignals:[],fund:null}
 ];
-
-function renderSignals(){
-  const el=document.getElementById("sigBody");
-  if(!el)return;
+function scanToSignal(r){
+  const sigs=r.starSignals||[];
+  const bestA=sigs.filter(s=>s.type==="A").sort((a,b)=>b.count-a.count)[0];
+  const bestC=sigs.find(s=>s.type==="C");
+  const aS=bestA?bestA.signals:[];
+  const aC=bestA?bestA.count:0;
+  let trend=30;if(aS.includes("S.T"))trend+=20;if(aS.includes("I.M"))trend+=20;if(aS.includes("B.B"))trend+=15;trend+=Math.max(-15,Math.min(15,r.change*4));trend=Math.max(0,Math.min(100,trend));
+  let mom=30;if(aS.includes("M.A"))mom+=25;if(aS.includes("DMI"))mom+=20;mom+=Math.max(-20,Math.min(25,r.change*5));mom=Math.max(0,Math.min(100,mom));
+  let vol=35;if(bestC){const vs=bestC.signals.find(s=>s.startsWith("Vol×"));if(vs)vol+=Math.min(40,parseFloat(vs.replace("Vol×",""))*20);vol+=15;}vol+=aC*5;vol=Math.max(0,Math.min(100,vol));
+  let div=40;if(bestC){if(bestC.signals.includes("BB수렴"))div+=15;if(bestC.signals.includes("범위↓"))div+=15;div+=10;}if(aC>=4)div+=15;if(aC>=5)div+=10;div=Math.max(0,Math.min(100,div));
+  let vola=45;if(bestC){if(bestC.signals.includes("ATR↓"))vola+=20;if(bestC.signals.includes("BB수렴"))vola+=15;}if(aC<=2)vola-=10;vola=Math.max(0,Math.min(100,vola));
+  const total=Math.round(trend*.35+mom*.25+vol*.15+div*.15+vola*.10);
+  let type,label;if(total>=70){type="entry";label="🟢 진입";}else if(total>=55){type="watch";label="🔵 관심";}else if(total>=40){type="exit";label="🟡 익절";}else{type="danger";label="🔴 경고";}
+  const reasons=[];if(aS.length)reasons.push(aS.join("+")+` (${aC}/5)`);if(bestC)reasons.push("◆강한상승예상");if(r.change>3)reasons.push("급등 "+r.change.toFixed(1)+"%");if(r.change<-3)reasons.push("급락 "+r.change.toFixed(1)+"%");if(r.fund?.per&&r.fund.per<15)reasons.push("PER "+r.fund.per.toFixed(0)+"x");
+  const cs=r.currency==="KRW"?"₩":"$",fp=v=>v>=10000?Number(v).toLocaleString():v>=1?Number(v).toFixed(2):Number(v).toFixed(4);
+  const mkt=r.source==="naver"?"KRX":r.source==="coingecko"?"CRYPTO":"US";
+  return{sym:r.name||r.symbol,code:r.symbol,mkt,source:r.source,trend,mom,vol,div,vola,total,type,label,reason:reasons.join(" · ")||"시그널 감지",price:cs+fp(r.currentPrice||0),ch:r.change||0,fund:r.fund,daysAgo:sigs[0]?.daysAgo||0,starSignals:sigs};
+}
+let _sigCache=null;
+async function renderSignals(){
+  const el=document.getElementById("sigBody");if(!el)return;
+  el.innerHTML=`<div style="text-align:center;padding:40px 0"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p class="noto" style="color:#666;font-size:11px;margin-top:10px">스캐너 결과를 불러오는 중...</p></div>`;
+  let signals=[],dataSource="demo",scanTime=null;
+  if(!_sigCache){try{const resp=await fetch("/api/scan-store");const data=await resp.json();if(data.stored&&data.results&&data.results.length)_sigCache={results:data.results,scannedAt:data.scannedAt,totalScanned:data.totalScanned,source:data.source};}catch(e){}}
+  if(_sigCache&&_sigCache.results.length){signals=_sigCache.results.map(r=>scanToSignal(r)).sort((a,b)=>b.total-a.total);dataSource=_sigCache.source==="cron-6am"?"자동 스캔(6AM)":"스캐너 결과";scanTime=_sigCache.scannedAt;}
+  if(!signals.length){signals=SIG_DEMO;dataSource="demo";}
   const tc={entry:"#4ECCA3",exit:"#C9A96E",danger:"#E85D75",watch:"#3b82f6"};
   const tbg={entry:"rgba(78,204,163,.06)",exit:"rgba(201,169,110,.06)",danger:"rgba(232,93,117,.06)",watch:"rgba(59,130,246,.06)"};
   const tbd={entry:"rgba(78,204,163,.2)",exit:"rgba(201,169,110,.2)",danger:"rgba(232,93,117,.2)",watch:"rgba(59,130,246,.2)"};
   const cc=v=>v>=70?"#4ECCA3":v>=50?"#C9A96E":"#E85D75";
   const cb=v=>v>=70?"rgba(78,204,163,.12)":v>=50?"rgba(201,169,110,.12)":"rgba(232,93,117,.12)";
-  const sorted=[...SIG_DATA].sort((a,b)=>b.total-a.total);
-  const counts={entry:0,exit:0,danger:0,watch:0};
-  SIG_DATA.forEach(s=>counts[s.type]++);
-
-  const scoreBar=(val,label,color)=>`
-    <div style="display:flex;align-items:center;gap:6px;font-size:9px">
-      <span class="mono" style="color:#555;width:65px">${label}</span>
-      <div style="flex:1;height:5px;background:#0a0a14;border-radius:3px;overflow:hidden">
-        <div style="width:${val}%;height:100%;background:${color};border-radius:3px"></div>
-      </div>
-      <span class="mono" style="color:#888;width:22px;text-align:right">${val}</span>
-    </div>`;
-
-  const miniSpark=(sym,type)=>{
-    const W=160,H=40;
-    let seed=0;for(let i=0;i<sym.length;i++)seed=(seed*31+sym.charCodeAt(i))>>>0;
-    const rng=()=>{seed=(seed*1103515245+12345)>>>0;return(seed>>>16)/65536;};
-    const pts=[];let p=50;
-    for(let i=0;i<60;i++){p+=((rng()-.48+(type==="entry"?.008:type==="danger"?-.006:.002))*3);p=Math.max(20,Math.min(80,p));pts.push(p);}
-    const mn=Math.min(...pts),mx=Math.max(...pts);
-    const line=pts.map((v,i)=>`${(i/(pts.length-1)*W).toFixed(1)},${(H-4-(v-mn)/(mx-mn||1)*(H-8)).toFixed(1)}`).join(" ");
-    const col=tc[type];const id="sp_"+sym.replace(/[^a-zA-Z0-9]/g,"");
-    return`<svg viewBox="0 0 ${W} ${H}" style="width:160px;height:40px"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity=".15"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs><polygon points="${line} ${W},${H} 0,${H}" fill="url(#${id})"/><polyline points="${line}" fill="none" stroke="${col}" stroke-width="1.5"/></svg>`;
-  };
-
+  const counts={entry:0,exit:0,danger:0,watch:0};signals.forEach(s=>counts[s.type]=(counts[s.type]||0)+1);
+  const scoreBar=(val,lbl,color)=>`<div style="display:flex;align-items:center;gap:6px;font-size:9px"><span class="mono" style="color:#555;width:65px">${lbl}</span><div style="flex:1;height:5px;background:#0a0a14;border-radius:3px;overflow:hidden"><div style="width:${val}%;height:100%;background:${color};border-radius:3px"></div></div><span class="mono" style="color:#888;width:22px;text-align:right">${val}</span></div>`;
+  const miniSpark=(sym,type)=>{const W=160,H=40;let seed=0;for(let i=0;i<sym.length;i++)seed=(seed*31+sym.charCodeAt(i))>>>0;const rng=()=>{seed=(seed*1103515245+12345)>>>0;return(seed>>>16)/65536;};const pts=[];let p=50;for(let i=0;i<60;i++){p+=((rng()-.48+(type==="entry"?.008:type==="danger"?-.006:.002))*3);p=Math.max(20,Math.min(80,p));pts.push(p);}const mn=Math.min(...pts),mx=Math.max(...pts);const line=pts.map((v,i)=>`${(i/(pts.length-1)*W).toFixed(1)},${(H-4-(v-mn)/(mx-mn||1)*(H-8)).toFixed(1)}`).join(" ");const col=tc[type]||"#555";const id="sp_"+sym.replace(/[^a-zA-Z0-9]/g,"");return`<svg viewBox="0 0 ${W} ${H}" style="width:160px;height:40px"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity=".15"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs><polygon points="${line} ${W},${H} 0,${H}" fill="url(#${id})"/><polyline points="${line}" fill="none" stroke="${col}" stroke-width="1.5"/></svg>`;};
+  const timeBadge=scanTime?`<span class="mono" style="font-size:7px;color:#555">${new Date(scanTime).toLocaleString("ko-KR",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:false})}</span>`:"";
+  const srcBadge=dataSource==="demo"?`<span class="mono" style="font-size:7px;padding:2px 8px;border-radius:3px;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.25);color:#eab308;font-weight:700">DEMO</span>`:`<span class="mono" style="font-size:7px;padding:2px 8px;border-radius:3px;background:rgba(78,204,163,.12);border:1px solid rgba(78,204,163,.25);color:#4ECCA3;font-weight:700">LIVE</span>`;
   let sh=`
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-    ${[["진입",counts.entry,"#4ECCA3","🟢"],["익절",counts.exit,"#C9A96E","🟡"],["경고",counts.danger,"#E85D75","🔴"],["관심",counts.watch,"#3b82f6","🔵"]].map(([l,c,co,ic])=>`
-      <div style="background:linear-gradient(135deg,${co}08,#0c0c16);border:1px solid ${co}20;border-left:3px solid ${co};border-radius:8px;padding:8px 10px">
-        <div style="font-size:9px;color:#555">${ic} ${l}</div>
-        <div class="mono" style="font-size:24px;font-weight:900;color:${co}">${c}</div>
-      </div>
-    `).join("")}
-  </div>
-
-  <div class="card" style="padding:8px;margin-bottom:12px">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-      <span style="color:#3b82f6;font-size:12px">◆</span>
-      <span style="font-size:12px;font-weight:700;color:#F0ECE3">시그널 매트릭스</span>
-      <span class="mono" style="font-size:8px;color:#555;margin-left:auto">종합점수순</span>
-    </div>
-    <div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;min-width:500px">
-      <thead><tr style="border-bottom:1px solid #16162a">
-        <th style="padding:5px 6px;text-align:left;color:#555;font-size:8px;font-family:'DM Mono',monospace">종목</th>
-        ${["추세","모멘텀","거래량","다이버전스","변동성","종합","판정"].map(h2=>`<th style="padding:5px 3px;text-align:center;color:#555;font-size:8px;font-family:'DM Mono',monospace">${h2}</th>`).join("")}
-      </tr></thead>
-      <tbody>${sorted.map(s=>`
-        <tr style="border-bottom:1px solid #0e0e18">
-          <td style="padding:6px"><span class="mono" style="font-size:11px;font-weight:700;color:#F0ECE3">${s.sym}</span> <span style="padding:1px 5px;border-radius:3px;font-size:7px;font-family:'DM Mono',monospace;color:#3b82f6;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2)">${s.mkt}</span></td>
-          ${[s.trend,s.mom,s.vol,s.div,s.vola].map(v=>`<td style="padding:3px;text-align:center"><span style="background:${cb(v)};color:${cc(v)};padding:2px 5px;border-radius:3px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace">${v}</span></td>`).join("")}
-          <td style="text-align:center"><span class="mono" style="font-size:14px;font-weight:900;color:${tc[s.type]}">${s.total}</span></td>
-          <td style="text-align:center"><span style="padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;background:${tbg[s.type]};color:${tc[s.type]};border:1px solid ${tbd[s.type]}">${s.label}</span></td>
-        </tr>
-      `).join("")}</tbody>
-    </table>
-    </div>
-  </div>
-
-  ${sorted.map((sig,i)=>`
-    <div class="card" style="padding:0;overflow:hidden;border-color:${tbd[sig.type]};background:linear-gradient(135deg,${tbg[sig.type]},#0c0c16);margin-bottom:8px;cursor:pointer" onclick="toggleSigDetail(${i})">
-      <div style="padding:10px 12px;display:flex;align-items:center">
-        <div style="width:38px;height:38px;border-radius:8px;background:${tbg[sig.type]};border:1px solid ${tbd[sig.type]};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:10px">
-          <span class="mono" style="font-size:14px;font-weight:900;color:${tc[sig.type]}">${sig.total}</span>
-        </div>
-        <div style="flex:1;min-width:0">
-          <div><span class="mono" style="font-size:13px;font-weight:700;color:#F0ECE3">${sig.sym}</span>
-            <span style="padding:1px 5px;border-radius:3px;font-size:7px;font-family:'DM Mono',monospace;color:#3b82f6;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);margin-left:4px">${sig.mkt}</span>
-            <span style="padding:2px 7px;border-radius:3px;font-size:8px;font-weight:700;font-family:'DM Mono',monospace;background:${tbg[sig.type]};color:${tc[sig.type]};border:1px solid ${tbd[sig.type]};margin-left:4px">${sig.label}</span>
-          </div>
-          <div style="font-size:10px;color:#777;margin-top:3px">${sig.reason}</div>
-        </div>
-        <div style="flex-shrink:0;margin:0 10px">${miniSpark(sig.sym,sig.type)}</div>
-        <div style="text-align:right;min-width:70px;flex-shrink:0">
-          <div class="mono" style="font-size:13px;font-weight:700;color:#F0ECE3">${sig.price}</div>
-          <div class="mono" style="font-size:10px;color:${sig.ch>=0?"#4ECCA3":"#E85D75"}">${sig.ch>=0?"+":""}${sig.ch}%</div>
-        </div>
-        <span id="sigChev_${i}" style="color:#555;font-size:10px;margin-left:6px">▼</span>
-      </div>
-      <div id="sigDetail_${i}" style="display:none;border-top:1px solid ${tbd[sig.type]};padding:12px;background:rgba(6,6,16,.5)">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div style="display:flex;flex-direction:column;gap:5px">
-            <span style="font-size:10px;font-weight:700;color:#F0ECE3;margin-bottom:2px">카테고리별 점수</span>
-            ${scoreBar(sig.trend,"추세 35%",cc(sig.trend))}
-            ${scoreBar(sig.mom,"모멘텀 25%",cc(sig.mom))}
-            ${scoreBar(sig.vol,"거래량 15%",cc(sig.vol))}
-            ${scoreBar(sig.div,"다이버전스 15%",cc(sig.div))}
-            ${scoreBar(sig.vola,"변동성 10%",cc(sig.vola))}
-          </div>
-          <div>
-            <div style="font-size:10px;font-weight:700;color:#F0ECE3;margin-bottom:6px">종합 분석</div>
-            <div style="font-size:9px;color:#777;line-height:1.8">추세(MA 배열·방향), 모멘텀(RSI·MACD), 거래량(수급 강도), 다이버전스(가격-지표 괴리), 변동성(ATR·BB폭)을 가중 합산한 0~100 점수입니다.</div>
-            <div style="margin-top:8px;padding:8px;background:#0a0a14;border-radius:6px;border:1px solid #16162a">
-              <div class="mono" style="font-size:9px;color:#555;margin-bottom:4px">가중치</div>
-              <div style="display:flex;gap:4px;flex-wrap:wrap">
-                ${[["추세","35%","#4ECCA3"],["모멘텀","25%","#C9A96E"],["거래량","15%","#3b82f6"],["다이버전스","15%","#a78bfa"],["변동성","10%","#eab308"]].map(([l,w,c])=>`<span style="padding:2px 6px;border-radius:3px;font-size:7px;font-family:'DM Mono',monospace;background:${c}12;color:${c};border:1px solid ${c}25">${l} ${w}</span>`).join("")}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `).join("")}
-
-  <div style="background:linear-gradient(135deg,rgba(59,130,246,.03),rgba(78,204,163,.02));border:1px solid #16162a;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-top:4px">
-    <span style="color:#C9A96E;font-size:14px">⚠</span>
-    <div>
-      <div style="color:#C9A96E;font-size:10px;font-weight:700">투자 유의사항</div>
-      <div style="color:#777;font-size:9px;line-height:1.7;margin-top:2px">시그널은 기술적 지표 기반 참고 자료입니다. 최종 판단은 본인의 분석에 근거해주세요. 데모 데이터입니다.</div>
-    </div>
-  </div>
-  `;
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">${srcBadge}<span class="mono" style="font-size:8px;color:#555">${dataSource} · ${signals.length}종목</span>${timeBadge}<button onclick="_sigCache=null;renderSignals()" class="pill" style="margin-left:auto;font-size:8px;padding:2px 8px">↻ 새로고침</button></div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">${[["진입",counts.entry||0,"#4ECCA3","🟢"],["익절",counts.exit||0,"#C9A96E","🟡"],["경고",counts.danger||0,"#E85D75","🔴"],["관심",counts.watch||0,"#3b82f6","🔵"]].map(([l,c,co,ic])=>`<div style="background:linear-gradient(135deg,${co}08,#0c0c16);border:1px solid ${co}20;border-left:3px solid ${co};border-radius:8px;padding:8px 10px"><div style="font-size:9px;color:#555">${ic} ${l}</div><div class="mono" style="font-size:24px;font-weight:900;color:${co}">${c}</div></div>`).join("")}</div>
+  <div class="card" style="padding:8px;margin-bottom:12px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="color:#3b82f6;font-size:12px">◆</span><span style="font-size:12px;font-weight:700;color:#F0ECE3">시그널 매트릭스</span><span class="mono" style="font-size:8px;color:#555;margin-left:auto">종합점수순 · 상위 ${Math.min(signals.length,30)}</span></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:500px"><thead><tr style="border-bottom:1px solid #16162a"><th style="padding:5px 6px;text-align:left;color:#555;font-size:8px;font-family:'DM Mono',monospace">종목</th>${["추세","모멘텀","거래량","다이버전스","변동성","종합","판정"].map(h2=>`<th style="padding:5px 3px;text-align:center;color:#555;font-size:8px;font-family:'DM Mono',monospace">${h2}</th>`).join("")}</tr></thead><tbody>${signals.slice(0,30).map(s=>`<tr style="border-bottom:1px solid #0e0e18"><td style="padding:6px"><span class="mono" style="font-size:11px;font-weight:700;color:#F0ECE3">${s.sym}</span> <span style="padding:1px 5px;border-radius:3px;font-size:7px;font-family:'DM Mono',monospace;color:#3b82f6;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2)">${s.mkt}</span></td>${[s.trend,s.mom,s.vol,s.div,s.vola].map(v=>`<td style="padding:3px;text-align:center"><span style="background:${cb(v)};color:${cc(v)};padding:2px 5px;border-radius:3px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace">${v}</span></td>`).join("")}<td style="text-align:center"><span class="mono" style="font-size:14px;font-weight:900;color:${tc[s.type]||"#555"}">${s.total}</span></td><td style="text-align:center"><span style="padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;background:${tbg[s.type]||"transparent"};color:${tc[s.type]||"#555"};border:1px solid ${tbd[s.type]||"#16162a"}">${s.label}</span></td></tr>`).join("")}</tbody></table></div></div>
+  ${signals.slice(0,20).map((sig,i)=>`<div class="card" style="padding:0;overflow:hidden;border-color:${tbd[sig.type]||"#16162a"};background:linear-gradient(135deg,${tbg[sig.type]||"transparent"},#0c0c16);margin-bottom:8px;cursor:pointer" onclick="toggleSigDetail(${i})"><div style="padding:10px 12px;display:flex;align-items:center"><div style="width:38px;height:38px;border-radius:8px;background:${tbg[sig.type]||"transparent"};border:1px solid ${tbd[sig.type]||"#16162a"};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:10px"><span class="mono" style="font-size:14px;font-weight:900;color:${tc[sig.type]||"#555"}">${sig.total}</span></div><div style="flex:1;min-width:0"><div><span class="mono" style="font-size:13px;font-weight:700;color:#F0ECE3">${sig.sym}</span> <span style="padding:1px 5px;border-radius:3px;font-size:7px;font-family:'DM Mono',monospace;color:#3b82f6;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);margin-left:4px">${sig.mkt}</span> <span style="padding:2px 7px;border-radius:3px;font-size:8px;font-weight:700;font-family:'DM Mono',monospace;background:${tbg[sig.type]||"transparent"};color:${tc[sig.type]||"#555"};border:1px solid ${tbd[sig.type]||"#16162a"};margin-left:4px">${sig.label}</span>${sig.daysAgo<=1?` <span style="padding:1px 5px;border-radius:3px;font-size:7px;font-family:'DM Mono',monospace;color:#eab308;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.2);margin-left:4px">NEW</span>`:""}</div><div style="font-size:10px;color:#777;margin-top:3px">${sig.reason}</div></div><div style="flex-shrink:0;margin:0 10px">${miniSpark(sig.sym,sig.type)}</div><div style="text-align:right;min-width:70px;flex-shrink:0"><div class="mono" style="font-size:13px;font-weight:700;color:#F0ECE3">${sig.price}</div><div class="mono" style="font-size:10px;color:${sig.ch>=0?"#4ECCA3":"#E85D75"}">${sig.ch>=0?"+":""}${sig.ch.toFixed(1)}%</div></div><span id="sigChev_${i}" style="color:#555;font-size:10px;margin-left:6px">▼</span></div><div id="sigDetail_${i}" style="display:none;border-top:1px solid ${tbd[sig.type]||"#16162a"};padding:12px;background:rgba(6,6,16,.5)"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="display:flex;flex-direction:column;gap:5px"><span style="font-size:10px;font-weight:700;color:#F0ECE3;margin-bottom:2px">카테고리별 점수</span>${scoreBar(sig.trend,"추세 35%",cc(sig.trend))}${scoreBar(sig.mom,"모멘텀 25%",cc(sig.mom))}${scoreBar(sig.vol,"거래량 15%",cc(sig.vol))}${scoreBar(sig.div,"다이버전스 15%",cc(sig.div))}${scoreBar(sig.vola,"변동성 10%",cc(sig.vola))}</div><div><div style="font-size:10px;font-weight:700;color:#F0ECE3;margin-bottom:6px">시그널 상세</div>${sig.starSignals&&sig.starSignals.length?`<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">${sig.starSignals.slice(0,5).map(ss=>`<div style="display:flex;align-items:center;gap:6px;font-size:9px"><span style="padding:1px 6px;border-radius:3px;background:${ss.type==="C"?"rgba(201,169,110,.12)":"rgba(78,204,163,.12)"};color:${ss.type==="C"?"#C9A96E":"#4ECCA3"};font-family:'DM Mono',monospace;font-weight:700">${ss.type==="C"?"◆":"⬆"+ss.count}</span><span style="color:#888">${ss.signals.join(" + ")}</span><span style="color:#555;margin-left:auto">${ss.daysAgo===0?"오늘":ss.daysAgo+"일전"}</span></div>`).join("")}</div>`:`<div style="font-size:9px;color:#555">시그널 상세 없음</div>`}${sig.fund?`<div style="padding:8px;background:#0a0a14;border-radius:6px;border:1px solid #16162a;margin-top:4px"><div class="mono" style="font-size:8px;color:#555;margin-bottom:4px">펀더멘털</div><div style="display:flex;gap:8px;flex-wrap:wrap;font-size:9px">${sig.fund.per?`<span style="color:#888">PER <span style="color:${sig.fund.per<15?"#4ECCA3":sig.fund.per>30?"#E85D75":"#C9A96E"}">${sig.fund.per.toFixed(1)}</span></span>`:""}${sig.fund.pbr?`<span style="color:#888">PBR <span style="color:#C9A96E">${sig.fund.pbr.toFixed(1)}</span></span>`:""}${sig.fund.roe?`<span style="color:#888">ROE <span style="color:${sig.fund.roe>10?"#4ECCA3":"#C9A96E"}">${sig.fund.roe.toFixed(1)}%</span></span>`:""}${sig.fund.opm?`<span style="color:#888">OPM <span style="color:#C9A96E">${sig.fund.opm.toFixed(1)}%</span></span>`:""}</div></div>`:""}</div></div><div style="margin-top:10px;text-align:right"><button onclick="event.stopPropagation();goSigAnalyze('${(sig.code||sig.sym).replace(/'/g,"\\'")}','${sig.mkt}')" style="padding:5px 14px;border-radius:5px;border:1px solid #C9A96E40;background:rgba(201,169,110,.08);color:#C9A96E;font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;font-weight:600">→ 종목 분석</button></div></div></div>`).join("")}
+  <div class="card" style="margin-bottom:8px;padding:12px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="color:#3b82f6;font-size:10px">ⓘ</span><span style="font-size:10px;font-weight:700;color:#F0ECE3">점수 산출 기준</span></div><div style="font-size:9px;color:#777;line-height:1.8;margin-bottom:8px">스캐너가 감지한 A시그널(MACD·Supertrend·DMI·BB·Ichimoku)과 C시그널(BB수렴+ATR감소+범위수렴+거래량폭증+양봉)을 기반으로 5차원 점수를 자동 산출합니다.</div><div style="display:flex;gap:4px;flex-wrap:wrap">${[["추세","35%","#4ECCA3"],["모멘텀","25%","#C9A96E"],["거래량","15%","#3b82f6"],["다이버전스","15%","#a78bfa"],["변동성","10%","#eab308"]].map(([l,w,c])=>`<div style="padding:4px 8px;border-radius:4px;background:${c}08;border:1px solid ${c}20"><span style="font-size:8px;color:${c};font-family:'DM Mono',monospace;font-weight:700">${l} ${w}</span></div>`).join("")}</div><div style="font-size:8px;color:#555;margin-top:8px">판정: 70↑ 진입 · 55~69 관심 · 40~54 익절 · 40↓ 경고</div></div>
+  <div style="background:linear-gradient(135deg,rgba(59,130,246,.03),rgba(78,204,163,.02));border:1px solid #16162a;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;margin-top:4px"><span style="color:#C9A96E;font-size:14px">⚠</span><div><div style="color:#C9A96E;font-size:10px;font-weight:700">투자 유의사항</div><div style="color:#777;font-size:9px;line-height:1.7;margin-top:2px">시그널은 기술적 지표 기반 참고 자료입니다. 최종 판단은 본인의 분석에 근거해주세요.</div></div></div>`;
   el.innerHTML=sh;
 }
-function toggleSigDetail(i){
-  const det=document.getElementById("sigDetail_"+i);
-  const chev=document.getElementById("sigChev_"+i);
-  if(!det)return;
-  const show=det.style.display==="none";
-  det.style.display=show?"block":"none";
-  if(chev)chev.textContent=show?"▲":"▼";
-}
+function toggleSigDetail(i){const det=document.getElementById("sigDetail_"+i);const chev=document.getElementById("sigChev_"+i);if(!det)return;const show=det.style.display==="none";det.style.display=show?"block":"none";if(chev)chev.textContent=show?"▲":"▼";}
+function goSigAnalyze(sym,mkt){const isKR=mkt==="KRX";const isCrypto=mkt==="CRYPTO";const sr=isKR?"naver":isCrypto?"coingecko":"yahoo";switchTab("analyze");const inp=document.getElementById("symInput");inp.value=sym;selSym={symbol:sym,source:sr,name:sym};setSrc(sr);hideDrop();fetchData();}
 </script>
 </body>
 </html>
