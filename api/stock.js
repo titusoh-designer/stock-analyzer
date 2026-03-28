@@ -322,7 +322,9 @@ export default async function handler(req, res) {
 // Helper: Naver Chart API (Korean stocks)
 // ═══════════════════════════════════════════
 async function fetchNaverChart(code, interval) {
-  const periodMap = {
+  // Naver fchart API — XML format, most stable endpoint
+  // Format: date|open|high|low|close|volume
+  const tfMap = {
     "1m": "minute", "5m": "minute5", "10m": "minute10", "30m": "minute30",
     "60m": "minute60", "4h": "minute240",
     "1d": "day", "1wk": "week", "1mo": "month"
@@ -332,26 +334,35 @@ async function fetchNaverChart(code, interval) {
     "60m": 500, "4h": 500,
     "1d": 1300, "1wk": 520, "1mo": 120
   };
-  const period = periodMap[interval] || "day";
+  const timeframe = tfMap[interval] || "day";
   const count = countMap[interval] || 500;
-  const UA_M = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)";
 
-  // Naver chart API
-  const url = `https://m.stock.naver.com/api/stock/${code}/chart?periodType=${period}&count=${count}`;
-  const resp = await fetch(url, { headers: { "User-Agent": UA_M } });
-  if (!resp.ok) throw new Error("Naver chart API failed: " + resp.status);
-  const json = await resp.json();
+  const url = `https://fchart.stock.naver.com/sise.nhn?symbol=${code}&timeframe=${timeframe}&count=${count}&requestType=0`;
+  const resp = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+  });
+  if (!resp.ok) throw new Error("Naver fchart failed: " + resp.status);
+  const xml = await resp.text();
 
-  if (!Array.isArray(json) || json.length < 5) throw new Error("Naver chart data insufficient");
+  // Parse XML: <item data="20210329|81700|81700|81000|81600|14952134" />
+  const items = [...xml.matchAll(/data="([^"]+)"/g)].map(m => m[1]);
+  if (items.length < 5) throw new Error("Naver fchart data insufficient: " + items.length);
 
-  return json.map(d => ({
-    date: d.localDate || d.dt || "",
-    open: parseFloat(d.openPrice || d.open || 0),
-    high: parseFloat(d.highPrice || d.high || 0),
-    low: parseFloat(d.lowPrice || d.low || 0),
-    close: parseFloat(d.closePrice || d.close || 0),
-    volume: parseInt(d.accumulatedTradingVolume || d.volume || 0)
-  })).filter(d => d.close > 0);
+  return items.map(row => {
+    const [dt, open, high, low, close, volume] = row.split("|");
+    // Date format: "20210329" or "202103291530" (intraday)
+    const date = dt.length >= 12
+      ? `${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)} ${dt.slice(8,10)}:${dt.slice(10,12)}`
+      : `${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)}`;
+    return {
+      date,
+      open: parseInt(open) || 0,
+      high: parseInt(high) || 0,
+      low: parseInt(low) || 0,
+      close: parseInt(close) || 0,
+      volume: parseInt(volume) || 0
+    };
+  }).filter(d => d.close > 0);
 }
 
 // ═══════════════════════════════════════════
