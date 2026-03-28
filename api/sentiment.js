@@ -88,13 +88,14 @@ export default async function handler(req, res) {
       "CL=F",     // WTI Crude Oil
       "GC=F",     // Gold
       "^TNX",     // US 10Y Treasury Yield
+      "^KQ11",    // KOSDAQ Composite
     ];
     const yData = await yahooQuote(yahooSymbols);
 
-    // ═══ 3. Korean Futures (Naver) ═══
-    let kospiFutures = null, kospiNightFutures = null;
+    // ═══ 3. Korean Futures + KOSDAQ150 (Naver) ═══
+    let kospiFutures = null, kosdaqIndex = null;
     try {
-      // KOSPI200 futures from Naver
+      // KOSPI200 from Naver
       const kfResp = await fetch("https://m.stock.naver.com/api/index/KOSPI200/basic", {
         headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" }
       });
@@ -108,8 +109,25 @@ export default async function handler(req, res) {
         }
       }
     } catch (e) { }
+    // KOSDAQ150 from Naver
+    let kosdaq150 = null;
+    try {
+      const kd150Resp = await fetch("https://m.stock.naver.com/api/index/KRX/KOSDAQ150/basic", {
+        headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" }
+      });
+      if (kd150Resp.ok) {
+        const kd150Json = await kd150Resp.json();
+        if (kd150Json) {
+          kosdaq150 = {
+            price: kd150Json.closePrice || kd150Json.currentPrice,
+            change: kd150Json.fluctuationsRatio ? parseFloat(kd150Json.fluctuationsRatio) : null
+          };
+        }
+      }
+    } catch (e) { }
 
-    // ═══ 4. Sector Performance (Yahoo sector ETFs as proxy) ═══
+    // ═══ 4. Sector Performance ═══
+    // US: ETFs, KR: Sector ETFs (KODEX/TIGER)
     const sectorSymbols = {
       US: [
         { sym: "XLK", name: "Tech" },
@@ -117,9 +135,17 @@ export default async function handler(req, res) {
         { sym: "XLE", name: "Energy" },
         { sym: "XLF", name: "Finance" },
         { sym: "XLY", name: "Consumer" },
+      ],
+      KR: [
+        { sym: "091160.KS", name: "반도체" },
+        { sym: "305720.KS", name: "2차전지" },
+        { sym: "244580.KS", name: "바이오" },
+        { sym: "140700.KS", name: "조선" },
+        { sym: "143860.KS", name: "전력기기" },
       ]
     };
-    const sectorData = await yahooQuote(sectorSymbols.US.map(s => s.sym));
+    const allSectorSyms = [...sectorSymbols.US.map(s=>s.sym), ...sectorSymbols.KR.map(s=>s.sym)];
+    const sectorData = await yahooQuote(allSectorSyms);
 
     // ═══ Assemble response ═══
     const get = (sym) => yData[sym] || { price: 0, change: 0 };
@@ -175,7 +201,11 @@ export default async function handler(req, res) {
           v: kospiFutures ? fmtPrice(kospiFutures.price) : fmtPrice(get("^KS11").price),
           ch: kospiFutures?.change ?? get("^KS11").change
         },
-        { n: "KOSPI 야간선물", v: "—", ch: 0, hl: true, note: "장외 데이터 미제공" },
+        {
+          n: "KOSDAQ150",
+          v: kosdaq150 ? fmtPrice(kosdaq150.price) : "—",
+          ch: kosdaq150?.change ?? 0
+        },
         { n: "S&P500 선물", v: fmtPrice(get("ES=F").price), ch: get("ES=F").change },
         { n: "나스닥100 선물", v: fmtPrice(get("NQ=F").price), ch: get("NQ=F").change },
       ],
@@ -189,6 +219,7 @@ export default async function handler(req, res) {
 
       indices: [
         { n: "KOSPI", v: fmtPrice(get("^KS11").price), ch: get("^KS11").change },
+        { n: "KOSDAQ", v: fmtPrice(get("^KQ11").price), ch: get("^KQ11").change },
         { n: "S&P500", v: fmtPrice(get("^GSPC").price), ch: get("^GSPC").change },
         { n: "NASDAQ", v: fmtPrice(get("^IXIC").price), ch: get("^IXIC").change },
         { n: "BTC", v: fmtPrice(get("BTC-USD").price, "$"), ch: get("BTC-USD").change },
@@ -200,14 +231,11 @@ export default async function handler(req, res) {
         info: s.sym + " ETF 기준"
       })),
 
-      // Korean sectors — hardcoded names, would need KRX API for live data
-      sectorsKR: [
-        { name: "반도체", ch: 0, info: "실시간 데이터 준비 중" },
-        { name: "2차전지", ch: 0, info: "실시간 데이터 준비 중" },
-        { name: "조선", ch: 0, info: "실시간 데이터 준비 중" },
-        { name: "바이오", ch: 0, info: "실시간 데이터 준비 중" },
-        { name: "전력기기", ch: 0, info: "실시간 데이터 준비 중" },
-      ],
+      sectorsKR: sectorSymbols.KR.map(s => ({
+        name: s.name,
+        ch: sectorData[s.sym]?.change || 0,
+        info: s.sym.replace(".KS","") + " ETF 기준"
+      })),
 
       // Economic calendar — static (would need investing.com scraping for live)
       eco: [
@@ -231,7 +259,7 @@ export default async function handler(req, res) {
         fxSource: "Yahoo Finance (KRW=X)",
         commoditiesSource: "Yahoo Finance (CL=F, GC=F)",
         sectorUSSource: "Yahoo Finance sector ETFs (XLK, XLV, XLE, XLF, XLY)",
-        sectorKRSource: "미구현 — KRX 업종지수 API 필요",
+        sectorKRSource: "Yahoo Finance KR sector ETFs (091160, 305720, 244580, 140700, 143860)",
         ecoSource: "미구현 — 수동 또는 스크래핑 필요",
         newsSource: "미구현 — 네이버/Google News RSS 필요",
         nightFuturesNote: "KOSPI 야간선물은 장외거래 데이터로, 무료 API에서 실시간 제공 불가",
