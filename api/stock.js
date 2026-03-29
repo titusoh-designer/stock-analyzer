@@ -221,9 +221,8 @@ export default async function handler(req, res) {
 
           // Try 1: Naver short selling pages (multiple URL candidates)
           const shortPageUrls = [
-            `https://finance.naver.com/item/sise_short.naver?code=${code}&page=1`,
-            `https://finance.naver.com/item/sise_short_balance.naver?code=${code}&page=1`,
-            `https://finance.naver.com/sise/sise_short_balance.naver?code=${code}&page=1`
+            `https://finance.naver.com/item/short_selling.naver?code=${code}&page=1`,
+            `https://finance.naver.com/item/frgn.naver?code=${code}&page=1`
           ];
           for (const ssUrl of shortPageUrls) {
             try {
@@ -261,8 +260,8 @@ export default async function handler(req, res) {
           // Try 2: page 2~4 for more history (try all URL patterns)
           if (shortData && shortData.timeSeries.length < 60) {
             const pgBaseUrls = [
-              `https://finance.naver.com/item/sise_short.naver?code=${code}`,
-              `https://finance.naver.com/item/sise_short_balance.naver?code=${code}`
+              `https://finance.naver.com/item/short_selling.naver?code=${code}`,
+              `https://finance.naver.com/item/frgn.naver?code=${code}`
             ];
             for (let pg = 2; pg <= 4; pg++) {
               let pgFound = false;
