@@ -330,9 +330,9 @@ async function fetchNaverChart(code, interval) {
     "1d": "day", "1wk": "week", "1mo": "month"
   };
   const countMap = {
-    "1m": 500, "5m": 500, "10m": 500, "30m": 500,
-    "60m": 500, "4h": 500,
-    "1d": 1300, "1wk": 520, "1mo": 120
+    "1m": 2500, "5m": 2500, "10m": 2500, "30m": 2500,
+    "60m": 2500, "4h": 2500,
+    "1d": 2500, "1wk": 520, "1mo": 240
   };
   const timeframe = tfMap[interval] || "day";
   const count = countMap[interval] || 500;
@@ -371,7 +371,7 @@ async function fetchNaverChart(code, interval) {
 async function fetchYahooChart(ticker, interval) {
   const rangeMap = {
     "1m": "7d", "5m": "60d", "10m": "60d", "15m": "60d", "30m": "60d",
-    "60m": "6mo", "4h": "6mo",
+    "60m": "2y", "4h": "2y",
     "1d": "5y", "1wk": "10y", "1mo": "max"
   };
   const intMap = {

@@ -1041,7 +1041,7 @@ JSON으로만 응답 (모든 텍스트 한국어):
 function render(data,ai){
   const allData=data.ohlcv;
   const o=allData.slice(viewStart,viewEnd);
-  const cp=data.currentPrice||o[o.length-1].close,pv=o.length>1?o[o.length-2].close:cp;
+  const cp=data.currentPrice||allData[allData.length-1].close,pv=allData.length>1?allData[allData.length-2].close:cp;
   const ch=((cp-pv)/pv*100).toFixed(2),cs=data.currency==="KRW"?"₩":"$",fp=v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
   const cls=o.map(d=>d.close),h52=Math.max(...o.map(d=>d.high)),l52=Math.min(...o.map(d=>d.low));
   const rsi=calcRSI(cls),macd=calcMACD(cls),bb=calcBB(cls),stoch=calcStoch(o);
@@ -1608,8 +1608,8 @@ function render(data,ai){
     // Lightweight chart-only update (skips full render)
     function updateChartView(){
       const d=curData.ohlcv.slice(viewStart,viewEnd);
-      const isLatest=viewEnd>=curData.ohlcv.length; // 최신 봉이 보이는 중인가
-      const cp2=isLatest?(curData.currentPrice||d[d.length-1]?.close||0):(d[d.length-1]?.close||0);
+      // Always use real current price — never the last visible candle
+      const cp2=curData.currentPrice||curData.ohlcv[curData.ohlcv.length-1]?.close||0;
       const stockFullName2=curData.name||curSym?.name||curData.symbol;
       const stockCode2=curData.symbol||curSym?.symbol||"";
       const stockLabel2=stockFullName2!==stockCode2?`${stockFullName2} (${stockCode2})`:stockFullName2;
