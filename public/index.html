@@ -3716,11 +3716,11 @@ function renderScanResults(data){
     let qHtml="";
     if(f.quarterly&&f.quarterly.length){
       const qDiv=r.currency==="KRW"?1e8:1e6;
-      qHtml=`<table style="width:100%;border-collapse:collapse;font-size:9px;margin-top:6px"><tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#555;padding:2px 4px;font-weight:400"></th>${f.quarterly.map(q=>`<th style="text-align:right;color:#666;padding:2px 4px;font-weight:400">${q.q||""}</th>`).join("")}</tr><tr><td style="color:#555;padding:2px 4px">매출</td>${f.quarterly.map(q=>{const v=q.rev!=null?Math.round(q.rev/qDiv):null;return`<td style="text-align:right;color:#999;padding:2px 4px">${v!=null?v.toLocaleString():"—"}</td>`;}).join("")}</tr><tr><td style="color:#555;padding:2px 4px">영업이익</td>${f.quarterly.map((q,qi)=>{const v=q.opProfit!=null?Math.round(q.opProfit/qDiv):q.earn!=null?Math.round(q.earn/qDiv):null;const c=v==null?"#888":v>=0?"#4ECCA3":"#E85D75";return`<td style="text-align:right;color:${c};padding:2px 4px">${v!=null?v.toLocaleString():"—"}</td>`;}).join("")}</tr><tr><td style="color:#555;padding:2px 4px">이익률</td>${f.quarterly.map(q=>{if(!q.rev||!q.opProfit)return`<td style="text-align:right;color:#555;padding:2px 4px">—</td>`;const m=q.opProfit/q.rev*100;const c=m>=10?"#4ECCA3":m>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;color:${c};padding:2px 4px">${m.toFixed(1)}%</td>`;}).join("")}</tr></table>`;
+      qHtml=`<table style="width:100%;border-collapse:collapse;font-size:9px;margin-top:6px"><tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#555;padding:2px 4px;font-weight:400"></th>${f.quarterly.map(q=>`<th style="text-align:right;color:#888;padding:2px 4px;font-weight:400">${q.q||""}</th>`).join("")}</tr><tr><td style="color:#555;padding:2px 4px">매출</td>${f.quarterly.map(q=>{const v=q.rev!=null?Math.round(q.rev/qDiv):null;return`<td style="text-align:right;color:#bbb;padding:2px 4px">${v!=null?v.toLocaleString():"—"}</td>`;}).join("")}</tr><tr><td style="color:#555;padding:2px 4px">영업이익</td>${f.quarterly.map((q,qi)=>{const v=q.opProfit!=null?Math.round(q.opProfit/qDiv):q.earn!=null?Math.round(q.earn/qDiv):null;const c=v==null?"#888":v>=0?"#4ECCA3":"#E85D75";return`<td style="text-align:right;color:${c};padding:2px 4px">${v!=null?v.toLocaleString():"—"}</td>`;}).join("")}</tr><tr><td style="color:#555;padding:2px 4px">이익률</td>${f.quarterly.map(q=>{if(!q.rev||!q.opProfit)return`<td style="text-align:right;color:#555;padding:2px 4px">—</td>`;const m=q.opProfit/q.rev*100;const c=m>=10?"#4ECCA3":m>=5?"#C9A96E":"#E85D75";return`<td style="text-align:right;color:${c};padding:2px 4px">${m.toFixed(1)}%</td>`;}).join("")}</tr></table>`;
     } else if(f.usFinance){
       // US stock finance from Google
       const uf=f.usFinance;
-      qHtml=`<table style="width:100%;border-collapse:collapse;font-size:9px;margin-top:6px"><tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#555;padding:2px 4px;font-weight:400"></th><th style="text-align:right;color:#666;padding:2px 4px;font-weight:400">Latest</th></tr>`;
+      qHtml=`<table style="width:100%;border-collapse:collapse;font-size:9px;margin-top:6px"><tr style="border-bottom:1px solid #1a1a28"><th style="text-align:left;color:#555;padding:2px 4px;font-weight:400"></th><th style="text-align:right;color:#888;padding:2px 4px;font-weight:400">Latest</th></tr>`;
       if(uf.revenue)qHtml+=`<tr><td style="color:#555;padding:2px 4px">Revenue</td><td style="text-align:right;color:#999;padding:2px 4px">${uf.revenue}</td></tr>`;
       if(uf.netIncome)qHtml+=`<tr><td style="color:#555;padding:2px 4px">Net Income</td><td style="text-align:right;color:${uf.netIncome.startsWith("-")?"#E85D75":"#4ECCA3"};padding:2px 4px">${uf.netIncome}</td></tr>`;
       if(f.per)qHtml+=`<tr><td style="color:#555;padding:2px 4px">PER</td><td style="text-align:right;color:#999;padding:2px 4px">${f.per.toFixed(1)}배</td></tr>`;
@@ -3729,33 +3729,34 @@ function renderScanResults(data){
     }
 
     return`<div class="card" style="border-left:3px solid ${borderCol};padding:14px 16px;margin-bottom:8px;cursor:pointer" onclick="window.open(location.origin+'?s=${encodeURIComponent(r.symbol)}&src=${r.source}','_blank')">>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span style="font-size:${isTypeC?'22':sig.count>=4?'20':'17'}px;font-weight:700;color:${sigCol}">${sigIcon}</span>
             <span style="padding:3px 10px;border-radius:6px;font-size:${isTypeC?'12':'11'}px;font-weight:600;background:rgba(${bgRgb},.15);color:${sigCol};border:1px solid ${sigCol}40">${sigLabel}</span>
+            <span style="font-size:16px;font-weight:600;color:#F0ECE3">${r.name||r.symbol}</span>
+            <span class="mono" style="font-size:20px;font-weight:700;color:#F0ECE3">${cs}${fp(r.currentPrice)}</span>
+            <span class="mono" style="font-size:12px;font-weight:600;color:${chCol}">${r.change>=0?"+":""}${r.change}%</span>
           </div>
-          <div style="min-width:0">
-            <div style="font-size:16px;font-weight:600;color:#F0ECE3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">${r.name||r.symbol}</div>
-            <div class="mono" style="font-size:10px;color:#666;margin-top:1px">${r.symbol} · ${r.source} · <span style="color:${chCol}">${r.change>=0?"+":""}${r.change}%</span></div>
+          <div class="mono" style="font-size:10px;color:#555;margin-top:3px;display:flex;gap:8px;align-items:center">
+            <span>${r.symbol} · ${r.source}</span>
+            ${f.sector?`<span style="color:#C9A96E">◆ ${f.sector}</span>`:""}
+            ${mcapStr?`<span style="color:#85C1E9">시총 ${mcapStr}</span>`:""}
           </div>
         </div>
-        <div style="text-align:right;min-width:140px">
-          <div class="mono" style="font-size:20px;font-weight:700;color:#F0ECE3">${cs}${fp(r.currentPrice)}</div>
-          <div class="mono" style="font-size:10px;color:#888;margin-top:2px">${sig.date} (${dayLabel})</div>
-          <div class="mono" style="font-size:8px;color:#555;margin-top:1px">${sig.signals?sig.signals.join("+"):""}</div>
+        <div style="text-align:right;min-width:110px;flex-shrink:0">
+          <div class="mono" style="font-size:10px;color:#888">${sig.date} (${dayLabel})</div>
+          <div class="mono" style="font-size:9px;color:#555;margin-top:1px">${sig.signals?sig.signals.join("+"):""}</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-        ${f.sector?`<span style="background:rgba(201,169,110,.06);border:1px solid #C9A96E20;border-radius:4px;padding:2px 7px;font-size:9px;color:#C9A96E">◆ ${f.sector}${f.industry?" · "+f.industry:""}</span>`:""}
-        ${mcapStr?`<span style="background:rgba(133,193,233,.06);border:1px solid #85C1E920;border-radius:4px;padding:2px 7px;font-size:9px;color:#85C1E9">시총 ${mcapStr}</span>`:""}
-        <div style="display:flex;gap:8px;flex:1;min-width:180px">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+        <div style="display:flex;gap:10px;flex:1">
           ${mg("PER",f.per,0,40,false)}
           ${mg("PBR",f.pbr,0,10,false)}
           ${mg("ROE",f.roe,-5,25,true)}
         </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:stretch">
+      <div style="display:flex;gap:10px;align-items:stretch">
         <div style="flex:1;min-width:0">${qHtml||`<div style="font-size:9px;color:#444;padding:4px">분기 실적 데이터 없음</div>`}</div>
         <div style="flex:0 0 210px;background:#0e0e16;border:1px solid #1a1a28;border-radius:6px;padding:4px 6px;display:flex;align-items:center;justify-content:center">${miniChartSvg(r.mini,r.change,r.miniMA20,r.miniMA22,r.starSignals)}</div>
       </div>
