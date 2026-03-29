@@ -219,11 +219,16 @@ export default async function handler(req, res) {
         try {
           let shortData = null;
 
-          // Try 1: Naver short selling balance page (time series)
-          try {
-            const ssUrl = `https://finance.naver.com/item/sise_short_balance.naver?code=${code}&page=1`;
+          // Try 1: Naver short selling pages (multiple URL candidates)
+          const shortPageUrls = [
+            `https://finance.naver.com/item/sise_short.naver?code=${code}&page=1`,
+            `https://finance.naver.com/item/sise_short_balance.naver?code=${code}&page=1`,
+            `https://finance.naver.com/sise/sise_short_balance.naver?code=${code}&page=1`
+          ];
+          for (const ssUrl of shortPageUrls) {
+            try {
             const ssResp = await fetch(ssUrl, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(5000) });
-            console.log(`[SHORT] sise_short_balance status: ${ssResp.status}`);
+            console.log(`[SHORT] ${ssUrl.split('?')[0].split('/').pop()} status: ${ssResp.status}`);
             if (ssResp.ok) {
               const ssHtml = await ssResp.text();
               console.log(`[SHORT] HTML length: ${ssHtml.length}`);
@@ -246,31 +251,44 @@ export default async function handler(req, res) {
               if (rows.length >= 3) {
                 rows.reverse(); // oldest first
                 shortData = { source: "naver-short-balance", timeSeries: rows };
+                console.log(`[SHORT] SUCCESS: ${rows.length} rows from ${ssUrl.split('?')[0].split('/').pop()}`);
+                break; // found data, stop trying other URLs
               }
             }
-          } catch (e) { /* page 1 failed */ }
+            } catch (e) { console.log(`[SHORT] Failed: ${e.message}`); continue; }
+          } // end for shortPageUrls
 
-          // Try 2: page 2~3 for more history
+          // Try 2: page 2~4 for more history (try all URL patterns)
           if (shortData && shortData.timeSeries.length < 60) {
+            const pgBaseUrls = [
+              `https://finance.naver.com/item/sise_short.naver?code=${code}`,
+              `https://finance.naver.com/item/sise_short_balance.naver?code=${code}`
+            ];
             for (let pg = 2; pg <= 4; pg++) {
-              try {
-                const pgUrl = `https://finance.naver.com/item/sise_short_balance.naver?code=${code}&page=${pg}`;
-                const pgResp = await fetch(pgUrl, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(3000) });
-                if (!pgResp.ok) break;
-                const pgHtml = await pgResp.text();
-                const trMatches = pgHtml.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-                for (const tr of trMatches) {
-                  const tds = tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
-                  if (!tds || tds.length < 4) continue;
-                  const strip = s => s.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, "").trim();
-                  const dateStr = strip(tds[0]);
-                  if (!/^\d{4}\.\d{2}\.\d{2}$/.test(dateStr)) continue;
-                  const date = dateStr.replace(/\./g, "-");
-                  const balance = parseFloat(strip(tds[1]).replace(/,/g, "")) || 0;
-                  const ratio = parseFloat(strip(tds[3]).replace(/,/g, "")) || 0;
-                  if (balance > 0) shortData.timeSeries.unshift({ date, balance, ratio });
-                }
-              } catch (e) { break; }
+              let pgFound = false;
+              for (const base of pgBaseUrls) {
+                try {
+                  const pgUrl = `${base}&page=${pg}`;
+                  const pgResp = await fetch(pgUrl, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(3000) });
+                  if (!pgResp.ok) continue;
+                  const pgHtml = await pgResp.text();
+                  const trMatches = pgHtml.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+                  let added = 0;
+                  for (const tr of trMatches) {
+                    const tds = tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
+                    if (!tds || tds.length < 4) continue;
+                    const strip = s => s.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, "").trim();
+                    const dateStr = strip(tds[0]);
+                    if (!/^\d{4}\.\d{2}\.\d{2}$/.test(dateStr)) continue;
+                    const date = dateStr.replace(/\./g, "-");
+                    const balance = parseFloat(strip(tds[1]).replace(/,/g, "")) || 0;
+                    const ratio = parseFloat(strip(tds[3]).replace(/,/g, "")) || 0;
+                    if (balance > 0) { shortData.timeSeries.unshift({ date, balance, ratio }); added++; }
+                  }
+                  if (added > 0) { pgFound = true; break; }
+                } catch (e) { continue; }
+              }
+              if (!pgFound) break;
             }
           }
 
@@ -473,8 +491,8 @@ async function fetchNaverChart(code, interval) {
   };
   // Naver fchart has different max counts for intraday vs daily
   const countMap = {
-    "1m": 500, "5m": 2000, "10m": 2000, "30m": 2000,
-    "60m": 2000, "4h": 2000,
+    "1m": 300, "5m": 500, "10m": 500, "30m": 500,
+    "60m": 500, "4h": 500,
     "1d": 2500, "1wk": 520, "1mo": 240
   };
   const timeframe = tfMap[interval] || "day";
