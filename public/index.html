@@ -2314,7 +2314,7 @@ function svgChart(data,cp,cur,ai,stockName){
   const tx=i=>P.l+(i/(data.length-1||1))*cw,ty=p=>P.t+(1-(p-mn)/(mx-mn||1))*ch;
   const bw=Math.max(1.5,Math.min(8,cw/data.length*.55)),cs=cur==="KRW"?"₩":"$";
   const fm=v=>v>=1?Number(v).toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(v<0.01?6:v<1?4:2);
-  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:640px;display:block">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:660px">`;
 
   // Grid
   for(let i=0;i<=6;i++){const p=mn+(mx-mn)*(i/6);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".035"/><text x="${W-P.r+6}" y="${ty(p)+3.5}" fill="#555" font-size="8" font-family="DM Mono,monospace">${fm(p)}</text>`;}
@@ -3155,7 +3155,7 @@ function svgShort(data){
   const trendCol=trend==="상승"?"#E85D75":"#4ECCA3";
   const trendLabel=trend==="상승"?"공매도 증가":"공매도 감소";
 
-  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:180px;display:block">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%">`;
 
   // Grid
   [vMin,vMin+vRng/2,vMax].forEach(v=>{
