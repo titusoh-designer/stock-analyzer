@@ -2314,7 +2314,7 @@ function svgChart(data,cp,cur,ai,stockName){
   const tx=i=>P.l+(i/(data.length-1||1))*cw,ty=p=>P.t+(1-(p-mn)/(mx-mn||1))*ch;
   const bw=Math.max(1.5,Math.min(8,cw/data.length*.55)),cs=cur==="KRW"?"₩":"$";
   const fm=v=>v>=1?Number(v).toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(v<0.01?6:v<1?4:2);
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:660px">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:640px;display:block">`;
 
   // Grid
   for(let i=0;i<=6;i++){const p=mn+(mx-mn)*(i/6);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".035"/><text x="${W-P.r+6}" y="${ty(p)+3.5}" fill="#555" font-size="8" font-family="DM Mono,monospace">${fm(p)}</text>`;}
@@ -2951,7 +2951,8 @@ function findDivergences(priceSeries, indicatorSeries, txFn, tyPriceFn, tyIndFn)
 
 // ═══════ RSI CHART (with price overlay + divergence) ═══════
 function svgRSI(data){
-  const cls=data.map(d=>d.close||0).filter(v=>v>0);if(cls.length<15)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI: 15봉 이상 필요</div>`;
+  const cls=data.map(d=>d.close||0);
+  if(cls.filter(v=>v>0).length<15)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI: 15봉 이상 필요</div>`;
   const rsAll=calcRSISeries(cls);
   const rsValid=rsAll.filter(v=>v!=null&&isFinite(v));
   if(rsValid.length<2)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">RSI 계산 불가</div>`;
@@ -2961,7 +2962,8 @@ function svgRSI(data){
   const lv=rsValid[rsValid.length-1],rc=lv>70?"#E85D75":lv<30?"#4ECCA3":"#C9A96E";
 
   // Price normalized to RSI chart Y range (aligned to data indices)
-  const pMin=Math.min(...cls),pMax=Math.max(...cls),pRng=pMax-pMin||1;
+  const clsV=cls.filter(v=>v>0);
+  const pMin=Math.min(...clsV),pMax=Math.max(...clsV),pRng=pMax-pMin||1;
   const tyP=v=>P.t+(1-(v-pMin)/pRng)*ch;
 
   // Divergence detection (last 20 bars)
@@ -2972,7 +2974,7 @@ function svgRSI(data){
   const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ RSI↓)":"⚠ 강세 다이버전스 (가격↓ RSI↑)"):"정합 (추세 확인)";
   const divCol=divergence?(priceUp?"#E85D75":"#4ECCA3"):"#555";
 
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:130px;display:block">`;
   // Title
   s+=`<text x="${P.l+2}" y="12" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">RSI(14)</text>`;
   s+=`<text x="${P.l+50}" y="12" fill="${rc}" font-size="9" font-weight="700" font-family="DM Mono,monospace">${lv}</text>`;
@@ -2989,7 +2991,7 @@ function svgRSI(data){
   }
 
   // Price overlay (normalized)
-  const pPts=cls.map((v,i)=>{const y=tyP(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  const pPts=cls.map((v,i)=>{const y=tyP(v);return v>0&&isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(pPts.length>1)s+=`<polyline points="${pPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width=".8" opacity=".3" stroke-dasharray="4,2"/>`;
 
   // RSI line
@@ -3012,7 +3014,7 @@ function svgRSI(data){
 
 // ═══════ MACD CHART (with price overlay + divergence) ═══════
 function svgMACD(data){
-  const cls=data.map(d=>d.close||0).filter(v=>v>0);if(cls.length<35)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">MACD: 35봉 이상 필요</div>`;
+  const cls=data.map(d=>d.close||0);if(cls.filter(v=>v>0).length<35)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">MACD: 35봉 이상 필요</div>`;
   const ema=(d,n)=>{const k=2/(n+1);let e=[d[0]];for(let i=1;i<d.length;i++)e.push(d[i]*k+e[i-1]*(1-k));return e;};
   const e12=ema(cls,12),e26=ema(cls,26),ml=e12.map((v,i)=>v-e26[i]);
   const slR=ema(ml.slice(26),9),sl=Array(34).fill(null).concat(slR);
@@ -3037,7 +3039,7 @@ function svgMACD(data){
   const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ MACD↓)":"⚠ 강세 다이버전스 (가격↓ MACD↑)"):"정합 (추세 확인)";
   const divCol=divergence?(priceUp?"#E85D75":"#4ECCA3"):"#555";
 
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:130px;display:block">`;
   // Title
   s+=`<text x="${P.l+2}" y="12" fill="#C39BD3" font-size="8" font-weight="600" font-family="DM Mono,monospace">MACD(12,26,9)</text>`;
   s+=`<text x="${P.l+90}" y="12" fill="${hi[hi.length-1]>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace">${m[m.length-1]?.toFixed(2)||"-"}</text>`;
@@ -3052,7 +3054,7 @@ function svgMACD(data){
   }
 
   // Price overlay (normalized)
-  const pPts=cls.map((v,i)=>{const y=tyP(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  const pPts=cls.map((v,i)=>{const y=tyP(v);return v>0&&isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(pPts.length>1)s+=`<polyline points="${pPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width=".8" opacity=".3" stroke-dasharray="4,2"/>`;
 
   // Histogram
@@ -3151,7 +3153,7 @@ function svgShort(data){
   const trendCol=trend==="상승"?"#E85D75":"#4ECCA3";
   const trendLabel=trend==="상승"?"공매도 증가":"공매도 감소";
 
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:180px;display:block">`;
 
   // Grid
   [vMin,vMin+vRng/2,vMax].forEach(v=>{
@@ -3236,7 +3238,7 @@ function svgOBV(data){
   }
 
   // Price series (closes)
-  const cls=data.map(d=>d.close).filter(v=>v>0);
+  const cls=data.map(d=>d.close||0);
 
   const W=900,H=130,P={t:20,r:56,b:14,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
   const tx=i=>P.l+(i/(data.length-1||1))*cw;
@@ -3248,7 +3250,7 @@ function svgOBV(data){
   const tyO=v=>P.t+(1-(v-obvMin)/obvRng)*ch;
 
   // Price range (normalized to same chart height)
-  const pMin=Math.min(...cls),pMax=Math.max(...cls);
+  const pMin=Math.min(...cls.filter(v=>v>0)),pMax=Math.max(...cls.filter(v=>v>0));
   const pRng=pMax-pMin||1;
   const tyP=v=>P.t+(1-(v-pMin)/pRng)*ch;
 
@@ -3267,7 +3269,7 @@ function svgOBV(data){
   // Format large numbers
   const fmV=v=>{const a=Math.abs(v);return a>=1e9?(v/1e9).toFixed(1)+"B":a>=1e6?(v/1e6).toFixed(1)+"M":a>=1e3?(v/1e3).toFixed(0)+"K":v.toFixed(0);};
 
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:130px">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:130px;display:block">`;
 
   // Title + values
   s+=`<text x="${P.l+2}" y="12" fill="#7DCEA0" font-size="8" font-weight="600" font-family="DM Mono,monospace">OBV</text>`;
@@ -3290,7 +3292,7 @@ function svgOBV(data){
   }
 
   // Price overlay line (thinner, different color)
-  const pPts=cls.map((v,i)=>{const y=tyP(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  const pPts=cls.map((v,i)=>{const y=tyP(v);return v>0&&isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(pPts.length>1){
     s+=`<polyline points="${pPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1" opacity=".4" stroke-dasharray="4,2"/>`;
   }
