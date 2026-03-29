@@ -150,6 +150,16 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   <div class="f-search-area">
     <input id="symInput" placeholder="종목 검색... (삼성전자, AAPL, BTC-USD)" autocomplete="off"/>
     <div id="searchDrop"></div>
+    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap" id="quickTags">
+      <button class="pill" onclick="qk('AAPL','yahoo')" style="padding:2px 7px;font-size:10px;border-color:#16162a">AAPL</button>
+      <button class="pill" onclick="qk('TSLA','yahoo')" style="padding:2px 7px;font-size:10px;border-color:#16162a">TSLA</button>
+      <button class="pill" onclick="qk('NVDA','yahoo')" style="padding:2px 7px;font-size:10px;border-color:#16162a">NVDA</button>
+      <button class="pill" onclick="qk('005930','naver')" style="padding:2px 7px;font-size:10px;border-color:#16162a">삼성전자</button>
+      <button class="pill" onclick="qk('035720','naver')" style="padding:2px 7px;font-size:10px;border-color:#16162a">카카오</button>
+      <button class="pill" onclick="qk('065350','naver')" style="padding:2px 7px;font-size:10px;border-color:#16162a">신성델타테크</button>
+      <button class="pill" onclick="qk('bitcoin','coingecko')" style="padding:2px 7px;font-size:10px;border-color:#16162a">BTC</button>
+      <button class="pill" onclick="qk('ethereum','coingecko')" style="padding:2px 7px;font-size:10px;border-color:#16162a">ETH</button>
+    </div>
   </div>
   <div class="f-nav">
     <div class="f-nav-item on" data-tab="analyze" onclick="switchTab('analyze')">분석</div>
@@ -166,24 +176,7 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 <!-- ═══════ TAB: Analyze ═══════ -->
 <div id="tabAnalyze">
   <div class="f-body">
-  <!-- Compact toolbar: Quick + Source | Timeframe -->
-  <div style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-bottom:6px;padding:0 20px">
-    <button class="pill" onclick="qk('AAPL','yahoo')" style="padding:3px 8px;font-size:10px">AAPL</button>
-    <button class="pill" onclick="qk('TSLA','yahoo')" style="padding:3px 8px;font-size:10px">TSLA</button>
-    <button class="pill" onclick="qk('NVDA','yahoo')" style="padding:3px 8px;font-size:10px">NVDA</button>
-    <button class="pill" onclick="qk('005930','naver')" style="padding:3px 8px;font-size:10px">삼성전자</button>
-    <button class="pill" onclick="qk('035720','naver')" style="padding:3px 8px;font-size:10px">카카오</button>
-    <button class="pill" onclick="qk('065350','naver')" style="padding:3px 8px;font-size:10px">신성델타테크</button>
-    <button class="pill" onclick="qk('bitcoin','coingecko')" style="padding:3px 8px;font-size:10px">BTC</button>
-    <button class="pill" onclick="qk('ethereum','coingecko')" style="padding:3px 8px;font-size:10px">ETH</button>
-    <div style="flex:1"></div>
-    <div id="srcBar" style="display:flex;gap:1px">
-      <button class="src-btn on" data-s="yahoo" onclick="setSrc('yahoo')">Yahoo</button>
-      <button class="src-btn" data-s="naver" onclick="setSrc('naver')">네이버</button>
-      <button class="src-btn" data-s="coingecko" onclick="setSrc('coingecko')">Crypto</button>
-    </div>
-  </div>
-  <!-- Unified bar: TF | Chart Mode | Overlays | Watch + Live -->
+  <!-- Unified control bar: TF | Mode | Overlays | Source | Watch + Live -->
   <div style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-bottom:6px;padding:0 20px" id="tfBar">
     <button class="tf-btn" data-t="1m" onclick="setTf('1m')">1m</button>
     <button class="tf-btn" data-t="5m" onclick="setTf('5m')">5m</button>
@@ -206,6 +199,12 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
     <button class="ov-btn" data-c="adx" data-o="adx" onclick="toggleOv('adx')">ADX</button>
     <button class="ov-btn" data-c="obv" data-o="obv" onclick="toggleOv('obv')">OBV</button>
     <button class="ov-btn" data-c="ichi" data-o="ichi" onclick="toggleOv('ichi')">일목</button>
+    <div style="width:1px;height:16px;background:#1e1e2e;margin:0 4px"></div>
+    <div id="srcBar" style="display:flex;gap:1px">
+      <button class="src-btn on" data-s="yahoo" onclick="setSrc('yahoo')">Yahoo</button>
+      <button class="src-btn" data-s="naver" onclick="setSrc('naver')">네이버</button>
+      <button class="src-btn" data-s="coingecko" onclick="setSrc('coingecko')">Crypto</button>
+    </div>
     <div style="flex:1"></div>
     <button class="pill" id="addWlBtn" onclick="addToWatchlist()" style="display:none;border-color:#C9A96E40;color:#C9A96E">+ 워치</button>
     <span id="liveBadge" style="display:none;align-items:center;gap:3px;color:#4ECCA3;font-size:9px;font-family:'DM Mono',monospace;animation:livePulse 1.5s infinite">● LIVE</span>
@@ -1060,15 +1059,29 @@ function render(data,ai){
   const _sec0=data.sector||"";
   const tsEl=document.getElementById("tickerStrip");
   if(tsEl){
+    const _52h=_f0.fiftyTwoWeekHigh,_52l=_f0.fiftyTwoWeekLow;
+    const _div0=_f0.dividendYield?(_f0.dividendYield*100).toFixed(2)+"%":"—";
     tsEl.innerHTML=`
-      <div><div class="tk-name">${stockFullName}</div><div class="tk-code">${stockCode} · ${data.exchange||data.source}${_sec0?" · "+_sec0:""}</div></div>
-      <div class="tk-price">${cs}${fp(cp)}</div>
-      <div class="tk-chg" style="color:${ch>=0?"#4ECCA3":"#E85D75"}">${ch>=0?"▲":"▼"} ${Math.abs(ch)}%</div>
-      <div class="tk-sep"></div>
-      ${_per0!=null?`<div class="tk-kpi"><div class="tk-kpi-l">PER</div><div class="tk-kpi-v" style="color:${_per0<15?"#4ECCA3":_per0>30?"#E85D75":"#F0ECE3"}">${_per0.toFixed(1)}</div></div>`:""}
-      ${_pbr0!=null?`<div class="tk-kpi"><div class="tk-kpi-l">PBR</div><div class="tk-kpi-v">${_pbr0.toFixed(1)}</div></div>`:""}
-      ${_roe0!=null?`<div class="tk-kpi"><div class="tk-kpi-l">ROE</div><div class="tk-kpi-v">${_roe0.toFixed(1)}%</div></div>`:""}
-      <div class="tk-kpi"><div class="tk-kpi-l">시총</div><div class="tk-kpi-v">${_mcapS0}</div></div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px">
+          <span style="font-size:15px;font-weight:600;color:#F0ECE3">${stockFullName}</span>
+          <span style="font-size:12px;color:#444">${stockCode} · ${data.exchange||data.source}${_sec0?" · "+_sec0:""}</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <span class="mono" style="font-size:28px;font-weight:800;color:#F0ECE3;letter-spacing:-1px">${cs}${fp(cp)}</span>
+          <span class="mono" style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:14px;font-weight:700;${ch>=0?"background:rgba(78,204,163,.12);color:#4ECCA3":"background:rgba(232,93,117,.12);color:#E85D75"}">${ch>=0?"▲":"▼"} ${Math.abs(ch)}%</span>
+          <span class="mono" style="font-size:12px;color:#555">${ch>=0?"+":""}${fp(cp-pv)}</span>
+        </div>
+        <div style="display:flex;gap:14px;margin-top:5px;font-size:11px" class="mono">
+          ${_per0!=null?`<span><span style="color:#444">PER</span> <span style="color:#C9A96E;font-weight:600">${_per0.toFixed(1)}</span></span>`:""}
+          ${_pbr0!=null?`<span><span style="color:#444">PBR</span> <span style="color:#C9A96E;font-weight:600">${_pbr0.toFixed(1)}</span></span>`:""}
+          ${_roe0!=null?`<span><span style="color:#444">ROE</span> <span style="color:#C9A96E;font-weight:600">${_roe0.toFixed(1)}%</span></span>`:""}
+          <span><span style="color:#444">시총</span> <span style="color:#C9A96E;font-weight:600">${_mcapS0}</span></span>
+          ${_div0!=="—"?`<span><span style="color:#444">배당</span> <span style="color:#C9A96E;font-weight:600">${_div0}</span></span>`:""}
+          ${_52h?`<span><span style="color:#444">52H</span> <span style="color:#4ECCA3;font-weight:600">${fp(_52h)}</span></span>`:""}
+          ${_52l?`<span><span style="color:#444">52L</span> <span style="color:#E85D75;font-weight:600">${fp(_52l)}</span></span>`:""}
+        </div>
+      </div>
       <div class="f-sent-chip" id="tkSentChip"><div class="f-sent-score" id="tkSentScore">—</div><div><div class="f-sent-info" id="tkSentLabel">심리</div><div class="f-sent-bar"><div class="f-sent-fill"></div><div class="f-sent-mk" id="tkSentMk" style="left:50%"></div></div></div></div>`;
     tsEl.classList.add("show");
   }
@@ -1159,14 +1172,39 @@ function render(data,ai){
   <div id="analyzeSignalCard" style="padding:0 20px;margin-bottom:14px"></div>
 
   <div style="margin-bottom:14px;padding:0 20px">
-    <div id="rsiChartWrap" class="chart-box" style="margin-bottom:6px">${svgRSI(o)}</div>
-    <div id="macdChartWrap" class="chart-box" style="margin-bottom:6px">${svgMACD(o)}</div>
-    <div id="obvChartWrap" class="chart-box" style="margin-bottom:6px">${svgOBV(o)}</div>
+    <div id="rsiChartWrap" class="chart-box" style="margin-bottom:14px">${svgRSI(o)}</div>
+    <div style="height:1px;background:#0c0c16;margin:0 -4px 14px"></div>
+    <div id="macdChartWrap" class="chart-box" style="margin-bottom:14px">${svgMACD(o)}</div>
+    <div style="height:1px;background:#0c0c16;margin:0 -4px 14px"></div>
+    <div id="obvChartWrap" class="chart-box" style="margin-bottom:14px">${svgOBV(o)}</div>
+    <div style="height:1px;background:#0c0c16;margin:0 -4px 14px"></div>
     <div id="shortChartWrap" class="chart-box" style="margin-bottom:0">${svgShort(o)}</div>
   </div>
   <div class="sec"><div class="sec-title">◇ 기술 지표<div class="sec-line"></div></div></div>
-  <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(85px,1fr))">
-    ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"일20",v:ma20?fp(ma20):"-",c:"#4ECCA3"},{l:"주20",v:ma100?fp(ma100):"-",c:"#C9A96E"},{l:"월20",v:ma440?fp(ma440):"-",c:"#F0ECE3"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
+  <!-- Top 3 Key Indicators -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 20px;margin-bottom:10px">
+    <div style="background:#0c0c16;border:1px solid #16162a;border-radius:10px;padding:12px 14px">
+      <div style="font-size:11px;color:#555;margin-bottom:3px">RSI (14)</div>
+      <div class="mono" style="font-size:20px;font-weight:700;color:${rc}">${rsi??"-"}</div>
+      <div style="font-size:11px;color:#555;margin-top:3px">${rsi>70?"과매수 구간":rsi<30?"과매도 구간":"30~70 중립"}</div>
+      <div style="height:4px;border-radius:2px;background:#1a1a28;margin-top:6px;overflow:hidden"><div style="width:${Math.min(100,rsi||50)}%;height:100%;border-radius:2px;background:${rc}"></div></div>
+    </div>
+    <div style="background:#0c0c16;border:1px solid #16162a;border-radius:10px;padding:12px 14px">
+      <div style="font-size:11px;color:#555;margin-bottom:3px">MACD histogram</div>
+      <div class="mono" style="font-size:20px;font-weight:700;color:${macd.h>0?"#4ECCA3":"#E85D75"}">${macd.h??"-"}</div>
+      <div style="font-size:11px;color:#555;margin-top:3px">${macd.h>0?"시그널 상회":"시그널 하회"} <span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;${macd.h>0?"background:rgba(78,204,163,.08);color:#4ECCA3":"background:rgba(232,93,117,.08);color:#E85D75"}">${macd.h>0?"강세":"약세"}</span></div>
+      <div style="height:4px;border-radius:2px;background:#1a1a28;margin-top:6px;overflow:hidden"><div style="width:50%;height:100%;border-radius:2px;background:${macd.h>0?"#4ECCA3":"#E85D75"}"></div></div>
+    </div>
+    <div style="background:#0c0c16;border:1px solid #16162a;border-radius:10px;padding:12px 14px">
+      <div style="font-size:11px;color:#555;margin-bottom:3px">Stochastic %K</div>
+      <div class="mono" style="font-size:20px;font-weight:700;color:${stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"}">${stoch??"-"}</div>
+      <div style="font-size:11px;color:#555;margin-top:3px">${stoch>80?"과매수":stoch<20?"과매도":"20~80 중립"} <span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;${stoch>80?"background:rgba(232,93,117,.08);color:#E85D75":stoch<20?"background:rgba(78,204,163,.08);color:#4ECCA3":"background:rgba(201,169,110,.08);color:#C9A96E"}">${stoch>80?"과매수":stoch<20?"과매도":"중립"}</span></div>
+      <div style="height:4px;border-radius:2px;background:#1a1a28;margin-top:6px;overflow:hidden"><div style="width:${Math.min(100,stoch||50)}%;height:100%;border-radius:2px;background:${stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"}"></div></div>
+    </div>
+  </div>
+  <!-- Small Grid: remaining indicators -->
+  <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(88px,1fr))">
+    ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"일20",v:ma20?fp(ma20):"-",c:"#4ECCA3"},{l:"주20",v:ma100?fp(ma100):"-",c:"#C9A96E"},{l:"월20",v:ma440?fp(ma440):"-",c:"#F0ECE3"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
   </div>`;
 
   // ═══ SENTIMENT DETAIL PANEL ═══
