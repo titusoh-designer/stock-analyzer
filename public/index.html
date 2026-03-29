@@ -3538,7 +3538,7 @@ async function runScan(){
     const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length};
 
     // ★ Save top 150 results — weekly 120 bars (small, no downsampling needed)
-    const saveTop=allResults.slice(0,150);
+    const saveTop=allResults.slice(0,200);
 
     // Save to localStorage
     try{
