@@ -24,7 +24,7 @@ export default async function handler(req, res) {
         const code = ticker.replace(/\.(KS|KQ)$/, "");
         for (const suffix of [".KS", ".KQ"]) {
           try {
-            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=1y&interval=1d&includePrePost=false`;
+            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=3y&interval=1d&includePrePost=false`;
             const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
             const yJson = await yResp.json();
             if (yJson.chart?.error) continue;
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
         currency = "KRW";
         if (!currentPrice && ohlcv.length) currentPrice = ohlcv[ohlcv.length - 1].close;
       } else {
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1d&includePrePost=false`;
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=3y&interval=1d&includePrePost=false`;
         const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
         const json = await resp.json();
         const result = json.chart?.result?.[0];
@@ -233,24 +233,17 @@ export default async function handler(req, res) {
         const top = allSignals.slice(0, 10);
         const change = ohlcv.length >= 2 ? ((cls[cls.length - 1] / cls[cls.length - 2] - 1) * 100).toFixed(2) : 0;
 
-        // Weekly aggregation for mini chart
-        const weekly = [];
-        for (let w = 0; w < ohlcv.length; w += 5) {
-          const wk = ohlcv.slice(w, w + 5);
-          if (!wk.length) continue;
-          weekly.push({ c: wk[wk.length - 1].close, h: Math.max(...wk.map(d => d.high)), l: Math.min(...wk.map(d => d.low)) });
-        }
-        // Calculate MAs on FULL weekly data, then slice to visible range
-        const wkCls = weekly.map(w => w.c);
-        const wkMA20Full = [], wkMA22Full = [];
-        for (let j = 0; j < weekly.length; j++) {
-          wkMA20Full.push(j >= 19 ? wkCls.slice(j - 19, j + 1).reduce((a, b) => a + b, 0) / 20 : null);
-          wkMA22Full.push(j >= 21 ? wkCls.slice(j - 21, j + 1).reduce((a, b) => a + b, 0) / 22 : null);
-        }
-        const sliceStart = Math.max(0, weekly.length - 52);
-        const wk52 = weekly.slice(sliceStart);
-        const miniMA20 = wkMA20Full.slice(sliceStart);
-        const miniMA22 = wkMA22Full.slice(sliceStart);
+        // Daily mini chart — last 600 bars with MA20/MA100/MA440
+        const miniLen = Math.min(600, ohlcv.length);
+        const miniStart = Math.max(0, ohlcv.length - miniLen);
+        const miniDaily = ohlcv.slice(miniStart).map(d => ({ c: d.close }));
+        const calcMAFull = (arr, n) => arr.map((_, i) => i < n - 1 ? null : arr.slice(i - n + 1, i + 1).reduce((a, b) => a + b, 0) / n);
+        const ma20Full = calcMAFull(cls, 20);
+        const ma100Full = calcMAFull(cls, 100);
+        const ma440Full = calcMAFull(cls, 440);
+        const miniMA20 = ma20Full.slice(miniStart);
+        const miniMA100 = ma100Full.slice(miniStart);
+        const miniMA440 = ma440Full.slice(miniStart);
 
         // Fetch basic fundamentals (Korean=Naver, US=Google Finance)
         let fund = null;
@@ -335,7 +328,7 @@ export default async function handler(req, res) {
         results.push({
           symbol: ticker, name, source, currency, currentPrice, change: +change,
           starSignals: top, bestSignal: top[0],
-          mini: wk52, miniMA20, miniMA22, fund, dataLen: ohlcv.length,
+          mini: miniDaily, miniMA20, miniMA100, miniMA440, fund, dataLen: ohlcv.length,
           indicators: {
             rsi: curRsi,
             macdHist: curMacdHist,

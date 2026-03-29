@@ -3566,19 +3566,20 @@ async function runScan(){
   btn.disabled=false;btn.textContent="▶ 스캔";
 }
 
-function miniChartSvg(mini,change,miniMA20,miniMA22,starSignals){
+function miniChartSvg(mini,change,miniMA20,miniMA100,starSignals,miniMA440){
   if(!mini||!Array.isArray(mini)||mini.length<3)return"";
-  const W=210,H=80,P=4,Pb=10;
+  const W=380,H=100,P=4,Pb=10;
   const cls=mini.map(d=>d?.c||d?.close||0).filter(v=>v>0);
   if(cls.length<3)return"";
   const allVals=[...cls];
   if(miniMA20)miniMA20.forEach(v=>{if(v)allVals.push(v);});
-  if(miniMA22)miniMA22.forEach(v=>{if(v)allVals.push(v);});
-  const mn=Math.min(...allVals)*.998,mx=Math.max(...allVals)*1.002,rng=mx-mn||1;
+  if(miniMA100)miniMA100.forEach(v=>{if(v)allVals.push(v);});
+  if(miniMA440)miniMA440.forEach(v=>{if(v)allVals.push(v);});
+  const mn=Math.min(...allVals.filter(v=>v>0))*.998,mx=Math.max(...allVals)*1.002,rng=mx-mn||1;
   const tx=i=>P+(i/(cls.length-1))*(W-P*2);
   const ty=v=>P+(1-(v-mn)/rng)*(H-P-Pb);
   const col=change>=0?"#4ECCA3":"#E85D75";
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:210px;height:80px">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100%">`;
 
   // Sentiment background per bar
   const barW=(W-P*2)/cls.length;
@@ -3589,30 +3590,33 @@ function miniChartSvg(mini,change,miniMA20,miniMA22,starSignals){
     const dev=ma20?(cls[i]-ma20)/ma20*100:0;
     const sent=Math.max(0,Math.min(100,50+(rsi-50)*0.6+dev*2));
     let bc,bo=0;
-    if(sent<20){bc="232,93,117";bo=0.15;}else if(sent<35){bc="232,93,117";bo=0.07;}else if(sent<42){bc="232,93,117";bo=0.03;}
-    else if(sent>80){bc="78,204,163";bo=0.15;}else if(sent>65){bc="78,204,163";bo=0.07;}else if(sent>58){bc="78,204,163";bo=0.03;}
+    if(sent<20){bc="232,93,117";bo=0.12;}else if(sent<35){bc="232,93,117";bo=0.06;}
+    else if(sent>80){bc="78,204,163";bo=0.12;}else if(sent>65){bc="78,204,163";bo=0.06;}
     if(bo>0)s+=`<rect x="${P+i*barW}" y="${P}" width="${barW+.5}" height="${H-P-Pb}" fill="rgba(${bc},${bo})" rx="1"/>`;
   }
 
-  s+=`<text x="2" y="8" fill="#555" font-size="7" font-family="DM Mono,monospace">주봉 52주</text>`;
+  s+=`<text x="2" y="8" fill="#555" font-size="7" font-family="DM Mono,monospace">일봉 ${cls.length}봉</text>`;
   const pts=cls.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`);
-  s+=`<polygon points="${pts.join(" ")} ${tx(cls.length-1).toFixed(1)},${H-Pb} ${P},${H-Pb}" fill="${col}" opacity=".06"/>`;
-  s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.5" opacity=".7"/>`;
+  s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.2" opacity=".8"/>`;
 
-  // Weekly MA20 (주20)
+  // 일20 (MA20) — green
   if(miniMA20&&miniMA20.length>=cls.length){
     const mPts=[];for(let i=0;i<cls.length;i++){if(miniMA20[i]!=null)mPts.push(`${tx(i).toFixed(1)},${ty(miniMA20[i]).toFixed(1)}`);}
-    if(mPts.length>1){s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="2" opacity=".6" stroke-dasharray="3,2"/>`;
-    const lastMA20=miniMA20.filter(v=>v!=null).pop();
-    if(lastMA20)s+=`<text x="${W-P}" y="${ty(lastMA20).toFixed(0)}" fill="#C9A96E" font-size="6.5" font-family="DM Mono,monospace" text-anchor="end">주20</text>`;}
+    if(mPts.length>1)s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#4ECCA3" stroke-width="1" opacity=".5"/>`;
   }
-  // Monthly MA20 (월20)
-  if(miniMA22&&miniMA22.length>=cls.length){
-    const mPts=[];for(let i=0;i<cls.length;i++){if(miniMA22[i]!=null)mPts.push(`${tx(i).toFixed(1)},${ty(miniMA22[i]).toFixed(1)}`);}
-    if(mPts.length>1){s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#F0ECE3" stroke-width="2.5" opacity=".5" stroke-dasharray="4,2"/>`;
-    const lastMA22=miniMA22.filter(v=>v!=null).pop();
-    if(lastMA22)s+=`<text x="${W-P}" y="${(ty(lastMA22)+10).toFixed(0)}" fill="#F0ECE3" font-size="6.5" font-family="DM Mono,monospace" text-anchor="end">월20</text>`;}
+  // 주20 (MA100) — gold
+  if(miniMA100&&miniMA100.length>=cls.length){
+    const mPts=[];for(let i=0;i<cls.length;i++){if(miniMA100[i]!=null)mPts.push(`${tx(i).toFixed(1)},${ty(miniMA100[i]).toFixed(1)}`);}
+    if(mPts.length>1)s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1.5" opacity=".6"/>`;
   }
+  // 월20 (MA440) — white
+  if(miniMA440&&miniMA440.length>=cls.length){
+    const mPts=[];for(let i=0;i<cls.length;i++){if(miniMA440[i]!=null)mPts.push(`${tx(i).toFixed(1)},${ty(miniMA440[i]).toFixed(1)}`);}
+    if(mPts.length>1)s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#F0ECE3" stroke-width="2" opacity=".4"/>`;
+  }
+
+  // Legend
+  s+=`<text x="${W-P}" y="${H-1}" fill="#555" font-size="6" font-family="DM Mono,monospace" text-anchor="end"><tspan fill="#4ECCA3">━</tspan> 일20 <tspan fill="#C9A96E">━</tspan> 주20 <tspan fill="#F0ECE3">━</tspan> 월20</text>`;
 
   // ★ Signal markers (A=green triangle, C=gold diamond)
   if(starSignals&&starSignals.length){
@@ -3742,7 +3746,7 @@ function renderScanResults(data){
         <span style="flex:1"></span>
         <span class="mono" style="font-size:9px;color:#666">${sig.date} (${dayLabel}) ${sig.signals?sig.signals.join("+"):""}</span>
       </div>
-      <div style="display:grid;grid-template-columns:170px 1fr 140px;gap:10px;align-items:center;border-top:1px solid #12121e;padding-top:6px">
+      <div style="display:grid;grid-template-columns:170px 1fr 1fr;gap:10px;align-items:center;border-top:1px solid #12121e;padding-top:6px">
         <div>
           ${mg("PER",f.per,0,40,false)}
           <div style="height:4px"></div>
@@ -3751,7 +3755,7 @@ function renderScanResults(data){
           ${mg("ROE",f.roe,-5,25,true)}
         </div>
         <div style="min-width:0">${qHtml||`<div style="font-size:9px;color:#444;padding:4px">실적 데이터 없음</div>`}</div>
-        <div style="background:#0e0e16;border:1px solid #1a1a28;border-radius:6px;padding:3px 4px;display:flex;align-items:center;justify-content:center">${miniChartSvg(r.mini,r.change,r.miniMA20,r.miniMA22,r.starSignals)}</div>
+        <div style="background:#0e0e16;border:1px solid #1a1a28;border-radius:6px;padding:3px 4px;display:flex;align-items:center;justify-content:center">${miniChartSvg(r.mini,r.change,r.miniMA20,r.miniMA100,r.starSignals,r.miniMA440)}</div>
       </div>
     </div>`;
   }).join("");
@@ -4200,7 +4204,7 @@ async function renderSentiment(){
 }
 // ═══════ SIGNAL MATRIX (Live from Scanner) v2 ═══════
 const SIG_DEMO=[
-  {sym:"NVDA",mkt:"US",trend:82,mom:70,vol:75,div:90,vola:60,total:78,type:"entry",label:"🟢 진입",reason:"데모 데이터",price:"$920",ch:2.3,starSignals:[],fund:null,mini:null,miniMA20:null,miniMA22:null}
+  {sym:"NVDA",mkt:"US",trend:82,mom:70,vol:75,div:90,vola:60,total:78,type:"entry",label:"🟢 진입",reason:"데모 데이터",price:"$920",ch:2.3,starSignals:[],fund:null,mini:null,miniMA20:null,miniMA100:null}
 ];
 
 // Signal mini chart with MA overlays + signal markers
@@ -4213,7 +4217,7 @@ function sigMiniChart(sig,W,H){
     const cls=sig.mini.map(d=>d.c);
     const allV=[...cls];
     if(sig.miniMA20)sig.miniMA20.forEach(v=>{if(v)allV.push(v);});
-    if(sig.miniMA22)sig.miniMA22.forEach(v=>{if(v)allV.push(v);});
+    if(sig.miniMA100)sig.miniMA100.forEach(v=>{if(v)allV.push(v);});
     const mn=Math.min(...allV.filter(v=>v>0)),mx=Math.max(...allV);
     const range=mx-mn||1;
     const tx=i=>(i/(cls.length-1))*(W-4)+2;
@@ -4228,7 +4232,7 @@ function sigMiniChart(sig,W,H){
     // MA20 (주봉20=골드)
     if(sig.miniMA20){const mp=[];for(let i=0;i<cls.length;i++){if(sig.miniMA20[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(sig.miniMA20[i]).toFixed(1)}`);}if(mp.length>2)svg+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1" stroke-opacity=".6"/>`;}
     // MA22 (월봉20≈주봉22=흰색)
-    if(sig.miniMA22){const mp=[];for(let i=0;i<cls.length;i++){if(sig.miniMA22[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(sig.miniMA22[i]).toFixed(1)}`);}if(mp.length>2)svg+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#F0ECE3" stroke-width="1" stroke-opacity=".35"/>`;}
+    if(sig.miniMA100){const mp=[];for(let i=0;i<cls.length;i++){if(sig.miniMA100[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(sig.miniMA100[i]).toFixed(1)}`);}if(mp.length>2)svg+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#F0ECE3" stroke-width="1" stroke-opacity=".35"/>`;}
     // Signal markers
     if(sig.starSignals){
       sig.starSignals.forEach(ss=>{
@@ -4314,7 +4318,7 @@ function scanToSignal(r){
   if(r.fund?.per&&r.fund.per<15)reasons.push("PER "+r.fund.per.toFixed(0)+"x");
   const cs=r.currency==="KRW"?"₩":"$",fp=v=>v>=10000?Number(v).toLocaleString():v>=1?Number(v).toFixed(2):Number(v).toFixed(4);
   const mkt=r.source==="naver"?"KRX":r.source==="coingecko"?"CRYPTO":"US";
-  return{sym:r.name||r.symbol,code:r.symbol,mkt,source:r.source,trend,mom,vol,div,vola,total,type,label,reason:reasons.join(" · ")||"시그널 감지",price:cs+fp(r.currentPrice||0),ch:r.change||0,fund:r.fund,daysAgo:sigs[0]?.daysAgo||0,starSignals:sigs,indicators:ind,mini:r.mini||null,miniMA20:r.miniMA20||null,miniMA22:r.miniMA22||null};
+  return{sym:r.name||r.symbol,code:r.symbol,mkt,source:r.source,trend,mom,vol,div,vola,total,type,label,reason:reasons.join(" · ")||"시그널 감지",price:cs+fp(r.currentPrice||0),ch:r.change||0,fund:r.fund,daysAgo:sigs[0]?.daysAgo||0,starSignals:sigs,indicators:ind,mini:r.mini||null,miniMA20:r.miniMA20||null,miniMA100:r.miniMA100||null};
 }
 
 let _sigCache=null;
