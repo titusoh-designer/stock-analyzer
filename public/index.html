@@ -3538,7 +3538,7 @@ async function runScan(){
     const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length};
 
     // ★ Save top 100 results only (sorted by strength) — prevents storage overflow
-    const saveTop=allResults.slice(0,100);
+    const saveTop=allResults.slice(0,150);
     const downsample=(arr)=>arr&&arr.length>150?arr.filter((_,i)=>i%4===0||i===arr.length-1):arr;
     const slimTop=saveTop.map(r=>({...r,mini:downsample(r.mini),miniMA20:downsample(r.miniMA20),miniMA100:downsample(r.miniMA100),miniMA440:downsample(r.miniMA440)}));
 
