@@ -231,39 +231,63 @@ export default async function handler(req, res) {
             if (ssResp.ok) {
               const ssHtml = await ssResp.text();
               console.log(`[SHORT] HTML length: ${ssHtml.length}`);
-              // Parse table rows: date | 공매도잔고(주) | ... | 잔고비율(%) | ...
+
+              // Debug: find table headers
+              const thMatch = ssHtml.match(/<th[^>]*>([\s\S]*?)<\/th>/gi);
+              if (thMatch) {
+                const headers = thMatch.slice(0, 10).map(h => h.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim());
+                console.log(`[SHORT] Headers: ${headers.join(" | ")}`);
+              }
+
               const rows = [];
               const trMatches = ssHtml.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-              console.log(`[SHORT] TR matches: ${trMatches.length}`);
+              let debuggedFirst = false;
               for (const tr of trMatches) {
                 const tds = tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
                 if (!tds || tds.length < 4) continue;
                 const strip = s => s.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, "").trim();
                 const dateStr = strip(tds[0]);
                 if (!/^\d{4}\.\d{2}\.\d{2}$/.test(dateStr)) continue;
+
+                // Debug: log first row's all columns
+                if (!debuggedFirst) {
+                  const allCols = tds.map((td, idx) => `[${idx}]=${strip(td)}`).join(" | ");
+                  console.log(`[SHORT] First row cols: ${allCols}`);
+                  debuggedFirst = true;
+                }
+
                 const date = dateStr.replace(/\./g, "-");
                 const balance = parseFloat(strip(tds[1]).replace(/,/g, "")) || 0;
-                const ratio = parseFloat(strip(tds[3]).replace(/,/g, "")) || 0;
+                // tds[2] might be total volume, tds[3] might be ratio or change
+                // Try to find ratio column (should be 0~100 range, positive)
+                let ratio = 0;
+                for (let ci = 2; ci < tds.length; ci++) {
+                  const val = parseFloat(strip(tds[ci]).replace(/,/g, ""));
+                  if (!isNaN(val) && val >= 0 && val <= 100 && strip(tds[ci]).includes(".")) {
+                    ratio = val;
+                    break;
+                  }
+                }
                 if (balance > 0) rows.push({ date, balance, ratio });
               }
               console.log(`[SHORT] Parsed rows: ${rows.length}`);
               if (rows.length >= 3) {
-                rows.reverse(); // oldest first
+                rows.reverse();
                 shortData = { source: "naver-short-balance", timeSeries: rows };
-                console.log(`[SHORT] SUCCESS: ${rows.length} rows from ${ssUrl.split('?')[0].split('/').pop()}`);
-                break; // found data, stop trying other URLs
+                console.log(`[SHORT] SUCCESS: ${rows.length} rows`);
+                break;
               }
             }
             } catch (e) { console.log(`[SHORT] Failed: ${e.message}`); continue; }
           } // end for shortPageUrls
 
-          // Try 2: page 2~4 for more history (try all URL patterns)
-          if (shortData && shortData.timeSeries.length < 60) {
+          // Try 2: page 2~10 for more history (~200 data points)
+          if (shortData && shortData.timeSeries.length < 200) {
             const pgBaseUrls = [
               `https://finance.naver.com/item/short_selling.naver?code=${code}`,
               `https://finance.naver.com/item/frgn.naver?code=${code}`
             ];
-            for (let pg = 2; pg <= 4; pg++) {
+            for (let pg = 2; pg <= 10; pg++) {
               let pgFound = false;
               for (const base of pgBaseUrls) {
                 try {
