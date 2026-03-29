@@ -3728,37 +3728,30 @@ function renderScanResults(data){
       qHtml+=`</table>`;
     }
 
-    return`<div class="card" style="border-left:3px solid ${borderCol};padding:14px 16px;margin-bottom:8px;cursor:pointer" onclick="window.open(location.origin+'?s=${encodeURIComponent(r.symbol)}&src=${r.source}','_blank')">>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span style="font-size:${isTypeC?'22':sig.count>=4?'20':'17'}px;font-weight:700;color:${sigCol}">${sigIcon}</span>
-            <span style="padding:3px 10px;border-radius:6px;font-size:${isTypeC?'12':'11'}px;font-weight:600;background:rgba(${bgRgb},.15);color:${sigCol};border:1px solid ${sigCol}40">${sigLabel}</span>
-            <span style="font-size:16px;font-weight:600;color:#F0ECE3">${r.name||r.symbol}</span>
-            <span class="mono" style="font-size:20px;font-weight:700;color:#F0ECE3">${cs}${fp(r.currentPrice)}</span>
-            <span class="mono" style="font-size:12px;font-weight:600;color:${chCol}">${r.change>=0?"+":""}${r.change}%</span>
-          </div>
-          <div class="mono" style="font-size:10px;color:#555;margin-top:3px;display:flex;gap:8px;align-items:center">
-            <span>${r.symbol} · ${r.source}</span>
-            ${f.sector?`<span style="color:#C9A96E">◆ ${f.sector}</span>`:""}
-            ${mcapStr?`<span style="color:#85C1E9">시총 ${mcapStr}</span>`:""}
-          </div>
-        </div>
-        <div style="text-align:right;min-width:110px;flex-shrink:0">
-          <div class="mono" style="font-size:10px;color:#888">${sig.date} (${dayLabel})</div>
-          <div class="mono" style="font-size:9px;color:#555;margin-top:1px">${sig.signals?sig.signals.join("+"):""}</div>
-        </div>
+    return`<div class="card" style="border-left:3px solid ${borderCol};padding:10px 14px;margin-bottom:8px;cursor:pointer" onclick="window.open(location.origin+'?s=${encodeURIComponent(r.symbol)}&src=${r.source}','_blank')">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-size:${isTypeC?'20':sig.count>=4?'18':'16'}px;font-weight:700;color:${sigCol}">${sigIcon}</span>
+        <span style="padding:2px 8px;border-radius:5px;font-size:${isTypeC?'11':'10'}px;font-weight:600;background:rgba(${bgRgb},.15);color:${sigCol};border:1px solid ${sigCol}30">${sigLabel}</span>
+        <span style="font-size:15px;font-weight:600;color:#F0ECE3">${r.name||r.symbol}</span>
+        <span class="mono" style="font-size:19px;font-weight:800;color:#F0ECE3">${cs}${fp(r.currentPrice)}</span>
+        <span class="mono" style="font-size:11px;font-weight:600;color:${chCol}">${r.change>=0?"+":""}${r.change}%</span>
+        <span style="width:1px;height:12px;background:#1e1e2e;margin:0 2px"></span>
+        <span class="mono" style="font-size:9px;color:#555">${r.symbol}·${r.source}</span>
+        ${f.sector?`<span style="font-size:9px;color:#C9A96E">◆ ${f.sector}</span>`:""}
+        ${mcapStr?`<span style="font-size:9px;color:#85C1E9">시총 ${mcapStr}</span>`:""}
+        <span style="flex:1"></span>
+        <span class="mono" style="font-size:9px;color:#666">${sig.date} (${dayLabel}) ${sig.signals?sig.signals.join("+"):""}</span>
       </div>
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
-        <div style="display:flex;gap:10px;flex:1">
+      <div style="display:grid;grid-template-columns:170px 1fr 140px;gap:10px;align-items:center;border-top:1px solid #12121e;padding-top:6px">
+        <div>
           ${mg("PER",f.per,0,40,false)}
+          <div style="height:4px"></div>
           ${mg("PBR",f.pbr,0,10,false)}
+          <div style="height:4px"></div>
           ${mg("ROE",f.roe,-5,25,true)}
         </div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:stretch">
-        <div style="flex:1;min-width:0">${qHtml||`<div style="font-size:9px;color:#444;padding:4px">분기 실적 데이터 없음</div>`}</div>
-        <div style="flex:0 0 210px;background:#0e0e16;border:1px solid #1a1a28;border-radius:6px;padding:4px 6px;display:flex;align-items:center;justify-content:center">${miniChartSvg(r.mini,r.change,r.miniMA20,r.miniMA22,r.starSignals)}</div>
+        <div style="min-width:0">${qHtml||`<div style="font-size:9px;color:#444;padding:4px">실적 데이터 없음</div>`}</div>
+        <div style="background:#0e0e16;border:1px solid #1a1a28;border-radius:6px;padding:3px 4px;display:flex;align-items:center;justify-content:center">${miniChartSvg(r.mini,r.change,r.miniMA20,r.miniMA22,r.starSignals)}</div>
       </div>
     </div>`;
   }).join("");
