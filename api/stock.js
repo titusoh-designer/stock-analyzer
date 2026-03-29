@@ -37,19 +37,48 @@ export default async function handler(req, res) {
       // Try Naver chart API first
       try {
         const naverData = await fetchNaverChart(code, int);
-        if (naverData && naverData.length >= 5) {
+        if (naverData && naverData.length >= 1) {
           ohlcv = naverData;
           chartSource = "naver-chart";
         }
       } catch (e) { console.log("[NAVER CHART] fallback to Yahoo:", e.message); }
 
-      // Fallback: Yahoo
+      // Fallback: Yahoo (try both .KS and .KQ for intraday)
       if (!ohlcv.length) {
         const yahooTicker = await resolveKRTicker(code);
-        const yData = await fetchYahooChart(yahooTicker, int);
-        ohlcv = yData.ohlcv;
-        meta = yData.meta;
-        chartSource = "yahoo";
+        try {
+          const yData = await fetchYahooChart(yahooTicker, int);
+          // Verify intraday data is actually intraday (not daily fallback)
+          if (isIntraday && yData.ohlcv.length > 0) {
+            const firstDate = yData.ohlcv[0].date || "";
+            if (!firstDate.includes(":") && !firstDate.includes(" ")) {
+              // Yahoo returned daily data instead of intraday — try alternate suffix
+              const altTicker = yahooTicker.endsWith(".KS") ? code + ".KQ" : code + ".KS";
+              try {
+                const yData2 = await fetchYahooChart(altTicker, int);
+                const fd2 = yData2.ohlcv[0]?.date || "";
+                if (fd2.includes(":") || fd2.includes(" ")) {
+                  ohlcv = yData2.ohlcv; meta = yData2.meta; chartSource = "yahoo";
+                } else {
+                  ohlcv = yData.ohlcv; meta = yData.meta; chartSource = "yahoo";
+                }
+              } catch (e2) {
+                ohlcv = yData.ohlcv; meta = yData.meta; chartSource = "yahoo";
+              }
+            } else {
+              ohlcv = yData.ohlcv; meta = yData.meta; chartSource = "yahoo";
+            }
+          } else {
+            ohlcv = yData.ohlcv; meta = yData.meta; chartSource = "yahoo";
+          }
+        } catch (e) {
+          // Try alternate suffix
+          const altTicker = yahooTicker.endsWith(".KS") ? code + ".KQ" : code + ".KS";
+          try {
+            const yData2 = await fetchYahooChart(altTicker, int);
+            ohlcv = yData2.ohlcv; meta = yData2.meta; chartSource = "yahoo";
+          } catch (e2) { /* both failed */ }
+        }
       }
 
       // Get Korean name from Naver
@@ -176,37 +205,69 @@ export default async function handler(req, res) {
           }
         }
 
-        // Korean Short Interest — try multiple Naver endpoints
+        // Korean Short Interest — multiple approaches
         try {
-          // Try 1: Naver mobile short-selling API
           let shortData = null;
-          const shortUrls = [
+
+          // Try 1: Naver mobile short selling APIs
+          const shortApis = [
             `https://m.stock.naver.com/api/stock/${code}/short-selling`,
             `https://m.stock.naver.com/api/stock/${code}/short-balance`,
-            `https://api.stock.naver.com/stock/${code}/short-selling/daily?page=1&size=30`
+            `https://m.stock.naver.com/api/stock/${code}/trend/short`
           ];
-          for (const sUrl of shortUrls) {
+          for (const sUrl of shortApis) {
             try {
-              const sResp = await fetch(sUrl, { headers: { "User-Agent": UA_M } });
+              const sResp = await fetch(sUrl, { headers: { "User-Agent": UA_M }, signal: AbortSignal.timeout(3000) });
               if (sResp.ok) {
                 const sText = await sResp.text();
-                if (sText && sText.startsWith("{")) {
+                if (sText && sText.length > 2 && (sText.startsWith("{") || sText.startsWith("["))) {
                   shortData = JSON.parse(sText);
                   break;
                 }
               }
             } catch (e) { continue; }
           }
-          if (shortData) {
-            data.shortInterest = { source: "naver", raw: shortData };
+
+          // Try 2: Scrape short selling page from desktop Naver
+          if (!shortData) {
+            try {
+              const ssResp = await fetch(`https://finance.naver.com/item/frgn.naver?code=${code}`, {
+                headers: { "User-Agent": UA },
+                signal: AbortSignal.timeout(3000)
+              });
+              if (ssResp.ok) {
+                const ssHtml = await ssResp.text();
+                // Extract: 공매도 잔고, 대차잔고, 외국인 비율
+                const extractNum = (pattern) => {
+                  const m = ssHtml.match(pattern);
+                  return m ? parseFloat(m[1].replace(/,/g, "")) : null;
+                };
+                // 공매도 잔고 수량 (first table row)
+                const shortRows = ssHtml.match(/class="tah p11">([\d,]+)/g);
+                const foreignPct = extractNum(/외국인한도소진률[^>]*>[\s\S]*?<td[^>]*>([\d.]+)/);
+                if (shortRows && shortRows.length >= 3) {
+                  shortData = {
+                    source: "naver-frgn-scrape",
+                    shortBalance: parseFloat(shortRows[0].match(/([\d,]+)/)[1].replace(/,/g, "")),
+                    foreignPct: foreignPct
+                  };
+                }
+              }
+            } catch (e) { /* scrape optional */ }
           }
 
-          // Try 2: Scrape short selling ratio from integration (대차잔고 if available)
-          if (!data.shortInterest && data.fundamentals?.foreignRate) {
-            data.shortInterest = {
-              foreignRate: parseFloat(data.fundamentals.foreignRate) || null,
-              source: "naver-integration"
-            };
+          if (shortData) {
+            data.shortInterest = shortData;
+          } else {
+            // Minimal: use foreignRate from integration
+            const fr = data.fundamentals?.foreignRate;
+            if (fr) {
+              data.shortInterest = {
+                source: "naver-integration",
+                foreignRate: parseFloat(fr) || null,
+                note: "공매도 잔고 API 연동 예정 — 외국인 보유율 참고"
+              };
+            }
           }
         } catch (e) { /* short interest optional */ }
 
