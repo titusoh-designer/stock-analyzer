@@ -337,6 +337,17 @@ export default async function handler(req, res) {
 
           // Fallback: foreignRate from integration
           if (shortData) {
+            // Calculate shares outstanding from marketCap / currentPrice
+            const mcap = data.fundamentals?.marketCap;
+            const cp = data.currentPrice;
+            const sharesOut = (mcap && cp && cp > 0) ? Math.round(mcap / cp) : null;
+            if (sharesOut) shortData.sharesOutstanding = sharesOut;
+            // Add shortPercent to each timeSeries entry
+            if (sharesOut && shortData.timeSeries) {
+              shortData.timeSeries.forEach(t => {
+                t.shortPct = +(t.balance / sharesOut * 100).toFixed(3);
+              });
+            }
             data.shortInterest = shortData;
           } else {
             const fr = data.fundamentals?.foreignRate;
@@ -536,17 +547,15 @@ async function fetchNaverChart(code, interval) {
 
   return items.map(row => {
     const [dt, open, high, low, close, volume] = row.split("|");
+    const c = parseInt(close) || 0;
+    // Naver 1m timeframe returns 0 for open/high/low — fallback to close
+    const o = parseInt(open) || c;
+    const h = parseInt(high) || c;
+    const l = parseInt(low) || c;
     const date = dt.length >= 12
       ? `${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)} ${dt.slice(8,10)}:${dt.slice(10,12)}`
       : `${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)}`;
-    return {
-      date,
-      open: parseInt(open) || 0,
-      high: parseInt(high) || 0,
-      low: parseInt(low) || 0,
-      close: parseInt(close) || 0,
-      volume: parseInt(volume) || 0
-    };
+    return { date, open: o, high: h, low: l, close: c, volume: parseInt(volume) || 0 };
   }).filter(d => d.close > 0);
 }
 

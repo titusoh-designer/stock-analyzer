@@ -3044,11 +3044,9 @@ function svgShort(data){
   const ts=curData?.shortInterest?.timeSeries;
   if(!ts||ts.length<3||!data||data.length<5)return"";
 
-  // Date map: YYYY-MM-DD → {balance, ratio}
   const sMap={};
   ts.forEach(d=>{sMap[d.date]=d;});
 
-  // Map visible OHLCV dates to short data
   const mapped=data.map(d=>{
     const dk=(d.date||"").slice(0,10);
     return sMap[dk]||null;
@@ -3056,6 +3054,7 @@ function svgShort(data){
   const validCount=mapped.filter(Boolean).length;
   if(validCount<3)return`<div class="mono" style="text-align:center;padding:10px;color:#555;font-size:10px">SHORT: 일봉에서만 표시 (${validCount}개 매핑)</div>`;
 
+  const hasPct=ts[0].shortPct!=null;
   const W=900,H=180,P={t:20,r:92,b:14,l:8};
   const midY=Math.round(H*0.52);
   const topH=midY-P.t,botH=H-P.b-midY;
@@ -3063,107 +3062,99 @@ function svgShort(data){
   const n=data.length;
   const tx=i=>P.l+(i/(n-1||1))*cw;
 
-  // Extract balance series (fill nulls with previous value)
-  const bals=[];
-  let lastBal=0;
+  // Extract values (fill nulls with previous)
+  const vals=[];
+  let lastV=0;
   for(let i=0;i<n;i++){
-    if(mapped[i]){lastBal=mapped[i].balance;bals.push(lastBal);}
-    else{bals.push(lastBal);}
+    if(mapped[i]){lastV=hasPct?mapped[i].shortPct:mapped[i].balance;vals.push(lastV);}
+    else{vals.push(lastV);}
   }
 
-  // Balance change (daily delta)
-  const deltas=bals.map((v,i)=>i>0?v-bals[i-1]:0);
+  // Delta
+  const deltas=vals.map((v,i)=>i>0?v-vals[i-1]:0);
 
   // Ranges
-  const bMax=Math.max(...bals)*1.1||1;
-  const bMin=Math.min(...bals)*0.9||0;
-  const bRng=bMax-bMin||1;
-  const dMax=Math.max(...deltas.map(Math.abs))||1;
+  const vMax=Math.max(...vals)*1.1||1;
+  const vMin=Math.min(...vals)*0.9||0;
+  const vRng=vMax-vMin||0.001;
+  const dMax=Math.max(...deltas.map(Math.abs))||0.001;
 
-  const tyB=v=>P.t+topH-((v-bMin)/bRng*topH);
+  const tyV=v=>P.t+topH-((v-vMin)/vRng*topH);
   const tyD=v=>{const mid=midY+botH/2;return mid-(v/dMax)*(botH/2);};
 
-  // Last values
-  const lastIdx=n-1;
-  const curBal=bals[lastIdx];
-  const curDelta=deltas[lastIdx];
-  const fmN=v=>{if(v>=1e6)return(v/1e6).toFixed(1)+"M";if(v>=1e3)return(v/1e3).toFixed(0)+"K";return v.toLocaleString();};
+  const lastVal=vals[n-1];
+  const curDelta=deltas[n-1];
+  const fmV=v=>{
+    if(hasPct)return v.toFixed(3)+"%";
+    if(v>=1e6)return(v/1e6).toFixed(1)+"M";
+    if(v>=1e3)return(v/1e3).toFixed(0)+"K";
+    return v.toLocaleString();
+  };
+  const fmD=v=>{
+    if(hasPct)return(v>=0?"+":"")+v.toFixed(3)+"%";
+    if(Math.abs(v)>=1e3)return(v>=0?"+":"")+Math.round(v/1e3)+"K";
+    return(v>=0?"+":"")+v;
+  };
 
-  // MA5 of balance
+  // MA5
   const ma5=[];
   for(let i=0;i<n;i++){
-    if(i<4){ma5.push(bals[i]);}
-    else{ma5.push((bals[i]+bals[i-1]+bals[i-2]+bals[i-3]+bals[i-4])/5);}
+    if(i<4)ma5.push(vals[i]);
+    else ma5.push((vals[i]+vals[i-1]+vals[i-2]+vals[i-3]+vals[i-4])/5);
   }
 
-  // Trend detection
-  const recentBals=bals.slice(-10);
-  const trend=recentBals[recentBals.length-1]>recentBals[0]?"상승":"하락";
+  // Trend
+  const recent=vals.slice(-10);
+  const trend=recent[recent.length-1]>recent[0]?"상승":"하락";
   const trendCol=trend==="상승"?"#E85D75":"#4ECCA3";
-  const trendLabel=trend==="상승"?"공매도 증가 추세":"공매도 감소 추세";
+  const trendLabel=trend==="상승"?"공매도 증가":"공매도 감소";
 
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">`;
 
-  // ═══ TOP: Balance area chart ═══
-  // Grid lines
-  const gridVals=[bMin,bMin+bRng*0.5,bMax];
-  gridVals.forEach(v=>{
-    const y=tyB(v);
-    if(isFinite(y))s+=`<line x1="${P.l}" y1="${y}" x2="${W-P.r}" y2="${y}" stroke="#ffffff" stroke-opacity=".03"/>`;
+  // Grid
+  [vMin,vMin+vRng/2,vMax].forEach(v=>{
+    const y=tyV(v);if(isFinite(y))s+=`<line x1="${P.l}" y1="${y}" x2="${W-P.r}" y2="${y}" stroke="#ffffff" stroke-opacity=".03"/>`;
   });
 
   // Title
-  s+=`<text x="${P.l+2}" y="14" fill="#E85D75" font-size="9" font-weight="600" font-family="DM Mono,monospace">SHORT BALANCE</text>`;
-  s+=`<text x="${P.l+110}" y="14" fill="#F0ECE3" font-size="9" font-family="DM Mono,monospace">${fmN(curBal)}</text>`;
-  s+=`<text x="${P.l+185}" y="14" fill="${trendCol}" font-size="8" font-family="DM Mono,monospace">(${trendLabel})</text>`;
-  s+=`<text x="${W-P.r}" y="14" fill="#555" font-size="8" font-family="DM Mono,monospace" text-anchor="end">${trendLabel}</text>`;
+  s+=`<text x="${P.l+2}" y="14" fill="#E85D75" font-size="9" font-weight="600" font-family="DM Mono,monospace">${hasPct?"SHORT %":"SHORT BALANCE"}</text>`;
+  s+=`<text x="${P.l+95}" y="14" fill="#F0ECE3" font-size="9" font-family="DM Mono,monospace">${fmV(lastVal)}</text>`;
+  s+=`<text x="${W-P.r}" y="14" fill="${trendCol}" font-size="8" font-family="DM Mono,monospace" text-anchor="end">${trendLabel}</text>`;
 
-  // Y-axis labels (balance)
-  s+=`<text x="${W-P.r+6}" y="${P.t+4}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmN(Math.round(bMax))}</text>`;
-  s+=`<text x="${W-P.r+6}" y="${P.t+topH/2+3}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmN(Math.round(bMin+bRng/2))}</text>`;
-  s+=`<text x="${W-P.r+6}" y="${P.t+topH+3}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmN(Math.round(bMin))}</text>`;
+  // Y-axis
+  s+=`<text x="${W-P.r+6}" y="${P.t+4}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmV(vMax)}</text>`;
+  s+=`<text x="${W-P.r+6}" y="${P.t+topH/2+3}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmV(+(vMin+vRng/2).toFixed(3))}</text>`;
+  s+=`<text x="${W-P.r+6}" y="${P.t+topH+3}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmV(vMin)}</text>`;
 
-  // Area fill (gradient)
+  // Area
   s+=`<defs><linearGradient id="shortBG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#E85D75" stop-opacity=".12"/><stop offset="100%" stop-color="#E85D75" stop-opacity=".02"/></linearGradient></defs>`;
-  const bPts=bals.map((v,i)=>`${tx(i).toFixed(1)},${tyB(v).toFixed(1)}`).filter((_,i)=>mapped[i]||bals[i]>0);
-  if(bPts.length>1){
-    const allPts=bals.map((v,i)=>[tx(i).toFixed(1),tyB(v).toFixed(1)]);
-    s+=`<polygon points="${allPts.map(p=>p.join(",")).join(" ")} ${tx(n-1).toFixed(1)},${(P.t+topH).toFixed(1)} ${P.l.toFixed(1)},${(P.t+topH).toFixed(1)}" fill="url(#shortBG)"/>`;
-    s+=`<polyline points="${allPts.map(p=>p.join(",")).join(" ")}" fill="none" stroke="#E85D75" stroke-width="1.5" opacity=".7"/>`;
-  }
+  const pts=vals.map((v,i)=>`${tx(i).toFixed(1)},${tyV(v).toFixed(1)}`);
+  s+=`<polygon points="${pts.join(" ")} ${tx(n-1).toFixed(1)},${(P.t+topH).toFixed(1)} ${P.l.toFixed(1)},${(P.t+topH).toFixed(1)}" fill="url(#shortBG)"/>`;
+  s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="#E85D75" stroke-width="1.5" opacity=".7"/>`;
 
-  // MA5 line (gold dashed)
-  const maPts=ma5.map((v,i)=>`${tx(i).toFixed(1)},${tyB(v).toFixed(1)}`);
+  // MA5
+  const maPts=ma5.map((v,i)=>`${tx(i).toFixed(1)},${tyV(v).toFixed(1)}`);
   s+=`<polyline points="${maPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1" opacity=".4" stroke-dasharray="3,2"/>`;
 
-  // Dot markers where actual data exists
-  for(let i=0;i<n;i++){
-    if(mapped[i]){
-      const x=tx(i),y=tyB(bals[i]);
-      if(i===lastIdx)s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#E85D75" opacity=".8"/>`;
-    }
-  }
+  // Last point
+  s+=`<circle cx="${tx(n-1).toFixed(1)}" cy="${tyV(lastVal).toFixed(1)}" r="3" fill="#E85D75" opacity=".8"/>`;
 
   // Divider
   s+=`<line x1="${P.l}" y1="${midY}" x2="${W-P.r}" y2="${midY}" stroke="#16162a" stroke-width="1"/>`;
 
-  // ═══ BOTTOM: Delta histogram (MACD style) ═══
-  s+=`<text x="${P.l+2}" y="${midY+12}" fill="#888" font-size="8" font-weight="600" font-family="DM Mono,monospace">SHORT DELTA</text>`;
-  s+=`<text x="${P.l+95}" y="${midY+12}" fill="${curDelta>=0?"#E85D75":"#4ECCA3"}" font-size="8" font-family="DM Mono,monospace">${curDelta>=0?"+":""}${fmN(curDelta)}</text>`;
+  // BOTTOM: Delta histogram
+  s+=`<text x="${P.l+2}" y="${midY+12}" fill="#888" font-size="8" font-weight="600" font-family="DM Mono,monospace">DELTA</text>`;
+  s+=`<text x="${P.l+50}" y="${midY+12}" fill="${curDelta>=0?"#E85D75":"#4ECCA3"}" font-size="8" font-family="DM Mono,monospace">${fmD(curDelta)}</text>`;
 
-  // Zero line
   const zeroY=midY+botH/2;
   s+=`<line x1="${P.l}" y1="${zeroY}" x2="${W-P.r}" y2="${zeroY}" stroke="#ffffff" stroke-opacity=".05"/>`;
 
-  // Delta bars
   const barW=Math.max(1,Math.min(6,(cw/n)*0.6));
   for(let i=0;i<n;i++){
     if(!mapped[i]&&deltas[i]===0)continue;
     const x=tx(i)-barW/2;
-    const y1=zeroY;
-    const y2=tyD(deltas[i]);
-    const top=Math.min(y1,y2);
-    const h=Math.abs(y2-y1);
+    const y1=zeroY,y2=tyD(deltas[i]);
+    const top=Math.min(y1,y2),h=Math.abs(y2-y1);
     if(h<0.5)continue;
     const col=deltas[i]>=0?"#E85D75":"#4ECCA3";
     const op=0.3+0.5*(Math.abs(deltas[i])/dMax);
@@ -3171,18 +3162,17 @@ function svgShort(data){
   }
 
   // Y-axis delta
-  s+=`<text x="${W-P.r+6}" y="${midY+8}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">+${fmN(Math.round(dMax))}</text>`;
-  s+=`<text x="${W-P.r+6}" y="${H-P.b}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">-${fmN(Math.round(dMax))}</text>`;
+  s+=`<text x="${W-P.r+6}" y="${midY+8}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">+${fmV(+dMax.toFixed(3))}</text>`;
+  s+=`<text x="${W-P.r+6}" y="${H-P.b}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">-${fmV(+dMax.toFixed(3))}</text>`;
 
   // Legend
   s+=`<text x="${W-P.r}" y="${H-2}" fill="#555" font-size="7" font-family="DM Mono,monospace" text-anchor="end">`;
-  s+=`<tspan fill="#E85D75">━</tspan> 잔고  <tspan fill="#C9A96E">---</tspan> MA5  `;
+  s+=`<tspan fill="#E85D75">━</tspan> ${hasPct?"비율(%)":"잔고"}  <tspan fill="#C9A96E">---</tspan> MA5  `;
   s+=`<tspan fill="#E85D75">█</tspan> 증가  <tspan fill="#4ECCA3">█</tspan> 감소</text>`;
 
   s+=`</svg>`;
   return s;
 }
-
 function svgOBV(data){
   if(data.length<10)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">OBV: 10봉 이상 필요</div>`;
 
