@@ -166,15 +166,16 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 <!-- ═══════ TAB: Analyze ═══════ -->
 <div id="tabAnalyze">
   <div class="f-body">
-  <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-    <button class="pill" onclick="qk('AAPL','yahoo')">AAPL</button>
-    <button class="pill" onclick="qk('TSLA','yahoo')">TSLA</button>
-    <button class="pill" onclick="qk('NVDA','yahoo')">NVDA</button>
-    <button class="pill" onclick="qk('005930','naver')">삼성전자</button>
-    <button class="pill" onclick="qk('035720','naver')">카카오</button>
-    <button class="pill" onclick="qk('065350','naver')">신성델타테크</button>
-    <button class="pill" onclick="qk('bitcoin','coingecko')">BTC</button>
-    <button class="pill" onclick="qk('ethereum','coingecko')">ETH</button>
+  <!-- Compact toolbar: Quick + Source | Timeframe -->
+  <div style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-bottom:6px;padding:0 20px">
+    <button class="pill" onclick="qk('AAPL','yahoo')" style="padding:3px 8px;font-size:10px">AAPL</button>
+    <button class="pill" onclick="qk('TSLA','yahoo')" style="padding:3px 8px;font-size:10px">TSLA</button>
+    <button class="pill" onclick="qk('NVDA','yahoo')" style="padding:3px 8px;font-size:10px">NVDA</button>
+    <button class="pill" onclick="qk('005930','naver')" style="padding:3px 8px;font-size:10px">삼성전자</button>
+    <button class="pill" onclick="qk('035720','naver')" style="padding:3px 8px;font-size:10px">카카오</button>
+    <button class="pill" onclick="qk('065350','naver')" style="padding:3px 8px;font-size:10px">신성델타테크</button>
+    <button class="pill" onclick="qk('bitcoin','coingecko')" style="padding:3px 8px;font-size:10px">BTC</button>
+    <button class="pill" onclick="qk('ethereum','coingecko')" style="padding:3px 8px;font-size:10px">ETH</button>
     <div style="flex:1"></div>
     <div id="srcBar" style="display:flex;gap:1px">
       <button class="src-btn on" data-s="yahoo" onclick="setSrc('yahoo')">Yahoo</button>
@@ -182,7 +183,8 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
       <button class="src-btn" data-s="coingecko" onclick="setSrc('coingecko')">Crypto</button>
     </div>
   </div>
-  <div class="tf-bar" id="tfBar">
+  <!-- Unified bar: TF | Chart Mode | Overlays | Watch + Live -->
+  <div style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-bottom:6px;padding:0 20px" id="tfBar">
     <button class="tf-btn" data-t="1m" onclick="setTf('1m')">1m</button>
     <button class="tf-btn" data-t="5m" onclick="setTf('5m')">5m</button>
     <button class="tf-btn" data-t="10m" onclick="setTf('10m')">10m</button>
@@ -192,18 +194,11 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
     <button class="tf-btn on" data-t="1d" onclick="setTf('1d')">D</button>
     <button class="tf-btn" data-t="1wk" onclick="setTf('1wk')">W</button>
     <button class="tf-btn" data-t="1mo" onclick="setTf('1mo')">M</button>
-    <button class="pill" id="addWlBtn" onclick="addToWatchlist()" style="display:none;border-color:#C9A96E40;color:#C9A96E;margin-left:8px">+ 워치</button>
-    <span id="liveBadge" style="display:none;align-items:center;gap:3px;color:#4ECCA3;font-size:8px;font-family:'DM Mono',monospace;animation:livePulse 1.5s infinite;margin-left:4px">● LIVE</span>
-    <div class="f-live" style="display:none" id="dataInfo"><div class="f-live-dot"></div><span id="dataInfoText"></span></div>
-  </div>
-  <!-- Chart Mode + Overlay Bar -->
-  <div class="cm-bar" id="cmBar">
-    <span style="font-size:9px;color:#555;font-family:'DM Mono',monospace;letter-spacing:.06em;margin-right:2px">CHART</span>
+    <div style="width:1px;height:16px;background:#1e1e2e;margin:0 4px"></div>
     <button class="cm-btn" data-m="line" onclick="setChartMode('line')">라인</button>
     <button class="cm-btn on" data-m="candle" onclick="setChartMode('candle')">캔들</button>
     <button class="cm-btn" data-m="heikin" onclick="setChartMode('heikin')">하이킨아시</button>
-    <div class="cm-sep"></div>
-    <span style="font-size:9px;color:#555;font-family:'DM Mono',monospace;letter-spacing:.06em;margin-right:2px">OVERLAY</span>
+    <div style="width:1px;height:16px;background:#1e1e2e;margin:0 4px"></div>
     <button class="ov-btn on" data-c="bb" data-o="bb" onclick="toggleOv('bb')">BB</button>
     <button class="ov-btn on" data-c="vol" data-o="vol" onclick="toggleOv('vol')">VOL</button>
     <button class="ov-btn" data-c="rsi" data-o="rsi" onclick="toggleOv('rsi')">RSI</button>
@@ -211,6 +206,10 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
     <button class="ov-btn" data-c="adx" data-o="adx" onclick="toggleOv('adx')">ADX</button>
     <button class="ov-btn" data-c="obv" data-o="obv" onclick="toggleOv('obv')">OBV</button>
     <button class="ov-btn" data-c="ichi" data-o="ichi" onclick="toggleOv('ichi')">일목</button>
+    <div style="flex:1"></div>
+    <button class="pill" id="addWlBtn" onclick="addToWatchlist()" style="display:none;border-color:#C9A96E40;color:#C9A96E">+ 워치</button>
+    <span id="liveBadge" style="display:none;align-items:center;gap:3px;color:#4ECCA3;font-size:9px;font-family:'DM Mono',monospace;animation:livePulse 1.5s infinite">● LIVE</span>
+    <div class="f-live" style="display:none" id="dataInfo"><div class="f-live-dot"></div><span id="dataInfoText"></span></div>
   </div>
   <div id="analyzeOut"></div>
   <div id="loadEl" style="display:none" class="loading"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p id="loadMsg" class="noto" style="color:#666;font-size:11px;margin-top:10px"></p></div>
@@ -1077,13 +1076,62 @@ function render(data,ai){
   let h=`<div class="fade">
   <div style="position:relative">
     <div id="mainChartWrap" class="chart-box" style="cursor:crosshair;user-select:none">${svgChart(o,cp,data.currency,ai,stockLabel)}</div>
+    <!-- Zoom +/- buttons -->
+    <div style="position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:3px;z-index:10">
+      <button id="zoomInBtn" style="width:28px;height:28px;border-radius:6px;border:1px solid #1e1e2e;background:rgba(12,12,22,.85);color:#C9A96E;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;backdrop-filter:blur(4px)">+</button>
+      <button id="zoomOutBtn" style="width:28px;height:28px;border-radius:6px;border:1px solid #1e1e2e;background:rgba(12,12,22,.85);color:#C9A96E;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;backdrop-filter:blur(4px)">−</button>
+    </div>
+    <!-- Crosshair overlay -->
     <div id="crosshair" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none">
-      <div id="chV" style="position:absolute;top:0;width:1px;height:100%;background:rgba(201,169,110,.3)"></div>
-      <div id="chH" style="position:absolute;left:0;height:1px;width:100%;background:rgba(201,169,110,.3)"></div>
-      <div id="chLabel" style="position:absolute;padding:4px 8px;border-radius:4px;background:rgba(10,10,16,.9);border:1px solid rgba(201,169,110,.3);white-space:nowrap;font-family:'DM Mono',monospace;font-size:10px;color:#C9A96E;pointer-events:none"></div>
+      <div id="chV" style="position:absolute;top:0;width:1px;height:100%;background:rgba(201,169,110,.25)"></div>
+      <div id="chH" style="position:absolute;left:0;height:1px;width:100%;background:rgba(201,169,110,.25)"></div>
+      <div id="chLabel" style="position:absolute;padding:5px 10px;border-radius:5px;background:rgba(10,10,16,.92);border:1px solid rgba(201,169,110,.25);white-space:nowrap;font-family:'DM Mono',monospace;font-size:11px;color:#C9A96E;pointer-events:none;backdrop-filter:blur(4px)"></div>
+      <!-- Snap labels on axes -->
+      <div id="chDateSnap" style="position:absolute;bottom:0;padding:2px 8px;border-radius:3px;background:rgba(201,169,110,.15);border:1px solid rgba(201,169,110,.2);font-family:'DM Mono',monospace;font-size:10px;color:#C9A96E;pointer-events:none;transform:translateX(-50%)"></div>
+      <div id="chPriceSnap" style="position:absolute;right:0;padding:2px 6px;border-radius:3px;background:rgba(201,169,110,.15);border:1px solid rgba(201,169,110,.2);font-family:'DM Mono',monospace;font-size:10px;color:#C9A96E;pointer-events:none;transform:translateY(-50%)"></div>
     </div>
   </div>
-  <div id="chartInfoText" class="mono" style="font-size:9px;color:#44444460;text-align:center;margin:-6px 0 8px">휠: 줌 · 드래그: 이동 · ${o.length}봉 / ${allData.length}봉</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 20px;margin-bottom:6px">
+    <div id="chartInfoText" class="mono" style="font-size:10px;color:#44444480">Ctrl+휠: 줌 · 드래그: 이동 · ${o.length}봉 / ${allData.length}봉</div>
+    <button onclick="document.getElementById('chartLegend').style.display=document.getElementById('chartLegend').style.display==='none'?'block':'none'" style="background:none;border:1px solid #16162a;border-radius:5px;padding:3px 10px;color:#555;font-size:10px;font-family:'DM Mono',monospace;cursor:pointer">ⓘ 범례</button>
+  </div>
+  <!-- External legend (collapsed by default) -->
+  <div id="chartLegend" style="display:none;padding:0 20px;margin-bottom:12px">
+    <div class="card" style="padding:14px 16px;border-color:#C9A96E15">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#C9A96E;margin-bottom:8px">상승 시그널 (5-Indicator Bull Signal)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <span style="color:#90EE90;font-size:11px;font-family:'DM Mono',monospace">⬆3 과반(3/5)</span>
+            <span style="color:#4ECCA3;font-size:11px;font-family:'DM Mono',monospace">⬆4 강한(4/5)</span>
+            <span style="color:#1B7A43;font-size:11px;font-family:'DM Mono',monospace">⬆5 최강(5/5)</span>
+            <span style="color:#C9A96E;font-size:11px;font-family:'DM Mono',monospace">◆ 강한상승예상</span>
+          </div>
+          <div style="font-size:10px;color:#666;line-height:1.7">
+            M.A=MACD 상향돌파 · S.T=Supertrend 전환 · DMI=+DI 돌파 · B.B=BB 중심선 돌파 · I.M=일목 구름 돌파<br>
+            ◆조건: BB스퀴즈(하위20%) + ATR감소 + 고저수렴 + 거래량 1.5x↑ + 양봉 (5조건 동시)
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#C9A96E;margin-bottom:8px">심리지수 (Fear & Greed)</div>
+          <div style="display:flex;gap:10px;margin-bottom:8px">
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:8px;border-radius:2px;background:rgba(232,93,117,.2);display:inline-block"></span><span style="font-size:11px;color:#666">공포 (0~40)</span></span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:8px;border-radius:2px;border:1px solid #333;display:inline-block"></span><span style="font-size:11px;color:#666">중립 (40~60)</span></span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:8px;border-radius:2px;background:rgba(78,204,163,.2);display:inline-block"></span><span style="font-size:11px;color:#666">욕망 (60~100)</span></span>
+          </div>
+          <div style="font-size:10px;color:#666;line-height:1.7">
+            산출: RSI(14) + BB위치 + MA20이격도 + 거래량비율 + ATR변동성<br>
+            → 5-bar SMA 스무딩 → 배경색 오버레이
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <span style="font-size:10px;color:#4ECCA3">━ 일20</span>
+            <span style="font-size:10px;color:#C9A96E">━ 주20</span>
+            <span style="font-size:10px;color:#F0ECE3">━ 월20</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- 3-column quick panels -->
   <div class="f-panels">
@@ -1575,7 +1623,7 @@ function render(data,ai){
       if(obvEl)obvEl.innerHTML=svgOBV(d);
       // Update info text
       const infoEl=document.getElementById("chartInfoText");
-      if(infoEl)infoEl.textContent=`마우스 휠: 줌 · 클릭&드래그: 이동 · 표시: ${d.length}봉 / 전체 ${total}봉`;
+      if(infoEl)infoEl.textContent=`Ctrl+휠: 줌 · 드래그: 이동 · 표시: ${d.length}봉 / 전체 ${total}봉`;
     }
 
     function scheduleUpdate(){
@@ -1583,8 +1631,9 @@ function render(data,ai){
       rafId=requestAnimationFrame(()=>{rafId=null;updateChartView();});
     }
 
-    // Wheel zoom (finer steps)
+    // Wheel: Ctrl+wheel = zoom, normal wheel = page scroll
     chartEl.onwheel=(e)=>{
+      if(!e.ctrlKey&&!e.metaKey)return; // let page scroll through
       e.preventDefault();
       const visLen=viewEnd-viewStart;
       const zoomDir=e.deltaY>0?1:-1;
@@ -1593,9 +1642,14 @@ function render(data,ai){
       else{if(visLen>15){viewStart=Math.min(viewEnd-15,viewStart+step);viewEnd=Math.max(viewStart+15,viewEnd-step);}}
       scheduleUpdate();
     };
+    // +/- zoom buttons
+    const zoomIn=document.getElementById("zoomInBtn");
+    const zoomOut=document.getElementById("zoomOutBtn");
+    if(zoomIn)zoomIn.onclick=()=>{const v=viewEnd-viewStart;if(v>15){const s=Math.max(1,Math.round(v*.12));viewStart=Math.min(viewEnd-15,viewStart+s);viewEnd=Math.max(viewStart+15,viewEnd-s);scheduleUpdate();}};
+    if(zoomOut)zoomOut.onclick=()=>{const s=Math.max(1,Math.round((viewEnd-viewStart)*.12));viewStart=Math.max(0,viewStart-s);viewEnd=Math.min(total,viewEnd+s);scheduleUpdate();};
 
     // Chart dimensions for crosshair mapping (must match svgChart)
-    const chartP={t:28,r:92,b:118,l:8},chartW=900,chartH=700;
+    const chartP={t:28,r:92,b:40,l:8},chartW=900,chartH=620;
 
     // Drag pan
     chartEl.onmousedown=(e)=>{isDragging=true;dragStartX=e.clientX;dragStartViewStart=viewStart;e.preventDefault();};
@@ -1649,9 +1703,15 @@ function render(data,ai){
       const fmP=v=>v>=10000?(v/10000).toFixed(1)+"만":v>=1000?Number(v).toLocaleString():v.toFixed(v<10?4:2);
 
       if(d){
-        chLabel.innerHTML=`${d.date||""} · ${cur2}${fmP(price)} · O:${fmP(d.open)} H:${fmP(d.high)} L:${fmP(d.low)} C:${fmP(d.close)}`;
+        chLabel.innerHTML=`O:${fmP(d.open)} H:${fmP(d.high)} L:${fmP(d.low)} C:${fmP(d.close)}`;
         chLabel.style.left=Math.min(mx+12,rect.width-chLabel.offsetWidth-10)+"px";
         chLabel.style.top=Math.max(0,my-28)+"px";
+        // Snap date label on X-axis
+        const dateSnap=document.getElementById("chDateSnap");
+        if(dateSnap){dateSnap.textContent=d.date||"";dateSnap.style.left=mx+"px";}
+        // Snap price label on Y-axis
+        const priceSnap=document.getElementById("chPriceSnap");
+        if(priceSnap){priceSnap.textContent=cur2+fmP(price);priceSnap.style.top=my+"px";}
       }
     };
 
@@ -1661,40 +1721,47 @@ function render(data,ai){
     };
     chartEl.onmouseup=()=>{if(isDragging){isDragging=false;}};
 
-    // Touch (drag + pinch zoom) — must use addEventListener for passive:false
-    let touchStartDist=0,touchStartRange=0;
-    chartEl.style.touchAction="none"; // prevent browser zoom
+    // Touch: 1-finger horizontal=pan, 2-finger=pinch zoom, vertical=page scroll
+    let touchStartDist=0,touchStartRange=0,touchStartY=0,touchLocked=false;
+    chartEl.style.touchAction="pan-y"; // allow vertical scroll by default
     chartEl.addEventListener("touchstart",(e)=>{
-      e.preventDefault();
       if(e.touches.length===2){
+        e.preventDefault();
         const dx=e.touches[0].clientX-e.touches[1].clientX;
         const dy=e.touches[0].clientY-e.touches[1].clientY;
         touchStartDist=Math.sqrt(dx*dx+dy*dy);
         touchStartRange=viewEnd-viewStart;
-        isDragging=false;
+        isDragging=false;touchLocked=true;
       } else if(e.touches.length===1){
-        isDragging=true;dragStartX=e.touches[0].clientX;dragStartViewStart=viewStart;
-        touchStartDist=0;
+        dragStartX=e.touches[0].clientX;
+        touchStartY=e.touches[0].clientY;
+        dragStartViewStart=viewStart;
+        isDragging=false;touchLocked=false;touchStartDist=0;
       }
-    },{passive:false});
+    },{passive:true});
     chartEl.addEventListener("touchmove",(e)=>{
-      e.preventDefault();
       if(e.touches.length===2&&touchStartDist>0){
+        e.preventDefault();
         const dx=e.touches[0].clientX-e.touches[1].clientX;
         const dy=e.touches[0].clientY-e.touches[1].clientY;
         const dist=Math.sqrt(dx*dx+dy*dy);
         const scale=touchStartDist/dist;
-        const newRange=Math.max(15,Math.min(d.length,Math.round(touchStartRange*scale)));
+        const newRange=Math.max(15,Math.min(total,Math.round(touchStartRange*scale)));
         const mid=Math.round((viewStart+viewEnd)/2);
         viewStart=Math.max(0,mid-Math.round(newRange/2));
-        viewEnd=Math.min(d.length,viewStart+newRange);
+        viewEnd=Math.min(total,viewStart+newRange);
         if(viewEnd-viewStart<15)viewStart=Math.max(0,viewEnd-15);
-        updateChartView(d);
-      } else if(e.touches.length===1&&isDragging){
-        onMove(e.touches[0].clientX);
+        scheduleUpdate();
+      } else if(e.touches.length===1){
+        const dx=Math.abs(e.touches[0].clientX-dragStartX);
+        const dy=Math.abs(e.touches[0].clientY-touchStartY);
+        // Lock horizontal if moved more horizontally than vertically
+        if(!touchLocked&&(dx>8||dy>8)){touchLocked=true;isDragging=dx>dy;}
+        if(isDragging){e.preventDefault();onMove(e.touches[0].clientX);}
+        // else: vertical scroll passes through naturally
       }
     },{passive:false});
-    chartEl.addEventListener("touchend",()=>{isDragging=false;touchStartDist=0;},{passive:true});
+    chartEl.addEventListener("touchend",()=>{isDragging=false;touchStartDist=0;touchLocked=false;},{passive:true});
   }
 }
 
@@ -2005,7 +2072,7 @@ function svgPatternChart(data,pat,cp,cur,idx){
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
 
   // Grid
-  for(let i=0;i<=4;i++){const p=mn+rng*(i/4);const y=ty(p);if(isFinite(y))s+=`<line x1="${P.l}" y1="${y}" x2="${W-P.r}" y2="${y}" stroke="#fff" stroke-opacity=".03"/><text x="${W-P.r+6}" y="${y+3}" fill="#555" font-size="7.5" font-family="DM Mono,monospace">${fm(p)}</text>`;}
+  for(let i=0;i<=4;i++){const p=mn+rng*(i/4);const y=ty(p);if(isFinite(y))s+=`<line x1="${P.l}" y1="${y}" x2="${W-P.r}" y2="${y}" stroke="#fff" stroke-opacity=".03"/><text x="${W-P.r+6}" y="${y+3}" fill="#555" font-size="10" font-family="DM Mono,monospace">${fm(p)}</text>`;}
 
   // Candles (dimmed)
   data.forEach((d,i)=>{
@@ -2101,9 +2168,12 @@ function svgPatternChart(data,pat,cp,cur,idx){
   // Current price line
   const cpY=ty(cp);
   if(isFinite(cpY)){
-    s+=`<line x1="${P.l}" y1="${cpY}" x2="${W-P.r}" y2="${cpY}" stroke="#C9A96E" stroke-width="1" opacity=".4" stroke-dasharray="4,3"/>`;
-    s+=`<rect x="${W-P.r+2}" y="${cpY-8}" width="84" height="16" rx="3" fill="rgba(201,169,110,.2)" stroke="#C9A96E40"/>`;
-    s+=`<text x="${W-P.r+8}" y="${cpY+3}" fill="#C9A96E" font-size="8" font-weight="600" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;
+    // Glow effect: soft background band
+    s+=`<rect x="${P.l}" y="${cpY-4}" width="${cw}" height="8" fill="rgba(201,169,110,.06)" rx="2"/>`;
+    s+=`<line x1="${P.l}" y1="${cpY}" x2="${W-P.r}" y2="${cpY}" stroke="#C9A96E" stroke-width="1.2" opacity=".5" stroke-dasharray="5,3"/>`;
+    // Enhanced price label on Y-axis
+    s+=`<rect x="${W-P.r+2}" y="${cpY-10}" width="86" height="20" rx="4" fill="rgba(201,169,110,.25)" stroke="#C9A96E60"/>`;
+    s+=`<text x="${W-P.r+8}" y="${cpY+4}" fill="#C9A96E" font-size="10" font-weight="700" font-family="DM Mono,monospace">${cs}${fm(cp)}</text>`;
   }
 
   // Target up — show in chart if in range, or as edge arrow if out of range
@@ -2176,7 +2246,7 @@ function svgChart(data,cp,cur,ai,stockName){
   // ═══ Chart Mode Preprocessing ═══
   const isLine=chartMode==="line",isHeikin=chartMode==="heikin";
   const displayData=isHeikin?calcHeikinAshi(data):data;
-  const W=900,H=700,P={t:28,r:92,b:118,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b-36;
+  const W=900,H=620,P={t:28,r:92,b:40,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b-36;
   const aP=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);if(cp&&isFinite(cp))aP.push(cp);
   if(isHeikin)displayData.forEach(d=>{if(d.high>0)aP.push(d.high);if(d.low>0)aP.push(d.low);});
   (ai?.supports||[]).forEach(s=>aP.push(s));(ai?.resistances||[]).forEach(r=>aP.push(r));
@@ -2667,26 +2737,7 @@ function svgChart(data,cp,cur,ai,stockName){
       s+=`<text x="${x}" y="${y+(sz==="huge"?66:sz==="large"?58:42)}" fill="${col}" font-size="6" font-family="DM Mono,monospace" text-anchor="middle" opacity=".7">${sig.buys.join("+")}</text>`;
     });
 
-    // Signal + Sentiment legend (detailed)
-    const ly=H-110; // legend y start — increased space
-    // Signal section
-    s+=`<text x="${P.l+4}" y="${ly}" fill="#C9A96E" font-size="10" font-weight="600" font-family="DM Mono,monospace" opacity=".8">상승 시그널</text>`;
-    s+=`<text x="${P.l+4}" y="${ly+15}" fill="#90EE90" font-size="9" font-family="DM Mono,monospace" opacity=".6">⬆3 과반(3/5)</text>`;
-    s+=`<text x="${P.l+100}" y="${ly+15}" fill="#4ECCA3" font-size="9" font-family="DM Mono,monospace" opacity=".6">⬆4 강한(4/5)</text>`;
-    s+=`<text x="${P.l+200}" y="${ly+15}" fill="#1B7A43" font-size="9" font-family="DM Mono,monospace" opacity=".6">⬆5 최강(5/5)</text>`;
-    s+=`<text x="${P.l+300}" y="${ly+15}" fill="#C9A96E" font-size="9" font-family="DM Mono,monospace" opacity=".6">◆ 강한상승예상</text>`;
-    // Indicator descriptions
-    s+=`<text x="${P.l+4}" y="${ly+30}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">M.A=MACD상향돌파  S.T=Supertrend전환  DMI=+DI돌파  B.B=BB중심선돌파  I.M=일목구름돌파</text>`;
-    s+=`<text x="${P.l+4}" y="${ly+43}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">◆조건: BB스퀴즈(하위20%) + ATR감소 + 고저수렴 + 거래량1.5x↑ + 양봉 (5조건 동시)</text>`;
-    // Sentiment section
-    s+=`<text x="${P.l+4}" y="${ly+62}" fill="#C9A96E" font-size="10" font-weight="600" font-family="DM Mono,monospace" opacity=".8">심리지수</text>`;
-    s+=`<rect x="${P.l+70}" y="${ly+54}" width="14" height="8" rx="2" fill="rgba(232,93,117,.15)"/>`;
-    s+=`<text x="${P.l+88}" y="${ly+62}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">공포(0~40)</text>`;
-    s+=`<rect x="${P.l+155}" y="${ly+54}" width="14" height="8" rx="2" fill="transparent" stroke="#33333380" stroke-width=".5"/>`;
-    s+=`<text x="${P.l+173}" y="${ly+62}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">중립(40~60)</text>`;
-    s+=`<rect x="${P.l+245}" y="${ly+54}" width="14" height="8" rx="2" fill="rgba(78,204,163,.15)"/>`;
-    s+=`<text x="${P.l+263}" y="${ly+62}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">욕망(60~100)</text>`;
-    s+=`<text x="${P.l+4}" y="${ly+77}" fill="#666" font-size="8" font-family="DM Mono,monospace" opacity=".6">산출: RSI(14) + BB위치 + MA20이격도 + 거래량비율 + ATR변동성 → 5-bar SMA 스무딩</text>`;
+    // Legend moved to external card (#chartLegend) — SVG space reclaimed for chart
 
     // ═══════ 상승예상신호 시스템 ═══════
     if(data.length>=30){
