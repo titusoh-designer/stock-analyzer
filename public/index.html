@@ -150,16 +150,6 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
   <div class="f-search-area">
     <input id="symInput" placeholder="종목 검색... (삼성전자, AAPL, BTC-USD)" autocomplete="off"/>
     <div id="searchDrop"></div>
-    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap" id="quickTags">
-      <button class="pill" onclick="qk('AAPL','yahoo')" style="padding:2px 7px;font-size:10px;border-color:#16162a">AAPL</button>
-      <button class="pill" onclick="qk('TSLA','yahoo')" style="padding:2px 7px;font-size:10px;border-color:#16162a">TSLA</button>
-      <button class="pill" onclick="qk('NVDA','yahoo')" style="padding:2px 7px;font-size:10px;border-color:#16162a">NVDA</button>
-      <button class="pill" onclick="qk('005930','naver')" style="padding:2px 7px;font-size:10px;border-color:#16162a">삼성전자</button>
-      <button class="pill" onclick="qk('035720','naver')" style="padding:2px 7px;font-size:10px;border-color:#16162a">카카오</button>
-      <button class="pill" onclick="qk('065350','naver')" style="padding:2px 7px;font-size:10px;border-color:#16162a">신성델타테크</button>
-      <button class="pill" onclick="qk('bitcoin','coingecko')" style="padding:2px 7px;font-size:10px;border-color:#16162a">BTC</button>
-      <button class="pill" onclick="qk('ethereum','coingecko')" style="padding:2px 7px;font-size:10px;border-color:#16162a">ETH</button>
-    </div>
   </div>
   <div class="f-nav">
     <div class="f-nav-item on" data-tab="analyze" onclick="switchTab('analyze')">분석</div>
@@ -176,8 +166,17 @@ body{background:#060610;color:#F0ECE3;font-family:'Outfit',sans-serif;min-height
 <!-- ═══════ TAB: Analyze ═══════ -->
 <div id="tabAnalyze">
   <div class="f-body">
-  <!-- Unified control bar: TF | Mode | Overlays | Source | Watch + Live -->
-  <div style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-bottom:6px;padding:0 20px" id="tfBar">
+  <!-- Unified control bar: Quick + TF | Mode | Overlays | Source | Watch + Live -->
+  <div style="display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-bottom:6px;padding:0 10px" id="tfBar">
+    <button class="pill" onclick="qk('AAPL','yahoo')" style="padding:2px 7px;font-size:10px;border-color:#16162a">AAPL</button>
+    <button class="pill" onclick="qk('TSLA','yahoo')" style="padding:2px 7px;font-size:10px;border-color:#16162a">TSLA</button>
+    <button class="pill" onclick="qk('NVDA','yahoo')" style="padding:2px 7px;font-size:10px;border-color:#16162a">NVDA</button>
+    <button class="pill" onclick="qk('005930','naver')" style="padding:2px 7px;font-size:10px;border-color:#16162a">삼성전자</button>
+    <button class="pill" onclick="qk('035720','naver')" style="padding:2px 7px;font-size:10px;border-color:#16162a">카카오</button>
+    <button class="pill" onclick="qk('065350','naver')" style="padding:2px 7px;font-size:10px;border-color:#16162a">신성델타테크</button>
+    <button class="pill" onclick="qk('bitcoin','coingecko')" style="padding:2px 7px;font-size:10px;border-color:#16162a">BTC</button>
+    <button class="pill" onclick="qk('ethereum','coingecko')" style="padding:2px 7px;font-size:10px;border-color:#16162a">ETH</button>
+    <div style="width:1px;height:14px;background:#1e1e2e;margin:0 2px"></div>
     <button class="tf-btn" data-t="1m" onclick="setTf('1m')">1m</button>
     <button class="tf-btn" data-t="5m" onclick="setTf('5m')">5m</button>
     <button class="tf-btn" data-t="10m" onclick="setTf('10m')">10m</button>
