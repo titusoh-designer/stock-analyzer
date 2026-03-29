@@ -4352,7 +4352,8 @@ async function renderSignals(){
   el.innerHTML=`<div style="text-align:center;padding:40px 0"><span class="dot"></span> <span class="dot"></span> <span class="dot"></span><p class="noto" style="color:#666;font-size:12px;margin-top:10px">스캐너 결과를 불러오는 중...</p></div>`;
   let signals=[],dataSource="demo",scanTime=null;
   if(!_sigCache){try{const resp=await fetch("/api/scan-store");const data=await resp.json();if(data.stored&&data.results&&data.results.length)_sigCache={results:data.results,scannedAt:data.scannedAt,totalScanned:data.totalScanned,source:data.source};}catch(e){}}
-  if(_sigCache&&_sigCache.results.length){signals=_sigCache.results.map(r=>scanToSignal(r)).sort((a,b)=>b.total-a.total);dataSource=_sigCache.source==="cron-6am"?"자동 스캔(6AM)":"스캐너 결과";scanTime=_sigCache.scannedAt;}
+  if(!_sigCache){try{const local=localStorage.getItem("scanResults");if(local){const ld=JSON.parse(local);if(ld.results&&ld.results.length)_sigCache={results:ld.results,scannedAt:ld.scannedAt,totalScanned:ld.totalScanned,source:"localStorage"};}}catch(e){}}
+  if(_sigCache&&_sigCache.results.length){signals=_sigCache.results.map(r=>scanToSignal(r)).sort((a,b)=>b.total-a.total);dataSource=_sigCache.source==="cron-6am"?"자동 스캔(6AM)":_sigCache.source==="localStorage"?"로컬 캐시":"스캐너 결과";scanTime=_sigCache.scannedAt;}
   if(!signals.length){signals=SIG_DEMO;dataSource="demo";}
   const tc={entry:"#4ECCA3",exit:"#C9A96E",danger:"#E85D75",watch:"#3b82f6"};
   const tbg={entry:"rgba(78,204,163,.05)",exit:"rgba(201,169,110,.05)",danger:"rgba(232,93,117,.05)",watch:"rgba(59,130,246,.05)"};
@@ -4391,7 +4392,7 @@ async function renderSignals(){
         </div>
         <div style="font-size:11px;color:#777;margin-top:4px;line-height:1.4">${sig.reason}</div>
       </div>
-      <div style="flex-shrink:0">${sigMiniChart(sig,380,100)}</div>
+      <div style="flex-shrink:0;width:280px;height:80px">${sigMiniChart(sig,380,100)}</div>
       <div style="text-align:right;min-width:80px;flex-shrink:0">
         <div class="mono" style="font-size:15px;font-weight:700;color:#F0ECE3">${sig.price}</div>
         <div class="mono" style="font-size:12px;color:${sig.ch>=0?"#4ECCA3":"#E85D75"}">${sig.ch>=0?"+":""}${sig.ch.toFixed(1)}%</div>
@@ -4453,6 +4454,7 @@ async function updateAnalyzeSignalCard(){
   // Load scan cache
   if(!_sigCache){try{const resp=await fetch("/api/scan-store");const data=await resp.json();if(data.stored&&data.results&&data.results.length)_sigCache={results:data.results,scannedAt:data.scannedAt,totalScanned:data.totalScanned,source:data.source};}catch(e){}}
   if(!_sigCache||!_sigCache.results)return;
+  if(!_sigCache){try{const local=localStorage.getItem("scanResults");if(local){const ld=JSON.parse(local);if(ld.results&&ld.results.length)_sigCache={results:ld.results,scannedAt:ld.scannedAt,totalScanned:ld.totalScanned,source:"localStorage"};}}catch(e){}}
   // Find current symbol
   const found=_sigCache.results.find(r=>(r.symbol||"").replace(/\.(KS|KQ)$/,"")===sym||(r.name||"")===sym);
   if(!found){el.innerHTML=`<div class="card" style="padding:10px 14px;opacity:.5"><span style="font-size:11px;color:#555">시그널 스캐너 데이터 없음 — 스캐너에서 스캔 후 확인 가능</span></div>`;return;}
