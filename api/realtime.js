@@ -56,6 +56,15 @@ export default async function handler(req, res) {
       else if (rawCurrentPrice > 0) price = rawCurrentPrice;
       else if (rawClosePrice > 0) price = rawClosePrice;
 
+      // Calculate prevClose from price - change if not directly available
+      if (!prevClose && price > 0) {
+        const change = pn(json.compareToPreviousClosePrice);
+        const direction = json.compareToPreviousPrice?.code; // "2"=상승, "5"=하락
+        if (change > 0) {
+          prevClose = direction === "5" ? price + change : price - change;
+        }
+      }
+
       // Only nullify price if market is CLOSED and we suspect stale data
       // During market hours (9:00~15:30), trust whatever Naver returns
       if (!marketOpen && price === prevClose && price > 0 && open === 0) {
