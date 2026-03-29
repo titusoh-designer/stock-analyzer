@@ -6,7 +6,7 @@
     "api/scan-store.js": { "maxDuration": 10 },
     "api/realtime.js": { "maxDuration": 10 },
     "api/universe.js": { "maxDuration": 30 },
-    "api/sentiment.js": { "maxDuration": 15 }
+    "api/sentiment.js": { "maxDuration": 30 }
   },
   "crons": [
     {
