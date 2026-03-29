@@ -315,6 +315,7 @@ let showIchimoku=false;
 let chartMode=localStorage.getItem("chartMode")||"candle";
 let overlays=JSON.parse(localStorage.getItem("overlays")||'{"rsi":false,"bb":true,"vol":true,"stoch":false,"adx":false,"obv":false,"ichi":false}');
 let autoRefreshTimer=null;
+let _scanData=null; // In-memory cache for scan results (survives filter changes)
 let isDragging=false,dragStartX=0,dragStartViewStart=0;
 let watchlist=JSON.parse(localStorage.getItem("wl")||"[]");
 
@@ -3663,10 +3664,15 @@ function miniChartSvg(mini,change,miniMA20,miniMA100,starSignals,miniMA440){
 }
 
 function filterScanResults(){
-  // Try server first, then localStorage
-  loadScanCache();
+  // Use in-memory cache (set by renderScanResults) — no re-fetch needed
+  if(_scanData&&_scanData.results&&_scanData.results.length){
+    renderScanResults(_scanData);
+  } else {
+    loadScanCache();
+  }
 }
 function clearScanCache(){
+  _scanData=null;
   localStorage.removeItem("scanResults");
   // Also clear server cache
   fetch("/api/scan-store",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({results:[],source:"cleared"})}).catch(()=>{});
@@ -3676,6 +3682,7 @@ function clearScanCache(){
 }
 
 function renderScanResults(data){
+  _scanData=data; // Cache for filter changes
   const el=document.getElementById("scanResults");
   const empty=document.getElementById("scanEmpty");
   const timeEl=document.getElementById("scanTime");
