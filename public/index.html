@@ -2250,7 +2250,10 @@ function svgChart(data,cp,cur,ai,stockName){
   const isLine=chartMode==="line",isHeikin=chartMode==="heikin";
   const displayData=isHeikin?calcHeikinAshi(data):data;
   const W=900,H=620,P={t:28,r:92,b:40,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b-36;
-  const aP=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);if(cp&&isFinite(cp))aP.push(cp);
+  const aP=data.flatMap(d=>[d.high,d.low]).filter(v=>isFinite(v)&&v>0);
+  // Only include currentPrice in Y-range when viewing latest data
+  const isViewingLatest=viewEnd>=(curData?.ohlcv?.length||data.length);
+  if(cp&&isFinite(cp)&&isViewingLatest)aP.push(cp);
   if(isHeikin)displayData.forEach(d=>{if(d.high>0)aP.push(d.high);if(d.low>0)aP.push(d.low);});
   (ai?.supports||[]).forEach(s=>aP.push(s));(ai?.resistances||[]).forEach(r=>aP.push(r));
   (ai?.detectedPatterns||[]).forEach(p=>{if(p.targetUp)aP.push(p.targetUp);if(p.targetDown)aP.push(p.targetDown);});
@@ -3136,6 +3139,15 @@ function svgShort(data){
   const maPts=ma5.map((v,i)=>`${tx(i).toFixed(1)},${tyV(v).toFixed(1)}`);
   s+=`<polyline points="${maPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1" opacity=".4" stroke-dasharray="3,2"/>`;
 
+  // Price overlay (normalized to short chart's top area)
+  const pCls=data.map(d=>d.close).filter(v=>v>0);
+  if(pCls.length>1){
+    const pMin=Math.min(...pCls),pMax=Math.max(...pCls),pRng=pMax-pMin||1;
+    const tyP=v=>P.t+topH*0.05+topH*0.9*(1-(v-pMin)/pRng);
+    const pPts=data.map((d,i)=>{const y=tyP(d.close);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+    if(pPts.length>1)s+=`<polyline points="${pPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width=".8" opacity=".25" stroke-dasharray="4,2"/>`;
+  }
+
   // Last point
   s+=`<circle cx="${tx(n-1).toFixed(1)}" cy="${tyV(lastVal).toFixed(1)}" r="3" fill="#E85D75" opacity=".8"/>`;
 
@@ -3167,7 +3179,7 @@ function svgShort(data){
 
   // Legend
   s+=`<text x="${W-P.r}" y="${H-2}" fill="#555" font-size="7" font-family="DM Mono,monospace" text-anchor="end">`;
-  s+=`<tspan fill="#E85D75">━</tspan> ${hasPct?"비율(%)":"잔고"}  <tspan fill="#C9A96E">---</tspan> MA5  `;
+  s+=`<tspan fill="#E85D75">━</tspan> ${hasPct?"비율(%)":"잔고"}  <tspan fill="#C9A96E">---</tspan> MA5  <tspan fill="#C9A96E" opacity=".4">···</tspan> 가격  `;
   s+=`<tspan fill="#E85D75">█</tspan> 증가  <tspan fill="#4ECCA3">█</tspan> 감소</text>`;
 
   s+=`</svg>`;
