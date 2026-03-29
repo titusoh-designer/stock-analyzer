@@ -330,7 +330,7 @@ function switchTab(t){
   const pTab=document.getElementById("tabPatterns");if(pTab)pTab.style.display=t==="patterns"?"block":"none";
   if(t==="watchlist")renderWatchlist();
   if(t==="patterns"&&typeof renderPatterns==="function")renderPatterns();
-  if(t==="scanner")loadScanCache();
+  if(t==="scanner"){if(_scanData)renderScanResults(_scanData);else loadScanCache();}
   if(t==="sentiment")renderSentiment();
   if(t==="signals")renderSignals();
 }
@@ -3537,42 +3537,30 @@ async function runScan(){
 
     const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length};
 
-    // Save to localStorage (slim: downsample mini 600→150)
+    // ★ Save top 100 results only (sorted by strength) — prevents storage overflow
+    const saveTop=allResults.slice(0,100);
+    const downsample=(arr)=>arr&&arr.length>150?arr.filter((_,i)=>i%4===0||i===arr.length-1):arr;
+    const slimTop=saveTop.map(r=>({...r,mini:downsample(r.mini),miniMA20:downsample(r.miniMA20),miniMA100:downsample(r.miniMA100),miniMA440:downsample(r.miniMA440)}));
+
+    // Save to localStorage
     try{
-      const slimLocal=allResults.map(r=>{
-        const s={...r};
-        if(s.mini&&s.mini.length>150)s.mini=s.mini.filter((_,i)=>i%4===0||i===s.mini.length-1);
-        if(s.miniMA20&&s.miniMA20.length>150)s.miniMA20=s.miniMA20.filter((_,i)=>i%4===0||i===s.miniMA20.length-1);
-        if(s.miniMA100&&s.miniMA100.length>150)s.miniMA100=s.miniMA100.filter((_,i)=>i%4===0||i===s.miniMA100.length-1);
-        if(s.miniMA440&&s.miniMA440.length>150)s.miniMA440=s.miniMA440.filter((_,i)=>i%4===0||i===s.miniMA440.length-1);
-        return s;
-      });
-      localStorage.setItem("scanResults",JSON.stringify({...result,results:slimLocal}));
-    }catch(storageErr){
-      const slim={...result,results:allResults.map(r=>({...r,mini:null,miniMA20:null,miniMA100:null,miniMA440:null}))};
-      try{localStorage.setItem("scanResults",JSON.stringify(slim));}
+      localStorage.setItem("scanResults",JSON.stringify({...result,results:slimTop}));
+      console.log("[SCAN] localStorage OK:",slimTop.length,"종목");
+    }catch(e){
+      // Still too large? Strip mini entirely
+      try{localStorage.setItem("scanResults",JSON.stringify({...result,results:saveTop.map(r=>({...r,mini:null,miniMA20:null,miniMA100:null,miniMA440:null}))}));}
       catch(e2){console.warn("[SCAN] localStorage save failed");}
     }
 
     // Save to server (shared across devices)
     try{
-      // Slim data for storage: reduce mini arrays to save space
-      const slimResults=allResults.map(r=>{
-        const s={...r};
-        // Downsample mini from 600→150 for storage (keep every 4th)
-        if(s.mini&&s.mini.length>150)s.mini=s.mini.filter((_,i)=>i%4===0||i===s.mini.length-1);
-        if(s.miniMA20&&s.miniMA20.length>150)s.miniMA20=s.miniMA20.filter((_,i)=>i%4===0||i===s.miniMA20.length-1);
-        if(s.miniMA100&&s.miniMA100.length>150)s.miniMA100=s.miniMA100.filter((_,i)=>i%4===0||i===s.miniMA100.length-1);
-        if(s.miniMA440&&s.miniMA440.length>150)s.miniMA440=s.miniMA440.filter((_,i)=>i%4===0||i===s.miniMA440.length-1);
-        return s;
-      });
       const resp=await fetch("/api/scan-store",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({results:slimResults,source:"manual"})
+        body:JSON.stringify({results:slimTop,source:"manual"})
       });
       if(!resp.ok)console.warn("[SCAN] Server save HTTP",resp.status);
-      else console.log("[SCAN] Server save OK:",slimResults.length,"종목");
+      else console.log("[SCAN] Server save OK:",slimTop.length,"종목");
     }catch(e){console.warn("[SCAN] Server save failed:",e.message);}
 
     renderScanResults(result);
