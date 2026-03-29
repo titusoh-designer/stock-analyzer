@@ -3490,6 +3490,8 @@ function checkAutoScan(){
 }
 
 async function runScan(){
+  const pw=prompt("스캔 비밀번호를 입력하세요 (숫자 6자리):");
+  if(pw!=="007410"){if(pw!==null)alert("비밀번호가 틀렸습니다.");return;}
   const btn=document.getElementById("scanBtn");
   const prog=document.getElementById("scanProgress");
   const empty=document.getElementById("scanEmpty");
