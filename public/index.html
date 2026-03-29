@@ -3537,15 +3537,13 @@ async function runScan(){
 
     const result={results:allResults,scannedAt:new Date().toISOString(),totalScanned:scanList.length};
 
-    // ★ Save top 100 results only (sorted by strength) — prevents storage overflow
+    // ★ Save top 150 results — weekly 120 bars (small, no downsampling needed)
     const saveTop=allResults.slice(0,150);
-    const downsample=(arr)=>arr&&arr.length>150?arr.filter((_,i)=>i%4===0||i===arr.length-1):arr;
-    const slimTop=saveTop.map(r=>({...r,mini:downsample(r.mini),miniMA20:downsample(r.miniMA20),miniMA100:downsample(r.miniMA100),miniMA440:downsample(r.miniMA440)}));
 
     // Save to localStorage
     try{
-      localStorage.setItem("scanResults",JSON.stringify({...result,results:slimTop}));
-      console.log("[SCAN] localStorage OK:",slimTop.length,"종목");
+      localStorage.setItem("scanResults",JSON.stringify({...result,results:saveTop}));
+      console.log("[SCAN] localStorage OK:",saveTop.length,"종목");
     }catch(e){
       // Still too large? Strip mini entirely
       try{localStorage.setItem("scanResults",JSON.stringify({...result,results:saveTop.map(r=>({...r,mini:null,miniMA20:null,miniMA100:null,miniMA440:null}))}));}
@@ -3557,10 +3555,10 @@ async function runScan(){
       const resp=await fetch("/api/scan-store",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({results:slimTop,source:"manual"})
+        body:JSON.stringify({results:saveTop,source:"manual"})
       });
       if(!resp.ok)console.warn("[SCAN] Server save HTTP",resp.status);
-      else console.log("[SCAN] Server save OK:",slimTop.length,"종목");
+      else console.log("[SCAN] Server save OK:",saveTop.length,"종목");
     }catch(e){console.warn("[SCAN] Server save failed:",e.message);}
 
     renderScanResults(result);
@@ -3602,7 +3600,7 @@ function miniChartSvg(mini,change,miniMA20,miniMA100,starSignals,miniMA440){
     if(bo>0)s+=`<rect x="${P+i*barW}" y="${P}" width="${barW+.5}" height="${H-P-Pb}" fill="rgba(${bc},${bo})" rx="1"/>`;
   }
 
-  s+=`<text x="2" y="8" fill="#555" font-size="7" font-family="DM Mono,monospace">일봉 ${cls.length}봉</text>`;
+  s+=`<text x="2" y="8" fill="#555" font-size="7" font-family="DM Mono,monospace">주봉 ${cls.length}주</text>`;
   const pts=cls.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`);
   s+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.2" opacity=".8"/>`;
 
@@ -3629,7 +3627,7 @@ function miniChartSvg(mini,change,miniMA20,miniMA100,starSignals,miniMA440){
   if(starSignals&&starSignals.length){
     starSignals.forEach(ss=>{
       if(ss.daysAgo!=null){
-        const idx=cls.length-1-ss.daysAgo;
+        const idx=cls.length-1-Math.round(ss.daysAgo/5);
         if(idx>=0&&idx<cls.length){
           const sx=tx(idx),sy=ty(cls[idx])-5;
           if(ss.type==="C"){
@@ -4253,7 +4251,7 @@ function sigMiniChart(sig,W,H){
       if(bo>0)svg+=`<rect x="${P+i*barW}" y="${P}" width="${barW+.5}" height="${H-P-Pb}" fill="rgba(${bc},${bo})" rx="1"/>`;
     }
 
-    svg+=`<text x="2" y="8" fill="#555" font-size="6" font-family="DM Mono,monospace">일봉 ${cls.length}</text>`;
+    svg+=`<text x="2" y="8" fill="#555" font-size="6" font-family="DM Mono,monospace">주봉 ${cls.length}</text>`;
     // Price line
     const pts=cls.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`);
     svg+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.2" opacity=".8"/>`;
@@ -4269,7 +4267,7 @@ function sigMiniChart(sig,W,H){
     if(sig.starSignals){
       sig.starSignals.forEach(ss=>{
         if(ss.daysAgo!=null){
-          const idx=cls.length-1-ss.daysAgo;
+          const idx=cls.length-1-Math.round(ss.daysAgo/5);
           if(idx>=0&&idx<cls.length){
             const sx=tx(idx),sy=ty(cls[idx])-5;
             if(ss.type==="C"){

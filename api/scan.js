@@ -233,21 +233,27 @@ export default async function handler(req, res) {
         const top = allSignals.slice(0, 10);
         const change = ohlcv.length >= 2 ? ((cls[cls.length - 1] / cls[cls.length - 2] - 1) * 100).toFixed(2) : 0;
 
-        // Daily mini chart — last 600 bars with MA20/MA100/MA440
-        // Ensure miniStart >= 440 so MA440 has values from chart start
-        const targetMiniLen = 600;
-        const minWarmup = 440; // largest MA period
-        const miniStart = ohlcv.length > minWarmup + 30 
-          ? Math.max(minWarmup, ohlcv.length - targetMiniLen)
-          : Math.max(0, ohlcv.length - targetMiniLen);
-        const miniDaily = ohlcv.slice(miniStart).map(d => ({ c: d.close }));
-        const calcMAFull = (arr, n) => arr.map((_, i) => i < n - 1 ? null : arr.slice(i - n + 1, i + 1).reduce((a, b) => a + b, 0) / n);
-        const ma20Full = calcMAFull(cls, 20);
-        const ma100Full = calcMAFull(cls, 100);
-        const ma440Full = calcMAFull(cls, 440);
-        const miniMA20 = ma20Full.slice(miniStart);
-        const miniMA100 = ma100Full.slice(miniStart);
-        const miniMA440 = ma440Full.slice(miniStart);
+        // Weekly mini chart — 120 weekly bars with MA4(일20)/MA20(주20)/MA88(월20)
+        // Aggregate daily → weekly
+        const weekly = [];
+        for (let w = 0; w < ohlcv.length; w += 5) {
+          const wk = ohlcv.slice(w, Math.min(w + 5, ohlcv.length));
+          if (!wk.length) continue;
+          weekly.push({ c: wk[wk.length - 1].close });
+        }
+        const wkCls = weekly.map(w => w.c);
+        const calcMA = (arr, n) => arr.map((_, i) => i < n - 1 ? null : arr.slice(i - n + 1, i + 1).reduce((a, b) => a + b, 0) / n);
+        const wkMA4Full = calcMA(wkCls, 4);    // 일20 ≈ 주4
+        const wkMA20Full = calcMA(wkCls, 20);   // 주20
+        const wkMA88Full = calcMA(wkCls, 88);   // 월20 ≈ 주88
+        // Ensure MA88 has values from chart start
+        const miniStart = weekly.length > 88 + 10
+          ? Math.max(88, weekly.length - 120)
+          : Math.max(0, weekly.length - 120);
+        const miniWeekly = weekly.slice(miniStart);
+        const miniMA20 = wkMA4Full.slice(miniStart);   // 일20 (MA4 on weekly)
+        const miniMA100 = wkMA20Full.slice(miniStart);  // 주20 (MA20 on weekly)
+        const miniMA440 = wkMA88Full.slice(miniStart);  // 월20 (MA88 on weekly)
 
         // Fetch basic fundamentals (Korean=Naver, US=Google Finance)
         let fund = null;
@@ -332,7 +338,7 @@ export default async function handler(req, res) {
         results.push({
           symbol: ticker, name, source, currency, currentPrice, change: +change,
           starSignals: top, bestSignal: top[0],
-          mini: miniDaily, miniMA20, miniMA100, miniMA440, fund, dataLen: ohlcv.length,
+          mini: miniWeekly, miniMA20, miniMA100, miniMA440, fund, dataLen: ohlcv.length,
           indicators: {
             rsi: curRsi,
             macdHist: curMacdHist,
