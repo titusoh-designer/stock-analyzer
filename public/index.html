@@ -1161,8 +1161,9 @@ function render(data,ai){
   <div style="margin-bottom:14px;padding:0 20px">
     <div id="rsiChartWrap" class="chart-box" style="margin-bottom:6px">${svgRSI(o)}</div>
     <div id="macdChartWrap" class="chart-box" style="margin-bottom:6px">${svgMACD(o)}</div>
-    <div id="obvChartWrap" class="chart-box" style="margin-bottom:0">${svgOBV(o)}</div>
+    <div id="obvChartWrap" class="chart-box" style="margin-bottom:6px">${svgOBV(o)}</div>
   </div>
+  ${data.shortInterest?renderShortInterest(data.shortInterest,data.currency,cp):""}
   <div class="sec"><div class="sec-title">◇ 기술 지표<div class="sec-line"></div></div></div>
   <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(85px,1fr))">
     ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"일20",v:ma20?fp(ma20):"-",c:"#4ECCA3"},{l:"주20",v:ma100?fp(ma100):"-",c:"#C9A96E"},{l:"월20",v:ma440?fp(ma440):"-",c:"#F0ECE3"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
@@ -3036,6 +3037,112 @@ function svgMACD(data){
 }
 
 // ═══════ OBV CHART (with price overlay) ═══════
+// ═══ Short Interest Panel ═══
+function renderShortInterest(si, currency, cp) {
+  if (!si) return "";
+  const cs = currency === "KRW" ? "₩" : "$";
+
+  // US stock — Yahoo v10 data
+  if (si.sharesShort != null || si.shortRatio != null) {
+    const fmN = v => { if (!v) return "—"; if (v >= 1e9) return (v/1e9).toFixed(2)+"B"; if (v >= 1e6) return (v/1e6).toFixed(1)+"M"; if (v >= 1e3) return (v/1e3).toFixed(0)+"K"; return v.toLocaleString(); };
+    const spf = si.shortPercentOfFloat != null ? (si.shortPercentOfFloat * 100).toFixed(2) : null;
+    const spo = si.sharesPercentSharesOut != null ? (si.sharesPercentSharesOut * 100).toFixed(2) : null;
+    const ratio = si.shortRatio != null ? si.shortRatio.toFixed(2) : null;
+    const prevShort = si.sharesShortPriorMonth;
+    const curShort = si.sharesShort;
+    const shortChg = (prevShort && curShort) ? ((curShort - prevShort) / prevShort * 100).toFixed(1) : null;
+    const shortChgCol = shortChg > 0 ? "#E85D75" : shortChg < 0 ? "#4ECCA3" : "#C9A96E";
+
+    // Gauge: shortPercentOfFloat (0~100 scale, typical range 0~30%)
+    const gaugeVal = spf ? Math.min(100, parseFloat(spf) * 3.3) : 0; // scale: 30% = 100
+    const gaugeCol = spf > 20 ? "#E85D75" : spf > 10 ? "#C9A96E" : "#4ECCA3";
+    const levelText = spf > 20 ? "높음 (과도)" : spf > 10 ? "보통" : spf > 5 ? "낮음" : "매우 낮음";
+
+    return `<div style="padding:0 20px;margin-bottom:14px">
+      <div class="card" style="padding:14px 16px;border-color:${gaugeCol}20;border-left:3px solid ${gaugeCol}">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-size:14px">📉</span>
+          <span style="font-size:13px;font-weight:700;color:#F0ECE3">공매도 잔고</span>
+          <span class="mono" style="font-size:10px;color:#555">Short Interest</span>
+          ${si.dateShortInterest ? `<span class="mono" style="font-size:9px;color:#555;margin-left:auto">${si.dateShortInterest} 기준</span>` : ""}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:center">
+          <!-- Left: Gauge -->
+          <div style="text-align:center">
+            <div style="position:relative;width:100%;max-width:120px;margin:0 auto">
+              <svg viewBox="0 0 120 70" style="width:100%;display:block">
+                <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="#1a1a28" stroke-width="8" stroke-linecap="round"/>
+                <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="${gaugeCol}" stroke-width="8" stroke-linecap="round"
+                  stroke-dasharray="${gaugeVal * 1.57} 157" opacity=".8"/>
+                <text x="60" y="48" fill="${gaugeCol}" font-size="18" font-weight="800" font-family="DM Mono,monospace" text-anchor="middle">${spf || "—"}%</text>
+                <text x="60" y="62" fill="#666" font-size="8" font-family="DM Mono,monospace" text-anchor="middle">${levelText}</text>
+              </svg>
+            </div>
+            <div style="font-size:9px;color:#555;margin-top:2px">유동주식 대비</div>
+          </div>
+          <!-- Right: Details -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div style="background:#0a0a14;border-radius:6px;padding:8px 10px;border:1px solid #12121e">
+              <div style="font-size:9px;color:#555">공매도 주식수</div>
+              <div class="mono" style="font-size:13px;font-weight:700;color:#F0ECE3">${fmN(curShort)}</div>
+              ${shortChg != null ? `<div class="mono" style="font-size:10px;color:${shortChgCol}">${shortChg > 0 ? "+" : ""}${shortChg}% vs 전월</div>` : ""}
+            </div>
+            <div style="background:#0a0a14;border-radius:6px;padding:8px 10px;border:1px solid #12121e">
+              <div style="font-size:9px;color:#555">Short Ratio</div>
+              <div class="mono" style="font-size:13px;font-weight:700;color:${ratio > 5 ? "#E85D75" : "#C9A96E"}">${ratio || "—"}</div>
+              <div style="font-size:9px;color:#555">${ratio > 5 ? "숏 스퀴즈 경계" : ratio > 2 ? "보통" : "낮음"}</div>
+            </div>
+            <div style="background:#0a0a14;border-radius:6px;padding:8px 10px;border:1px solid #12121e">
+              <div style="font-size:9px;color:#555">전월 공매도</div>
+              <div class="mono" style="font-size:13px;font-weight:700;color:#888">${fmN(prevShort)}</div>
+            </div>
+            <div style="background:#0a0a14;border-radius:6px;padding:8px 10px;border:1px solid #12121e">
+              <div style="font-size:9px;color:#555">발행주식 대비</div>
+              <div class="mono" style="font-size:13px;font-weight:700;color:#888">${spo ? spo + "%" : "—"}</div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:9px;color:#444;margin-top:8px;line-height:1.5">
+          Short Ratio(Days to Cover) = 공매도잔고 ÷ 일평균거래량. 5일 이상이면 숏 스퀴즈 가능성 증가. 유동주식 대비 20%↑이면 과도한 공매도 구간.
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Korean stock — Naver data (if available)
+  if (si.foreignRate != null) {
+    return `<div style="padding:0 20px;margin-bottom:14px">
+      <div class="card" style="padding:12px 16px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px">📉</span>
+          <span style="font-size:12px;font-weight:700;color:#F0ECE3">공매도 · 외국인</span>
+          <span class="mono" style="font-size:10px;color:#555;margin-left:auto">외국인 보유: <span style="color:#C9A96E;font-weight:700">${si.foreignRate}%</span></span>
+        </div>
+        <div style="margin-top:6px;height:6px;background:#1a1a28;border-radius:3px;overflow:hidden">
+          <div style="width:${Math.min(100, parseFloat(si.foreignRate))}%;height:100%;background:linear-gradient(90deg,#C9A96E,#4ECCA3);border-radius:3px"></div>
+        </div>
+        <div style="font-size:9px;color:#444;margin-top:6px">한국 종목 공매도 잔고 시계열은 KRX 데이터 연동 예정</div>
+      </div>
+    </div>`;
+  }
+
+  // Raw Naver data (if API returned something)
+  if (si.raw) {
+    return `<div style="padding:0 20px;margin-bottom:14px">
+      <div class="card" style="padding:12px 16px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px">📉</span>
+          <span style="font-size:12px;font-weight:700;color:#F0ECE3">공매도 잔고</span>
+          <span class="mono" style="font-size:10px;color:#4ECCA3;margin-left:auto">LIVE</span>
+        </div>
+        <div style="font-size:10px;color:#888;margin-top:6px">데이터 로드됨 — UI 구현 진행 중</div>
+      </div>
+    </div>`;
+  }
+
+  return "";
+}
+
 function svgOBV(data){
   if(data.length<10)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">OBV: 10봉 이상 필요</div>`;
 

@@ -176,6 +176,40 @@ export default async function handler(req, res) {
           }
         }
 
+        // Korean Short Interest — try multiple Naver endpoints
+        try {
+          // Try 1: Naver mobile short-selling API
+          let shortData = null;
+          const shortUrls = [
+            `https://m.stock.naver.com/api/stock/${code}/short-selling`,
+            `https://m.stock.naver.com/api/stock/${code}/short-balance`,
+            `https://api.stock.naver.com/stock/${code}/short-selling/daily?page=1&size=30`
+          ];
+          for (const sUrl of shortUrls) {
+            try {
+              const sResp = await fetch(sUrl, { headers: { "User-Agent": UA_M } });
+              if (sResp.ok) {
+                const sText = await sResp.text();
+                if (sText && sText.startsWith("{")) {
+                  shortData = JSON.parse(sText);
+                  break;
+                }
+              }
+            } catch (e) { continue; }
+          }
+          if (shortData) {
+            data.shortInterest = { source: "naver", raw: shortData };
+          }
+
+          // Try 2: Scrape short selling ratio from integration (대차잔고 if available)
+          if (!data.shortInterest && data.fundamentals?.foreignRate) {
+            data.shortInterest = {
+              foreignRate: parseFloat(data.fundamentals.foreignRate) || null,
+              source: "naver-integration"
+            };
+          }
+        } catch (e) { /* short interest optional */ }
+
       } else {
         // ════════════════════════════════════════════
         // ★ US: Yahoo v10 quoteSummary 1순위 → Google 폴백
@@ -215,6 +249,18 @@ export default async function handler(req, res) {
             data.fundamentals.beta = rv(ks.beta);
             data.fundamentals.targetPrice = rv(fd.targetMeanPrice);
             data.fundamentals.bps = rv(ks.bookValue);
+
+            // Short Interest (US only, from defaultKeyStatistics)
+            data.shortInterest = {
+              sharesShort: rv(ks.sharesShort),
+              sharesShortPriorMonth: rv(ks.sharesShortPriorMonth),
+              shortRatio: rv(ks.shortRatio),
+              shortPercentOfFloat: rv(ks.shortPercentOfFloat),
+              sharesPercentSharesOut: rv(ks.sharesPercentSharesOut),
+              dateShortInterest: ks.dateShortInterest?.fmt || null,
+              sharesOutstanding: rv(ks.sharesOutstanding),
+              floatShares: rv(ks.floatShares)
+            };
 
             // Sector + Industry
             data.sector = sp.sector || null;
