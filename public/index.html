@@ -3622,15 +3622,15 @@ function miniChartSvg(mini,change,miniMA20,miniMA100,starSignals,miniMA440){
   if(starSignals&&starSignals.length){
     starSignals.forEach(ss=>{
       if(ss.daysAgo!=null){
-        const wkIdx=cls.length-1-Math.round(ss.daysAgo/5);
-        if(wkIdx>=0&&wkIdx<cls.length){
-          const sx=tx(wkIdx),sy=ty(cls[wkIdx])-5;
+        const idx=cls.length-1-ss.daysAgo;
+        if(idx>=0&&idx<cls.length){
+          const sx=tx(idx),sy=ty(cls[idx])-5;
           if(ss.type==="C"){
-            s+=`<polygon points="${sx},${sy-4} ${sx+3},${sy} ${sx},${sy+4} ${sx-3},${sy}" fill="#C9A96E" opacity=".9"/>`;
+            s+=`<polygon points="${sx},${sy-5} ${sx+4},${sy} ${sx},${sy+5} ${sx-4},${sy}" fill="#C9A96E" opacity=".9"/>`;
           }else if(ss.type==="A"&&ss.count>=3){
             const ac=ss.count>=5?"#00cc66":ss.count>=4?"#4ECCA3":"#7cdd90";
-            s+=`<polygon points="${sx},${sy} ${sx-3.5},${sy+6} ${sx+3.5},${sy+6}" fill="${ac}" opacity=".85"/>`;
-            s+=`<text x="${sx}" y="${sy-1}" fill="${ac}" font-size="5.5" font-family="DM Mono,monospace" text-anchor="middle">⬆${ss.count}</text>`;
+            s+=`<polygon points="${sx},${sy-1} ${sx-4},${sy+6} ${sx+4},${sy+6}" fill="${ac}" opacity=".85"/>`;
+            s+=`<text x="${sx}" y="${sy-3}" fill="${ac}" font-size="6" font-family="DM Mono,monospace" text-anchor="middle">⬆${ss.count}</text>`;
           }
         }
       }
@@ -4207,45 +4207,72 @@ const SIG_DEMO=[
   {sym:"NVDA",mkt:"US",trend:82,mom:70,vol:75,div:90,vola:60,total:78,type:"entry",label:"🟢 진입",reason:"데모 데이터",price:"$920",ch:2.3,starSignals:[],fund:null,mini:null,miniMA20:null,miniMA100:null}
 ];
 
-// Signal mini chart with MA overlays + signal markers
+// Signal mini chart — same style as scanner miniChartSvg (daily + MA20/100/440 + signals)
 function sigMiniChart(sig,W,H){
-  W=W||200;H=H||56;
+  W=W||380;H=H||100;
   const tc={entry:"#4ECCA3",exit:"#C9A96E",danger:"#E85D75",watch:"#3b82f6"};
   const col=tc[sig.type]||"#555";
   if(sig.mini&&sig.mini.length>=5){
-    // Real data from scanner
-    const cls=sig.mini.map(d=>d.c);
+    const cls=sig.mini.map(d=>d.c||0).filter(v=>v>0);
+    if(cls.length<5)return"";
     const allV=[...cls];
     if(sig.miniMA20)sig.miniMA20.forEach(v=>{if(v)allV.push(v);});
     if(sig.miniMA100)sig.miniMA100.forEach(v=>{if(v)allV.push(v);});
-    const mn=Math.min(...allV.filter(v=>v>0)),mx=Math.max(...allV);
-    const range=mx-mn||1;
-    const tx=i=>(i/(cls.length-1))*(W-4)+2;
-    const ty=v=>H-4-((v-mn)/range)*(H-8);
+    if(sig.miniMA440)sig.miniMA440.forEach(v=>{if(v)allV.push(v);});
+    const mn=Math.min(...allV.filter(v=>v>0))*.998,mx=Math.max(...allV)*1.002,range=mx-mn||1;
+    const P=4,Pb=10;
+    const tx=i=>P+(i/(cls.length-1))*(W-P*2);
+    const ty=v=>P+(1-(v-mn)/range)*(H-P-Pb);
+
+    let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100%">`;
+
+    // Sentiment background
+    const barW=(W-P*2)/cls.length;
+    for(let i=14;i<cls.length;i++){
+      let ag=0,al=0;for(let j=1;j<=14&&(i-14+j)<cls.length;j++){const d=cls[i-14+j]-cls[i-14+j-1];d>0?ag+=d:al+=Math.abs(d);}ag/=14;al/=14;
+      const rsi=al===0?100:100-100/(1+ag/al);
+      const ma20=i>=19?cls.slice(i-19,i+1).reduce((a,b)=>a+b,0)/20:null;
+      const dev=ma20?(cls[i]-ma20)/ma20*100:0;
+      const sent=Math.max(0,Math.min(100,50+(rsi-50)*0.6+dev*2));
+      let bc,bo=0;
+      if(sent<20){bc="232,93,117";bo=0.12;}else if(sent<35){bc="232,93,117";bo=0.06;}
+      else if(sent>80){bc="78,204,163";bo=0.12;}else if(sent>65){bc="78,204,163";bo=0.06;}
+      if(bo>0)svg+=`<rect x="${P+i*barW}" y="${P}" width="${barW+.5}" height="${H-P-Pb}" fill="rgba(${bc},${bo})" rx="1"/>`;
+    }
+
+    svg+=`<text x="2" y="8" fill="#555" font-size="6" font-family="DM Mono,monospace">일봉 ${cls.length}</text>`;
     // Price line
     const pts=cls.map((v,i)=>`${tx(i).toFixed(1)},${ty(v).toFixed(1)}`);
-    const id="sm_"+Math.random().toString(36).slice(2,8);
-    let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;display:block">`;
-    svg+=`<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity=".12"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>`;
-    svg+=`<polygon points="${pts.join(" ")} ${W-2},${H} 2,${H}" fill="url(#${id})"/>`;
-    svg+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.5"/>`;
-    // MA20 (주봉20=골드)
-    if(sig.miniMA20){const mp=[];for(let i=0;i<cls.length;i++){if(sig.miniMA20[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(sig.miniMA20[i]).toFixed(1)}`);}if(mp.length>2)svg+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1" stroke-opacity=".6"/>`;}
-    // MA22 (월봉20≈주봉22=흰색)
-    if(sig.miniMA100){const mp=[];for(let i=0;i<cls.length;i++){if(sig.miniMA100[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(sig.miniMA100[i]).toFixed(1)}`);}if(mp.length>2)svg+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#F0ECE3" stroke-width="1" stroke-opacity=".35"/>`;}
-    // Signal markers
+    svg+=`<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.2" opacity=".8"/>`;
+
+    // 일20 (MA20) — green
+    if(sig.miniMA20){const mp=[];for(let i=0;i<cls.length;i++){if(sig.miniMA20[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(sig.miniMA20[i]).toFixed(1)}`);}if(mp.length>2)svg+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#4ECCA3" stroke-width="1" opacity=".5"/>`;}
+    // 주20 (MA100) — gold
+    if(sig.miniMA100){const mp=[];for(let i=0;i<cls.length;i++){if(sig.miniMA100[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(sig.miniMA100[i]).toFixed(1)}`);}if(mp.length>2)svg+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1.5" opacity=".6"/>`;}
+    // 월20 (MA440) — white
+    if(sig.miniMA440){const mp=[];for(let i=0;i<cls.length;i++){if(sig.miniMA440[i]!=null)mp.push(`${tx(i).toFixed(1)},${ty(sig.miniMA440[i]).toFixed(1)}`);}if(mp.length>2)svg+=`<polyline points="${mp.join(" ")}" fill="none" stroke="#F0ECE3" stroke-width="2" opacity=".4"/>`;}
+
+    // Signal markers (A=triangle, C=diamond) — daily index
     if(sig.starSignals){
       sig.starSignals.forEach(ss=>{
         if(ss.daysAgo!=null){
-          const wkIdx=cls.length-1-Math.round(ss.daysAgo/5);
-          if(wkIdx>=0&&wkIdx<cls.length){
-            const sx=tx(wkIdx),sy=ty(cls[wkIdx])-6;
-            const mc=ss.type==="C"?"#C9A96E":"#4ECCA3";
-            svg+=`<polygon points="${sx},${sy} ${sx-3},${sy-5} ${sx+3},${sy-5}" fill="${mc}" opacity=".9"/>`;
+          const idx=cls.length-1-ss.daysAgo;
+          if(idx>=0&&idx<cls.length){
+            const sx=tx(idx),sy=ty(cls[idx])-5;
+            if(ss.type==="C"){
+              svg+=`<polygon points="${sx},${sy-5} ${sx+4},${sy} ${sx},${sy+5} ${sx-4},${sy}" fill="#C9A96E" opacity=".9"/>`;
+            }else if(ss.type==="A"&&ss.count>=3){
+              const ac=ss.count>=5?"#00cc66":ss.count>=4?"#4ECCA3":"#7cdd90";
+              svg+=`<polygon points="${sx},${sy-1} ${sx-4},${sy+6} ${sx+4},${sy+6}" fill="${ac}" opacity=".85"/>`;
+              svg+=`<text x="${sx}" y="${sy-3}" fill="${ac}" font-size="6" font-family="DM Mono,monospace" text-anchor="middle">⬆${ss.count}</text>`;
+            }
           }
         }
       });
     }
+
+    // Legend
+    svg+=`<text x="${W-P}" y="${H-1}" fill="#555" font-size="6" font-family="DM Mono,monospace" text-anchor="end"><tspan fill="#4ECCA3">━</tspan> 일20 <tspan fill="#C9A96E">━</tspan> 주20 <tspan fill="#F0ECE3">━</tspan> 월20</text>`;
     svg+=`</svg>`;
     return svg;
   }
@@ -4256,8 +4283,7 @@ function sigMiniChart(sig,W,H){
   for(let i=0;i<52;i++){p+=((rng()-.48+(sig.type==="entry"?.008:sig.type==="danger"?-.006:.002))*3);p=Math.max(20,Math.min(80,p));pts2.push(p);}
   const mn2=Math.min(...pts2),mx2=Math.max(...pts2);
   const line2=pts2.map((v,i)=>`${(i/51*(W-4)+2).toFixed(1)},${(H-4-(v-mn2)/(mx2-mn2||1)*(H-8)).toFixed(1)}`).join(" ");
-  const id2="sm_"+Math.random().toString(36).slice(2,8);
-  return`<svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px"><defs><linearGradient id="${id2}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity=".12"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs><polygon points="${line2} ${W-2},${H} 2,${H}" fill="url(#${id2})"/><polyline points="${line2}" fill="none" stroke="${col}" stroke-width="1.5"/></svg>`;
+  return`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100%"><polyline points="${line2}" fill="none" stroke="${col}" stroke-width="1.5"/></svg>`;
 }
 
 // Convert scan result → 5-dimension signal score (with continuous indicators when available)
@@ -4318,7 +4344,7 @@ function scanToSignal(r){
   if(r.fund?.per&&r.fund.per<15)reasons.push("PER "+r.fund.per.toFixed(0)+"x");
   const cs=r.currency==="KRW"?"₩":"$",fp=v=>v>=10000?Number(v).toLocaleString():v>=1?Number(v).toFixed(2):Number(v).toFixed(4);
   const mkt=r.source==="naver"?"KRX":r.source==="coingecko"?"CRYPTO":"US";
-  return{sym:r.name||r.symbol,code:r.symbol,mkt,source:r.source,trend,mom,vol,div,vola,total,type,label,reason:reasons.join(" · ")||"시그널 감지",price:cs+fp(r.currentPrice||0),ch:r.change||0,fund:r.fund,daysAgo:sigs[0]?.daysAgo||0,starSignals:sigs,indicators:ind,mini:r.mini||null,miniMA20:r.miniMA20||null,miniMA100:r.miniMA100||null};
+  return{sym:r.name||r.symbol,code:r.symbol,mkt,source:r.source,trend,mom,vol,div,vola,total,type,label,reason:reasons.join(" · ")||"시그널 감지",price:cs+fp(r.currentPrice||0),ch:r.change||0,fund:r.fund,daysAgo:sigs[0]?.daysAgo||0,starSignals:sigs,indicators:ind,mini:r.mini||null,miniMA20:r.miniMA20||null,miniMA100:r.miniMA100||null,miniMA440:r.miniMA440||null};
 }
 
 let _sigCache=null;
@@ -4366,7 +4392,7 @@ async function renderSignals(){
         </div>
         <div style="font-size:11px;color:#777;margin-top:4px;line-height:1.4">${sig.reason}</div>
       </div>
-      <div style="flex-shrink:0">${sigMiniChart(sig,200,56)}</div>
+      <div style="flex-shrink:0">${sigMiniChart(sig,380,100)}</div>
       <div style="text-align:right;min-width:80px;flex-shrink:0">
         <div class="mono" style="font-size:15px;font-weight:700;color:#F0ECE3">${sig.price}</div>
         <div class="mono" style="font-size:12px;color:${sig.ch>=0?"#4ECCA3":"#E85D75"}">${sig.ch>=0?"+":""}${sig.ch.toFixed(1)}%</div>
@@ -4451,7 +4477,7 @@ async function updateAnalyzeSignalCard(){
         </div>
         <div style="font-size:11px;color:#777;line-height:1.5">${sig.reason}</div>
       </div>
-      <div style="flex-shrink:0;width:200px">${sigMiniChart(sig,200,56)}</div>
+      <div style="flex-shrink:0;width:380px">${sigMiniChart(sig,380,100)}</div>
     </div>
     <div style="border-top:1px solid ${tbd[sig.type]||"#16162a"};padding:12px 16px;background:rgba(6,6,16,.3)">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px">
