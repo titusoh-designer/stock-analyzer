@@ -24,7 +24,7 @@ export default async function handler(req, res) {
         const code = ticker.replace(/\.(KS|KQ)$/, "");
         for (const suffix of [".KS", ".KQ"]) {
           try {
-            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=3y&interval=1d&includePrePost=false`;
+            const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${suffix}?range=5y&interval=1d&includePrePost=false`;
             const yResp = await fetch(yUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
             const yJson = await yResp.json();
             if (yJson.chart?.error) continue;
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
         currency = "KRW";
         if (!currentPrice && ohlcv.length) currentPrice = ohlcv[ohlcv.length - 1].close;
       } else {
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=3y&interval=1d&includePrePost=false`;
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=5y&interval=1d&includePrePost=false`;
         const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
         const json = await resp.json();
         const result = json.chart?.result?.[0];
@@ -234,8 +234,12 @@ export default async function handler(req, res) {
         const change = ohlcv.length >= 2 ? ((cls[cls.length - 1] / cls[cls.length - 2] - 1) * 100).toFixed(2) : 0;
 
         // Daily mini chart — last 600 bars with MA20/MA100/MA440
-        const miniLen = Math.min(600, ohlcv.length);
-        const miniStart = Math.max(0, ohlcv.length - miniLen);
+        // Ensure miniStart >= 440 so MA440 has values from chart start
+        const targetMiniLen = 600;
+        const minWarmup = 440; // largest MA period
+        const miniStart = ohlcv.length > minWarmup + 30 
+          ? Math.max(minWarmup, ohlcv.length - targetMiniLen)
+          : Math.max(0, ohlcv.length - targetMiniLen);
         const miniDaily = ohlcv.slice(miniStart).map(d => ({ c: d.close }));
         const calcMAFull = (arr, n) => arr.map((_, i) => i < n - 1 ? null : arr.slice(i - n + 1, i + 1).reduce((a, b) => a + b, 0) / n);
         const ma20Full = calcMAFull(cls, 20);
