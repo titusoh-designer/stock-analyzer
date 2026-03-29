@@ -2314,7 +2314,7 @@ function svgChart(data,cp,cur,ai,stockName){
   const tx=i=>P.l+(i/(data.length-1||1))*cw,ty=p=>P.t+(1-(p-mn)/(mx-mn||1))*ch;
   const bw=Math.max(1.5,Math.min(8,cw/data.length*.55)),cs=cur==="KRW"?"₩":"$";
   const fm=v=>v>=1?Number(v).toLocaleString(undefined,{maximumFractionDigits:0}):v.toFixed(v<0.01?6:v<1?4:2);
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:660px">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:640px;display:block">`;
 
   // Grid
   for(let i=0;i<=6;i++){const p=mn+(mx-mn)*(i/6);s+=`<line x1="${P.l}" y1="${ty(p)}" x2="${W-P.r}" y2="${ty(p)}" stroke="#fff" stroke-opacity=".035"/><text x="${W-P.r+6}" y="${ty(p)+3.5}" fill="#555" font-size="8" font-family="DM Mono,monospace">${fm(p)}</text>`;}
@@ -3019,9 +3019,8 @@ function svgMACD(data){
   const e12=ema(cls,12),e26=ema(cls,26),ml=e12.map((v,i)=>v-e26[i]);
   const slR=ema(ml.slice(26),9),sl=Array(34).fill(null).concat(slR);
   const hl=ml.map((v,i)=>sl[i]!=null?v-sl[i]:null);
-  const st=26,m=ml.slice(st),sg=sl.slice(st),hi=hl.slice(st);
   const W=900,H=130,P={t:18,r:56,b:14,l:8},cw=W-P.l-P.r,ch=H-P.t-P.b;
-  const aV=[...m,...sg.filter(v=>v!=null),...hi.filter(v=>v!=null)];
+  const aV=[...ml,...sl.filter(v=>v!=null),...hl.filter(v=>v!=null)];
   const vM=Math.max(...aV.map(Math.abs))*1.1||1;
   const n=data.length;
   const tx=i=>P.l+(i/(n-1||1))*cw,ty=v=>P.t+ch/2-(v/vM)*(ch/2);
@@ -3032,8 +3031,8 @@ function svgMACD(data){
   const tyP=v=>P.t+(1-(v-pMin)/pRng)*ch;
 
   // Divergence detection (MACD vs price, last 20 bars)
-  const dLen=Math.min(20,m.length);
-  const macdUp=m[m.length-1]>m[m.length-dLen];
+  const dLen=Math.min(20,ml.length);
+  const macdUp=ml[ml.length-1]>ml[ml.length-dLen];
   const priceUp=cls[cls.length-1]>cls[cls.length-dLen];
   const divergence=macdUp!==priceUp;
   const divText=divergence?(priceUp?"⚠ 약세 다이버전스 (가격↑ MACD↓)":"⚠ 강세 다이버전스 (가격↓ MACD↑)"):"정합 (추세 확인)";
@@ -3042,14 +3041,14 @@ function svgMACD(data){
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">`;
   // Title
   s+=`<text x="${P.l+2}" y="12" fill="#C39BD3" font-size="8" font-weight="600" font-family="DM Mono,monospace">MACD(12,26,9)</text>`;
-  s+=`<text x="${P.l+90}" y="12" fill="${hi[hi.length-1]>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace">${m[m.length-1]?.toFixed(2)||"-"}</text>`;
+  s+=`<text x="${P.l+90}" y="12" fill="${hl[hl.length-1]>0?"#4ECCA3":"#E85D75"}" font-size="9" font-weight="700" font-family="DM Mono,monospace">${ml[ml.length-1]?.toFixed(2)||"-"}</text>`;
   s+=`<text x="${W-P.r}" y="12" fill="${divCol}" font-size="8" font-weight="500" font-family="DM Mono,monospace" text-anchor="end">${divText}</text>`;
 
   s+=`<line x1="${P.l}" y1="${ty(0)}" x2="${W-P.r}" y2="${ty(0)}" stroke="#fff" stroke-opacity=".06"/>`;
 
   // Divergence zone highlight
   if(divergence){
-    const startX=tx(Math.max(st,n-dLen));
+    const startX=tx(Math.max(0,n-dLen));
     const endX=tx(n-1);
     s+=`<rect x="${startX}" y="${P.t}" width="${endX-startX}" height="${ch}" fill="${divCol}" opacity=".05" rx="3"/>`;
   }
@@ -3058,15 +3057,15 @@ function svgMACD(data){
   const pPts=cls.map((v,i)=>{const y=tyP(v);return v>0&&isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(pPts.length>1)s+=`<polyline points="${pPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width=".8" opacity=".3" stroke-dasharray="4,2"/>`;
 
-  // Histogram (offset by st)
-  hi.forEach((v,i)=>{if(v==null||!isFinite(v))return;const x=tx(i+st),y0=ty(0),y1=ty(v);if(!isFinite(y1))return;s+=`<rect x="${x-bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.abs(y1-y0)||1}" fill="${v>=0?"#4ECCA3":"#E85D75"}" opacity=".45" rx=".5"/>`;});
+  // Histogram
+  hl.forEach((v,i)=>{if(v==null||!isFinite(v))return;const x=tx(i),y0=ty(0),y1=ty(v);if(!isFinite(y1))return;s+=`<rect x="${x-bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.abs(y1-y0)||1}" fill="${v>=0?"#4ECCA3":"#E85D75"}" opacity=".45" rx=".5"/>`;});
 
-  // MACD line (offset by st)
-  const mPts=m.map((v,i)=>{const y=ty(v);return isFinite(y)?`${tx(i+st).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  // MACD line
+  const mPts=ml.map((v,i)=>{const y=ty(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(mPts.length>1)s+=`<polyline points="${mPts.join(" ")}" fill="none" stroke="#85C1E9" stroke-width="1.2"/>`;
 
-  // Signal line (offset by st)
-  const sP=sg.map((v,i)=>{if(v==null)return null;const y=ty(v);return isFinite(y)?`${tx(i+st).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
+  // Signal line
+  const sP=sl.map((v,i)=>{if(v==null)return null;const y=ty(v);return isFinite(y)?`${tx(i).toFixed(1)},${y.toFixed(1)}`:null;}).filter(Boolean);
   if(sP.length>1)s+=`<polyline points="${sP.join(" ")}" fill="none" stroke="#E8A87C" stroke-width="1.2" stroke-dasharray="3,2"/>`;
 
   // Legend
@@ -3075,9 +3074,8 @@ function svgMACD(data){
   s+=`<line x1="${W-P.r-56}" y1="${H-5}" x2="${W-P.r-44}" y2="${H-5}" stroke="#C9A96E" stroke-width=".8" stroke-dasharray="3,2"/><text x="${W-P.r-40}" y="${H-2}" fill="#C9A96E" font-size="7" font-family="DM Mono,monospace">가격</text>`;
 
   // ★ Divergence lines (swing point connections)
-  if(cls.length>=20&&m.length>=20){
-    const pAlign=cls.slice(st);
-    s+=findDivergences(pAlign,m,(i)=>tx(i+st),tyP,ty);
+  if(cls.length>=20&&ml.length>=20){
+    s+=findDivergences(cls,ml,tx,tyP,ty);
   }
 
   s+=`</svg>`;
@@ -3155,7 +3153,7 @@ function svgShort(data){
   const trendCol=trend==="상승"?"#E85D75":"#4ECCA3";
   const trendLabel=trend==="상승"?"공매도 증가":"공매도 감소";
 
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%">`;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:180px;display:block">`;
 
   // Grid
   [vMin,vMin+vRng/2,vMax].forEach(v=>{
