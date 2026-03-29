@@ -12,8 +12,10 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const { symbol, source, interval } = req.query;
+  const { symbol, source, interval, debug } = req.query;
   if (!symbol) return res.status(400).json({ error: "symbol is required" });
+  const debugMode = debug === "1";
+  const debugLog = [];
 
   const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
   const UA_M = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)";
@@ -40,44 +42,52 @@ export default async function handler(req, res) {
         if (naverData && naverData.length >= 1) {
           ohlcv = naverData;
           chartSource = "naver-chart";
+          console.log(`[NAVER CHART] OK: ${code} ${int} → ${naverData.length}봉`);
         }
       } catch (e) { console.log("[NAVER CHART] fallback to Yahoo:", e.message); }
 
       // Fallback: Yahoo (try both .KS and .KQ for intraday)
       if (!ohlcv.length) {
         const yahooTicker = await resolveKRTicker(code);
+        console.log(`[YAHOO FALLBACK] ${code} → ${yahooTicker} interval=${int}`);
+
+        // Helper: check if data is truly intraday (multiple data points within same day)
+        const isRealIntraday = (data) => {
+          if (!data || data.length < 2) return false;
+          const d0 = (data[0].date || "").slice(0, 10);
+          const d1 = (data[1].date || "").slice(0, 10);
+          return d0 === d1; // same calendar day = intraday
+        };
+
         try {
           const yData = await fetchYahooChart(yahooTicker, int);
-          // Verify intraday data is actually intraday (not daily fallback)
-          if (isIntraday && yData.ohlcv.length > 0) {
-            const firstDate = yData.ohlcv[0].date || "";
-            if (!firstDate.includes(":") && !firstDate.includes(" ")) {
-              // Yahoo returned daily data instead of intraday — try alternate suffix
-              const altTicker = yahooTicker.endsWith(".KS") ? code + ".KQ" : code + ".KS";
-              try {
-                const yData2 = await fetchYahooChart(altTicker, int);
-                const fd2 = yData2.ohlcv[0]?.date || "";
-                if (fd2.includes(":") || fd2.includes(" ")) {
-                  ohlcv = yData2.ohlcv; meta = yData2.meta; chartSource = "yahoo";
-                } else {
-                  ohlcv = yData.ohlcv; meta = yData.meta; chartSource = "yahoo";
-                }
-              } catch (e2) {
+          if (isIntraday && yData.ohlcv.length > 1 && !isRealIntraday(yData.ohlcv)) {
+            console.log(`[YAHOO] ${yahooTicker} returned daily instead of ${int}, trying alt suffix`);
+            // Yahoo returned daily — try alternate suffix
+            const altTicker = yahooTicker.endsWith(".KS") ? code + ".KQ" : code + ".KS";
+            try {
+              const yData2 = await fetchYahooChart(altTicker, int);
+              if (isRealIntraday(yData2.ohlcv)) {
+                ohlcv = yData2.ohlcv; meta = yData2.meta; chartSource = "yahoo";
+                console.log(`[YAHOO] Alt ${altTicker} OK: ${ohlcv.length}봉 intraday`);
+              } else {
+                // Both failed intraday — use daily data with warning
                 ohlcv = yData.ohlcv; meta = yData.meta; chartSource = "yahoo";
+                console.log(`[YAHOO] Both ${yahooTicker} and ${altTicker} returned daily for ${int}`);
               }
-            } else {
+            } catch (e2) {
               ohlcv = yData.ohlcv; meta = yData.meta; chartSource = "yahoo";
             }
           } else {
             ohlcv = yData.ohlcv; meta = yData.meta; chartSource = "yahoo";
+            if (isIntraday) console.log(`[YAHOO] ${yahooTicker} ${int}: ${ohlcv.length}봉, intraday=${isRealIntraday(ohlcv)}`);
           }
         } catch (e) {
-          // Try alternate suffix
           const altTicker = yahooTicker.endsWith(".KS") ? code + ".KQ" : code + ".KS";
           try {
             const yData2 = await fetchYahooChart(altTicker, int);
             ohlcv = yData2.ohlcv; meta = yData2.meta; chartSource = "yahoo";
-          } catch (e2) { /* both failed */ }
+          } catch (e2) { console.log(`[YAHOO] Both tickers failed for ${code}`); }
         }
       }
 
@@ -213,11 +223,14 @@ export default async function handler(req, res) {
           try {
             const ssUrl = `https://finance.naver.com/item/sise_short_balance.naver?code=${code}&page=1`;
             const ssResp = await fetch(ssUrl, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(5000) });
+            console.log(`[SHORT] sise_short_balance status: ${ssResp.status}`);
             if (ssResp.ok) {
               const ssHtml = await ssResp.text();
-              // Parse table rows: date | 공매도잔고(주) | 잔고비율(%) | ...
+              console.log(`[SHORT] HTML length: ${ssHtml.length}`);
+              // Parse table rows: date | 공매도잔고(주) | ... | 잔고비율(%) | ...
               const rows = [];
               const trMatches = ssHtml.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+              console.log(`[SHORT] TR matches: ${trMatches.length}`);
               for (const tr of trMatches) {
                 const tds = tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
                 if (!tds || tds.length < 4) continue;
@@ -229,6 +242,7 @@ export default async function handler(req, res) {
                 const ratio = parseFloat(strip(tds[3]).replace(/,/g, "")) || 0;
                 if (balance > 0) rows.push({ date, balance, ratio });
               }
+              console.log(`[SHORT] Parsed rows: ${rows.length}`);
               if (rows.length >= 3) {
                 rows.reverse(); // oldest first
                 shortData = { source: "naver-short-balance", timeSeries: rows };
@@ -452,35 +466,35 @@ export default async function handler(req, res) {
 // Helper: Naver Chart API (Korean stocks)
 // ═══════════════════════════════════════════
 async function fetchNaverChart(code, interval) {
-  // Naver fchart API — XML format, most stable endpoint
-  // Format: date|open|high|low|close|volume
   const tfMap = {
     "1m": "minute", "5m": "minute5", "10m": "minute10", "30m": "minute30",
     "60m": "minute60", "4h": "minute240",
     "1d": "day", "1wk": "week", "1mo": "month"
   };
+  // Naver fchart has different max counts for intraday vs daily
   const countMap = {
-    "1m": 2500, "5m": 2500, "10m": 2500, "30m": 2500,
-    "60m": 2500, "4h": 2500,
+    "1m": 500, "5m": 2000, "10m": 2000, "30m": 2000,
+    "60m": 2000, "4h": 2000,
     "1d": 2500, "1wk": 520, "1mo": 240
   };
   const timeframe = tfMap[interval] || "day";
   const count = countMap[interval] || 500;
 
   const url = `https://fchart.stock.naver.com/sise.nhn?symbol=${code}&timeframe=${timeframe}&count=${count}&requestType=0`;
+  console.log(`[NAVER FCHART] Request: ${code} tf=${timeframe} count=${count}`);
   const resp = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
   });
-  if (!resp.ok) throw new Error("Naver fchart failed: " + resp.status);
+  if (!resp.ok) throw new Error("Naver fchart HTTP " + resp.status);
   const xml = await resp.text();
+  console.log(`[NAVER FCHART] Response length: ${xml.length} chars`);
 
-  // Parse XML: <item data="20210329|81700|81700|81000|81600|14952134" />
   const items = [...xml.matchAll(/data="([^"]+)"/g)].map(m => m[1]);
-  if (items.length < 5) throw new Error("Naver fchart data insufficient: " + items.length);
+  console.log(`[NAVER FCHART] Parsed items: ${items.length}`);
+  if (items.length < 1) throw new Error("Naver fchart empty: " + items.length + " items, xml=" + xml.substring(0, 200));
 
   return items.map(row => {
     const [dt, open, high, low, close, volume] = row.split("|");
-    // Date format: "20210329" or "202103291530" (intraday)
     const date = dt.length >= 12
       ? `${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)} ${dt.slice(8,10)}:${dt.slice(10,12)}`
       : `${dt.slice(0,4)}-${dt.slice(4,6)}-${dt.slice(6,8)}`;
