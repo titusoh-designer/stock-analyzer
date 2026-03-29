@@ -205,67 +205,90 @@ export default async function handler(req, res) {
           }
         }
 
-        // Korean Short Interest — multiple approaches
+        // Korean Short Interest — time series from Naver
         try {
           let shortData = null;
 
-          // Try 1: Naver mobile short selling APIs
-          const shortApis = [
-            `https://m.stock.naver.com/api/stock/${code}/short-selling`,
-            `https://m.stock.naver.com/api/stock/${code}/short-balance`,
-            `https://m.stock.naver.com/api/stock/${code}/trend/short`
-          ];
-          for (const sUrl of shortApis) {
-            try {
-              const sResp = await fetch(sUrl, { headers: { "User-Agent": UA_M }, signal: AbortSignal.timeout(3000) });
-              if (sResp.ok) {
-                const sText = await sResp.text();
-                if (sText && sText.length > 2 && (sText.startsWith("{") || sText.startsWith("["))) {
-                  shortData = JSON.parse(sText);
-                  break;
-                }
+          // Try 1: Naver short selling balance page (time series)
+          try {
+            const ssUrl = `https://finance.naver.com/item/sise_short_balance.naver?code=${code}&page=1`;
+            const ssResp = await fetch(ssUrl, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(5000) });
+            if (ssResp.ok) {
+              const ssHtml = await ssResp.text();
+              // Parse table rows: date | 공매도잔고(주) | 잔고비율(%) | ...
+              const rows = [];
+              const trMatches = ssHtml.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+              for (const tr of trMatches) {
+                const tds = tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
+                if (!tds || tds.length < 4) continue;
+                const strip = s => s.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, "").trim();
+                const dateStr = strip(tds[0]);
+                if (!/^\d{4}\.\d{2}\.\d{2}$/.test(dateStr)) continue;
+                const date = dateStr.replace(/\./g, "-");
+                const balance = parseFloat(strip(tds[1]).replace(/,/g, "")) || 0;
+                const ratio = parseFloat(strip(tds[3]).replace(/,/g, "")) || 0;
+                if (balance > 0) rows.push({ date, balance, ratio });
               }
-            } catch (e) { continue; }
+              if (rows.length >= 3) {
+                rows.reverse(); // oldest first
+                shortData = { source: "naver-short-balance", timeSeries: rows };
+              }
+            }
+          } catch (e) { /* page 1 failed */ }
+
+          // Try 2: page 2~3 for more history
+          if (shortData && shortData.timeSeries.length < 60) {
+            for (let pg = 2; pg <= 4; pg++) {
+              try {
+                const pgUrl = `https://finance.naver.com/item/sise_short_balance.naver?code=${code}&page=${pg}`;
+                const pgResp = await fetch(pgUrl, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(3000) });
+                if (!pgResp.ok) break;
+                const pgHtml = await pgResp.text();
+                const trMatches = pgHtml.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+                for (const tr of trMatches) {
+                  const tds = tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
+                  if (!tds || tds.length < 4) continue;
+                  const strip = s => s.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, "").trim();
+                  const dateStr = strip(tds[0]);
+                  if (!/^\d{4}\.\d{2}\.\d{2}$/.test(dateStr)) continue;
+                  const date = dateStr.replace(/\./g, "-");
+                  const balance = parseFloat(strip(tds[1]).replace(/,/g, "")) || 0;
+                  const ratio = parseFloat(strip(tds[3]).replace(/,/g, "")) || 0;
+                  if (balance > 0) shortData.timeSeries.unshift({ date, balance, ratio });
+                }
+              } catch (e) { break; }
+            }
           }
 
-          // Try 2: Scrape short selling page from desktop Naver
+          // Try 3: Naver mobile API fallback
           if (!shortData) {
-            try {
-              const ssResp = await fetch(`https://finance.naver.com/item/frgn.naver?code=${code}`, {
-                headers: { "User-Agent": UA },
-                signal: AbortSignal.timeout(3000)
-              });
-              if (ssResp.ok) {
-                const ssHtml = await ssResp.text();
-                // Extract: 공매도 잔고, 대차잔고, 외국인 비율
-                const extractNum = (pattern) => {
-                  const m = ssHtml.match(pattern);
-                  return m ? parseFloat(m[1].replace(/,/g, "")) : null;
-                };
-                // 공매도 잔고 수량 (first table row)
-                const shortRows = ssHtml.match(/class="tah p11">([\d,]+)/g);
-                const foreignPct = extractNum(/외국인한도소진률[^>]*>[\s\S]*?<td[^>]*>([\d.]+)/);
-                if (shortRows && shortRows.length >= 3) {
-                  shortData = {
-                    source: "naver-frgn-scrape",
-                    shortBalance: parseFloat(shortRows[0].match(/([\d,]+)/)[1].replace(/,/g, "")),
-                    foreignPct: foreignPct
-                  };
+            const shortApis = [
+              `https://m.stock.naver.com/api/stock/${code}/short-selling`,
+              `https://m.stock.naver.com/api/stock/${code}/short-balance`
+            ];
+            for (const sUrl of shortApis) {
+              try {
+                const sResp = await fetch(sUrl, { headers: { "User-Agent": UA_M }, signal: AbortSignal.timeout(3000) });
+                if (sResp.ok) {
+                  const sText = await sResp.text();
+                  if (sText && sText.length > 2 && (sText.startsWith("{") || sText.startsWith("["))) {
+                    shortData = { source: "naver-mobile", raw: JSON.parse(sText) };
+                    break;
+                  }
                 }
-              }
-            } catch (e) { /* scrape optional */ }
+              } catch (e) { continue; }
+            }
           }
 
+          // Fallback: foreignRate from integration
           if (shortData) {
             data.shortInterest = shortData;
           } else {
-            // Minimal: use foreignRate from integration
             const fr = data.fundamentals?.foreignRate;
             if (fr) {
               data.shortInterest = {
                 source: "naver-integration",
-                foreignRate: parseFloat(fr) || null,
-                note: "공매도 잔고 API 연동 예정 — 외국인 보유율 참고"
+                foreignRate: parseFloat(fr) || null
               };
             }
           }
