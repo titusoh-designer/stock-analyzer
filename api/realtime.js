@@ -32,18 +32,21 @@ export default async function handler(req, res) {
     rawData.method1 = json;
 
     if (json) {
+      // Helper: parse price strings like "58,000" → 58000
+      const pn = v => +(String(v || 0).replace(/,/g, ""));
+      
       // ★ Current price: try multiple field names
       // During trading: dealPrice or tradePrice is current
       // After hours: closePrice is final close
-      const rawDealPrice = +(json.dealPrice || 0);
-      const rawTradePrice = +(json.tradePrice || 0);
-      const rawCurrentPrice = +(json.currentPrice || 0);
-      const rawClosePrice = +(json.closePrice || 0);
-      prevClose = +(json.previousClosePrice || json.basePrice || json.prevPrice || 0);
-      open = +(json.openPrice || 0);
-      high = +(json.highPrice || 0);
-      low = +(json.lowPrice || 0);
-      volume = +(json.accumulatedTradingVolume || json.quant || 0);
+      const rawDealPrice = pn(json.dealPrice);
+      const rawTradePrice = pn(json.tradePrice);
+      const rawCurrentPrice = pn(json.currentPrice);
+      const rawClosePrice = pn(json.closePrice);
+      prevClose = pn(json.previousClosePrice || json.basePrice || json.prevPrice);
+      open = pn(json.openPrice);
+      high = pn(json.highPrice);
+      low = pn(json.lowPrice);
+      volume = pn(json.accumulatedTradingVolume || json.quant);
       name = json.stockName || json.stockNameEng || null;
 
       // Priority: dealPrice > tradePrice > currentPrice > closePrice
@@ -71,14 +74,15 @@ export default async function handler(req, res) {
       rawData.method2 = json2;
       const d = json2?.datas?.[0] || {};
       if (d) {
-        const p2 = +(d.nv || d.closePrice || d.dealPrice || 0);
+        const pn2 = v => +(String(v || 0).replace(/,/g, ""));
+        const p2 = pn2(d.nv || d.closePrice || d.dealPrice);
         if (p2 > 0) {
           price = p2;
-          if (!open) open = +(d.ov || d.openPrice || 0);
-          if (!high) high = +(d.hv || d.highPrice || 0);
-          if (!low) low = +(d.lv || d.lowPrice || 0);
-          if (!volume) volume = +(d.aq || d.accumulatedTradingVolume || 0);
-          if (!prevClose) prevClose = +(d.pcv || d.previousClosePrice || 0);
+          if (!open) open = pn2(d.ov || d.openPrice);
+          if (!high) high = pn2(d.hv || d.highPrice);
+          if (!low) low = pn2(d.lv || d.lowPrice);
+          if (!volume) volume = pn2(d.aq || d.accumulatedTradingVolume);
+          if (!prevClose) prevClose = pn2(d.pcv || d.previousClosePrice);
         }
       }
     } catch(e) { rawData.method2_error = e.message; }
