@@ -1162,8 +1162,8 @@ function render(data,ai){
     <div id="rsiChartWrap" class="chart-box" style="margin-bottom:6px">${svgRSI(o)}</div>
     <div id="macdChartWrap" class="chart-box" style="margin-bottom:6px">${svgMACD(o)}</div>
     <div id="obvChartWrap" class="chart-box" style="margin-bottom:6px">${svgOBV(o)}</div>
+    <div id="shortChartWrap" class="chart-box" style="margin-bottom:0">${svgShort(o)}</div>
   </div>
-  ${data.shortInterest?renderShortInterest(data.shortInterest,data.currency,cp):""}
   <div class="sec"><div class="sec-title">◇ 기술 지표<div class="sec-line"></div></div></div>
   <div class="sg" style="grid-template-columns:repeat(auto-fill,minmax(85px,1fr))">
     ${[{l:"52W High",v:fp(h52),c:"#4ECCA3"},{l:"52W Low",v:fp(l52),c:"#E85D75"},{l:"RSI(14)",v:rsi??"-",c:rc},{l:"MACD",v:macd.v??"-",c:mc},{l:"Signal",v:macd.s??"-",c:"#E8A87C"},{l:"Histogram",v:macd.h??"-",c:macd.h>0?"#4ECCA3":"#E85D75"},{l:"Stoch %K",v:stoch??"-",c:stoch>80?"#E85D75":stoch<20?"#4ECCA3":"#C9A96E"},{l:"BB Upper",v:bb?fp(bb.upper):"-",c:"#C39BD3"},{l:"BB Lower",v:bb?fp(bb.lower):"-",c:"#C39BD3"},{l:"MA5",v:ma5?fp(ma5):"-",c:"#E8A87C"},{l:"일20",v:ma20?fp(ma20):"-",c:"#4ECCA3"},{l:"주20",v:ma100?fp(ma100):"-",c:"#C9A96E"},{l:"월20",v:ma440?fp(ma440):"-",c:"#F0ECE3"},{l:"추세",v:ai?.trend==="uptrend"?"상승":ai?.trend==="downtrend"?"하락":"횡보",c:ai?.trend==="uptrend"?"#4ECCA3":"#E85D75"}].map(s=>`<div class="si"><div class="l">${s.l}</div><div class="v" style="color:${s.c}">${s.v}</div></div>`).join("")}
@@ -1622,6 +1622,8 @@ function render(data,ai){
       if(macdEl)macdEl.innerHTML=svgMACD(d);
       const obvEl=document.getElementById("obvChartWrap");
       if(obvEl)obvEl.innerHTML=svgOBV(d);
+      const shortEl=document.getElementById("shortChartWrap");
+      if(shortEl)shortEl.innerHTML=svgShort(d);
       // Update info text
       const infoEl=document.getElementById("chartInfoText");
       if(infoEl)infoEl.textContent=`Ctrl+휠: 줌 · 드래그: 이동 · 표시: ${d.length}봉 / 전체 ${total}봉`;
@@ -3037,125 +3039,149 @@ function svgMACD(data){
 }
 
 // ═══════ OBV CHART (with price overlay) ═══════
-// ═══ Short Interest Chart (A+B: ratio area + balance bars) ═══
-function svgShortChart(ts){
-  if(!ts||ts.length<3)return"";
-  const W=900,H=220,P={t:20,r:92,b:14,l:8};
-  const midY=Math.round(H*0.48);
-  const topH=midY-P.t, botH=H-P.b-midY;
+// ═══ Short Interest Chart — synced with main chart x-axis ═══
+function svgShort(data){
+  const ts=curData?.shortInterest?.timeSeries;
+  if(!ts||ts.length<3||!data||data.length<5)return"";
+
+  // Date map: YYYY-MM-DD → {balance, ratio}
+  const sMap={};
+  ts.forEach(d=>{sMap[d.date]=d;});
+
+  // Map visible OHLCV dates to short data
+  const mapped=data.map(d=>{
+    const dk=(d.date||"").slice(0,10);
+    return sMap[dk]||null;
+  });
+  const validCount=mapped.filter(Boolean).length;
+  if(validCount<3)return`<div class="mono" style="text-align:center;padding:10px;color:#555;font-size:10px">SHORT: 일봉에서만 표시 (${validCount}개 매핑)</div>`;
+
+  const W=900,H=180,P={t:20,r:92,b:14,l:8};
+  const midY=Math.round(H*0.52);
+  const topH=midY-P.t,botH=H-P.b-midY;
   const cw=W-P.l-P.r;
-  const n=ts.length;
-  const tx=i=>P.l+(i/(n-1))*cw;
+  const n=data.length;
+  const tx=i=>P.l+(i/(n-1||1))*cw;
 
-  const ratios=ts.map(d=>d.ratio);
-  const bals=ts.map(d=>d.balance);
-  const rMax=Math.max(...ratios)*1.2||1;
-  const bMax=Math.max(...bals)*1.15||1;
-  const tyR=v=>P.t+topH-((v/rMax)*topH);
-  const tyB=v=>midY+botH-((v/bMax)*botH);
+  // Extract balance series (fill nulls with previous value)
+  const bals=[];
+  let lastBal=0;
+  for(let i=0;i<n;i++){
+    if(mapped[i]){lastBal=mapped[i].balance;bals.push(lastBal);}
+    else{bals.push(lastBal);}
+  }
 
-  const lastR=ratios[n-1],lastB=bals[n-1];
-  const prevR=n>1?ratios[n-2]:lastR,prevB=n>1?bals[n-2]:lastB;
-  const rChg=prevR?((lastR-prevR)/prevR*100).toFixed(1):0;
-  const bChg=prevB?((lastB-prevB)/prevB*100).toFixed(1):0;
-  const rCol=lastR>20?"#E85D75":lastR>10?"#C9A96E":"#4ECCA3";
+  // Balance change (daily delta)
+  const deltas=bals.map((v,i)=>i>0?v-bals[i-1]:0);
+
+  // Ranges
+  const bMax=Math.max(...bals)*1.1||1;
+  const bMin=Math.min(...bals)*0.9||0;
+  const bRng=bMax-bMin||1;
+  const dMax=Math.max(...deltas.map(Math.abs))||1;
+
+  const tyB=v=>P.t+topH-((v-bMin)/bRng*topH);
+  const tyD=v=>{const mid=midY+botH/2;return mid-(v/dMax)*(botH/2);};
+
+  // Last values
+  const lastIdx=n-1;
+  const curBal=bals[lastIdx];
+  const curDelta=deltas[lastIdx];
   const fmN=v=>{if(v>=1e6)return(v/1e6).toFixed(1)+"M";if(v>=1e3)return(v/1e3).toFixed(0)+"K";return v.toLocaleString();};
+
+  // MA5 of balance
+  const ma5=[];
+  for(let i=0;i<n;i++){
+    if(i<4){ma5.push(bals[i]);}
+    else{ma5.push((bals[i]+bals[i-1]+bals[i-2]+bals[i-3]+bals[i-4])/5);}
+  }
+
+  // Trend detection
+  const recentBals=bals.slice(-10);
+  const trend=recentBals[recentBals.length-1]>recentBals[0]?"상승":"하락";
+  const trendCol=trend==="상승"?"#E85D75":"#4ECCA3";
+  const trendLabel=trend==="상승"?"공매도 증가 추세":"공매도 감소 추세";
 
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">`;
 
-  // ═══ TOP: Ratio area chart ═══
-  const y20=tyR(20),y10=tyR(10);
-  if(20<=rMax&&y20>=P.t)s+=`<rect x="${P.l}" y="${P.t}" width="${cw}" height="${Math.max(0,y20-P.t)}" fill="rgba(232,93,117,.05)"/>`;
-  if(10<=rMax&&y10>y20)s+=`<rect x="${P.l}" y="${y20}" width="${cw}" height="${Math.max(0,y10-y20)}" fill="rgba(201,169,110,.03)"/>`;
-  if(20<=rMax)s+=`<line x1="${P.l}" y1="${y20}" x2="${W-P.r}" y2="${y20}" stroke="#E85D75" stroke-width=".5" opacity=".3" stroke-dasharray="4,4"/>`;
-  if(10<=rMax)s+=`<line x1="${P.l}" y1="${y10}" x2="${W-P.r}" y2="${y10}" stroke="#C9A96E" stroke-width=".5" opacity=".3" stroke-dasharray="4,4"/>`;
+  // ═══ TOP: Balance area chart ═══
+  // Grid lines
+  const gridVals=[bMin,bMin+bRng*0.5,bMax];
+  gridVals.forEach(v=>{
+    const y=tyB(v);
+    if(isFinite(y))s+=`<line x1="${P.l}" y1="${y}" x2="${W-P.r}" y2="${y}" stroke="#ffffff" stroke-opacity=".03"/>`;
+  });
 
-  s+=`<text x="${P.l+2}" y="14" fill="#E85D75" font-size="9" font-weight="600" font-family="DM Mono,monospace">SHORT RATIO</text>`;
-  s+=`<text x="${P.l+90}" y="14" fill="${rCol}" font-size="9" font-family="DM Mono,monospace">${lastR.toFixed(2)}%</text>`;
-  s+=`<text x="${P.l+145}" y="14" fill="${parseFloat(rChg)>0?"#E85D75":"#4ECCA3"}" font-size="8" font-family="DM Mono,monospace">${parseFloat(rChg)>0?"+":""}${rChg}%</text>`;
+  // Title
+  s+=`<text x="${P.l+2}" y="14" fill="#E85D75" font-size="9" font-weight="600" font-family="DM Mono,monospace">SHORT BALANCE</text>`;
+  s+=`<text x="${P.l+110}" y="14" fill="#F0ECE3" font-size="9" font-family="DM Mono,monospace">${fmN(curBal)}</text>`;
+  s+=`<text x="${P.l+185}" y="14" fill="${trendCol}" font-size="8" font-family="DM Mono,monospace">(${trendLabel})</text>`;
+  s+=`<text x="${W-P.r}" y="14" fill="#555" font-size="8" font-family="DM Mono,monospace" text-anchor="end">${trendLabel}</text>`;
 
-  if(20<=rMax)s+=`<text x="${W-P.r+6}" y="${y20+3}" fill="#E85D7555" font-size="8" font-family="DM Mono,monospace">20%</text>`;
-  if(10<=rMax)s+=`<text x="${W-P.r+6}" y="${y10+3}" fill="#C9A96E55" font-size="8" font-family="DM Mono,monospace">10%</text>`;
-  s+=`<text x="${W-P.r+6}" y="${P.t+topH+3}" fill="#55555555" font-size="8" font-family="DM Mono,monospace">0%</text>`;
-  if(20<=rMax)s+=`<text x="${P.l+4}" y="${y20+10}" fill="#E85D7540" font-size="7" font-family="DM Mono,monospace">과도</text>`;
-  if(10<=rMax)s+=`<text x="${P.l+4}" y="${y10+10}" fill="#C9A96E40" font-size="7" font-family="DM Mono,monospace">경계</text>`;
+  // Y-axis labels (balance)
+  s+=`<text x="${W-P.r+6}" y="${P.t+4}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmN(Math.round(bMax))}</text>`;
+  s+=`<text x="${W-P.r+6}" y="${P.t+topH/2+3}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmN(Math.round(bMin+bRng/2))}</text>`;
+  s+=`<text x="${W-P.r+6}" y="${P.t+topH+3}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmN(Math.round(bMin))}</text>`;
 
-  const rPts=ratios.map((v,i)=>`${tx(i).toFixed(1)},${tyR(v).toFixed(1)}`);
-  s+=`<defs><linearGradient id="shortAreaG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#E85D75" stop-opacity=".15"/><stop offset="100%" stop-color="#E85D75" stop-opacity=".02"/></linearGradient></defs>`;
-  s+=`<polygon points="${rPts.join(" ")} ${tx(n-1).toFixed(1)},${P.t+topH} ${P.l},${P.t+topH}" fill="url(#shortAreaG)"/>`;
-  s+=`<polyline points="${rPts.join(" ")}" fill="none" stroke="#E85D75" stroke-width="1.5" opacity=".7"/>`;
+  // Area fill (gradient)
+  s+=`<defs><linearGradient id="shortBG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#E85D75" stop-opacity=".12"/><stop offset="100%" stop-color="#E85D75" stop-opacity=".02"/></linearGradient></defs>`;
+  const bPts=bals.map((v,i)=>`${tx(i).toFixed(1)},${tyB(v).toFixed(1)}`).filter((_,i)=>mapped[i]||bals[i]>0);
+  if(bPts.length>1){
+    const allPts=bals.map((v,i)=>[tx(i).toFixed(1),tyB(v).toFixed(1)]);
+    s+=`<polygon points="${allPts.map(p=>p.join(",")).join(" ")} ${tx(n-1).toFixed(1)},${(P.t+topH).toFixed(1)} ${P.l.toFixed(1)},${(P.t+topH).toFixed(1)}" fill="url(#shortBG)"/>`;
+    s+=`<polyline points="${allPts.map(p=>p.join(",")).join(" ")}" fill="none" stroke="#E85D75" stroke-width="1.5" opacity=".7"/>`;
+  }
 
-  // MA5 smoothed line
-  const rMA=[];for(let i=0;i<n;i++){rMA.push(i>=4?ratios.slice(i-4,i+1).reduce((a,b)=>a+b,0)/5:ratios[i]);}
-  const maPts=rMA.map((v,i)=>`${tx(i).toFixed(1)},${tyR(v).toFixed(1)}`);
+  // MA5 line (gold dashed)
+  const maPts=ma5.map((v,i)=>`${tx(i).toFixed(1)},${tyB(v).toFixed(1)}`);
   s+=`<polyline points="${maPts.join(" ")}" fill="none" stroke="#C9A96E" stroke-width="1" opacity=".4" stroke-dasharray="3,2"/>`;
+
+  // Dot markers where actual data exists
+  for(let i=0;i<n;i++){
+    if(mapped[i]){
+      const x=tx(i),y=tyB(bals[i]);
+      if(i===lastIdx)s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#E85D75" opacity=".8"/>`;
+    }
+  }
 
   // Divider
   s+=`<line x1="${P.l}" y1="${midY}" x2="${W-P.r}" y2="${midY}" stroke="#16162a" stroke-width="1"/>`;
 
-  // ═══ BOTTOM: Balance bars ═══
-  s+=`<text x="${P.l+2}" y="${midY+12}" fill="#E85D75" font-size="8" font-weight="600" font-family="DM Mono,monospace">SHORT BALANCE</text>`;
-  s+=`<text x="${P.l+105}" y="${midY+12}" fill="#F0ECE3" font-size="8" font-family="DM Mono,monospace">${fmN(lastB)}</text>`;
-  s+=`<text x="${P.l+175}" y="${midY+12}" fill="${parseFloat(bChg)>0?"#E85D75":"#4ECCA3"}" font-size="7" font-family="DM Mono,monospace">${parseFloat(bChg)>0?"+":""}${bChg}%</text>`;
+  // ═══ BOTTOM: Delta histogram (MACD style) ═══
+  s+=`<text x="${P.l+2}" y="${midY+12}" fill="#888" font-size="8" font-weight="600" font-family="DM Mono,monospace">SHORT DELTA</text>`;
+  s+=`<text x="${P.l+95}" y="${midY+12}" fill="${curDelta>=0?"#E85D75":"#4ECCA3"}" font-size="8" font-family="DM Mono,monospace">${curDelta>=0?"+":""}${fmN(curDelta)}</text>`;
 
-  s+=`<text x="${W-P.r+6}" y="${midY+6}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmN(Math.round(bMax))}</text>`;
-  s+=`<text x="${W-P.r+6}" y="${midY+botH/2+3}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">${fmN(Math.round(bMax/2))}</text>`;
-  s+=`<line x1="${P.l}" y1="${midY+botH/2}" x2="${W-P.r}" y2="${midY+botH/2}" stroke="#ffffff" stroke-opacity=".03"/>`;
+  // Zero line
+  const zeroY=midY+botH/2;
+  s+=`<line x1="${P.l}" y1="${zeroY}" x2="${W-P.r}" y2="${zeroY}" stroke="#ffffff" stroke-opacity=".05"/>`;
 
-  const barW=Math.max(1,Math.min(8,(cw/n)*0.7));
+  // Delta bars
+  const barW=Math.max(1,Math.min(6,(cw/n)*0.6));
   for(let i=0;i<n;i++){
+    if(!mapped[i]&&deltas[i]===0)continue;
     const x=tx(i)-barW/2;
-    const h=(bals[i]/bMax)*botH;
-    const y=midY+botH-h;
-    const prevBal=i>0?bals[i-1]:bals[i];
-    const barCol=bals[i]>=prevBal?"#E85D75":"#4ECCA3";
-    const barOp=0.4+0.3*(bals[i]/bMax);
-    s+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(1,h).toFixed(1)}" rx="1" fill="${barCol}" opacity="${barOp.toFixed(2)}"/>`;
+    const y1=zeroY;
+    const y2=tyD(deltas[i]);
+    const top=Math.min(y1,y2);
+    const h=Math.abs(y2-y1);
+    if(h<0.5)continue;
+    const col=deltas[i]>=0?"#E85D75":"#4ECCA3";
+    const op=0.3+0.5*(Math.abs(deltas[i])/dMax);
+    s+=`<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(1,h).toFixed(1)}" rx="1" fill="${col}" opacity="${op.toFixed(2)}"/>`;
   }
+
+  // Y-axis delta
+  s+=`<text x="${W-P.r+6}" y="${midY+8}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">+${fmN(Math.round(dMax))}</text>`;
+  s+=`<text x="${W-P.r+6}" y="${H-P.b}" fill="#55555555" font-size="7" font-family="DM Mono,monospace">-${fmN(Math.round(dMax))}</text>`;
 
   // Legend
   s+=`<text x="${W-P.r}" y="${H-2}" fill="#555" font-size="7" font-family="DM Mono,monospace" text-anchor="end">`;
-  s+=`<tspan fill="#E85D75">━</tspan> 비율  <tspan fill="#C9A96E">---</tspan> MA5  `;
+  s+=`<tspan fill="#E85D75">━</tspan> 잔고  <tspan fill="#C9A96E">---</tspan> MA5  `;
   s+=`<tspan fill="#E85D75">█</tspan> 증가  <tspan fill="#4ECCA3">█</tspan> 감소</text>`;
-  s+=`<text x="${W-P.r}" y="14" fill="#555" font-size="8" font-family="DM Mono,monospace" text-anchor="end">${lastR>20?"과도 (숏스퀴즈 주의)":lastR>10?"경계 (공매도 증가)":"정합 (추세 확인)"}</text>`;
 
   s+=`</svg>`;
   return s;
 }
-
-function renderShortInterest(si, currency, cp) {
-  if (!si) return "";
-  const cs = currency === "KRW" ? "₩" : "$";
-
-  // Time series chart (Korean with naver-short-balance)
-  if (si.timeSeries && si.timeSeries.length >= 3) {
-    return `<div style="padding:0 20px;margin-bottom:14px"><div class="chart-box">${svgShortChart(si.timeSeries)}</div></div>`;
-  }
-
-  // US snapshot gauge
-  if (si.sharesShort != null || si.shortRatio != null) {
-    const fmN = v => { if (!v) return "—"; if (v >= 1e9) return (v/1e9).toFixed(2)+"B"; if (v >= 1e6) return (v/1e6).toFixed(1)+"M"; if (v >= 1e3) return (v/1e3).toFixed(0)+"K"; return v.toLocaleString(); };
-    const spf = si.shortPercentOfFloat != null ? (si.shortPercentOfFloat * 100).toFixed(2) : null;
-    const spo = si.sharesPercentSharesOut != null ? (si.sharesPercentSharesOut * 100).toFixed(2) : null;
-    const ratio = si.shortRatio != null ? si.shortRatio.toFixed(2) : null;
-    const prevShort = si.sharesShortPriorMonth;
-    const curShort = si.sharesShort;
-    const shortChg = (prevShort && curShort) ? ((curShort - prevShort) / prevShort * 100).toFixed(1) : null;
-    const shortChgCol = shortChg > 0 ? "#E85D75" : shortChg < 0 ? "#4ECCA3" : "#C9A96E";
-    const gaugeVal = spf ? Math.min(100, parseFloat(spf) * 3.3) : 0;
-    const gaugeCol = spf > 20 ? "#E85D75" : spf > 10 ? "#C9A96E" : "#4ECCA3";
-    const levelText = spf > 20 ? "높음 (과도)" : spf > 10 ? "보통" : spf > 5 ? "낮음" : "매우 낮음";
-    return `<div style="padding:0 20px;margin-bottom:14px"><div class="card" style="padding:14px 16px;border-color:${gaugeCol}20;border-left:3px solid ${gaugeCol}"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span style="font-size:14px">📉</span><span style="font-size:13px;font-weight:700;color:#F0ECE3">공매도 잔고</span><span class="mono" style="font-size:10px;color:#555">Short Interest</span>${si.dateShortInterest?`<span class="mono" style="font-size:9px;color:#555;margin-left:auto">${si.dateShortInterest} 기준</span>`:""}</div><div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:center"><div style="text-align:center"><svg viewBox="0 0 120 70" style="width:100%;max-width:120px;display:block;margin:0 auto"><path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="#1a1a28" stroke-width="8" stroke-linecap="round"/><path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="${gaugeCol}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${gaugeVal*1.57} 157" opacity=".8"/><text x="60" y="48" fill="${gaugeCol}" font-size="18" font-weight="800" font-family="DM Mono,monospace" text-anchor="middle">${spf||"—"}%</text><text x="60" y="62" fill="#666" font-size="8" font-family="DM Mono,monospace" text-anchor="middle">${levelText}</text></svg><div style="font-size:9px;color:#555;margin-top:2px">유동주식 대비</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><div style="background:#0a0a14;border-radius:6px;padding:8px 10px;border:1px solid #12121e"><div style="font-size:9px;color:#555">공매도 주식수</div><div class="mono" style="font-size:13px;font-weight:700;color:#F0ECE3">${fmN(curShort)}</div>${shortChg!=null?`<div class="mono" style="font-size:10px;color:${shortChgCol}">${shortChg>0?"+":""}${shortChg}% vs 전월</div>`:""}</div><div style="background:#0a0a14;border-radius:6px;padding:8px 10px;border:1px solid #12121e"><div style="font-size:9px;color:#555">Short Ratio</div><div class="mono" style="font-size:13px;font-weight:700;color:${ratio>5?"#E85D75":"#C9A96E"}">${ratio||"—"}</div><div style="font-size:9px;color:#555">${ratio>5?"숏 스퀴즈 경계":ratio>2?"보통":"낮음"}</div></div><div style="background:#0a0a14;border-radius:6px;padding:8px 10px;border:1px solid #12121e"><div style="font-size:9px;color:#555">전월 공매도</div><div class="mono" style="font-size:13px;font-weight:700;color:#888">${fmN(prevShort)}</div></div><div style="background:#0a0a14;border-radius:6px;padding:8px 10px;border:1px solid #12121e"><div style="font-size:9px;color:#555">발행주식 대비</div><div class="mono" style="font-size:13px;font-weight:700;color:#888">${spo?spo+"%":"—"}</div></div></div></div><div style="font-size:9px;color:#444;margin-top:8px">Short Ratio = 공매도잔고÷일평균거래량. 5일↑ 숏스퀴즈, 유동주식 20%↑ 과도.</div></div></div>`;
-  }
-
-  // Korean foreignRate fallback
-  if (si.foreignRate != null || si.source === "naver-integration") {
-    return `<div style="padding:0 20px;margin-bottom:14px"><div class="card" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px">📉</span><span style="font-size:12px;font-weight:700;color:#F0ECE3">공매도 · 외국인</span><span class="mono" style="font-size:10px;color:#555;margin-left:auto">외국인 보유: <span style="color:#C9A96E;font-weight:700">${si.foreignRate||"—"}%</span></span></div><div style="margin-top:6px;height:6px;background:#1a1a28;border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,parseFloat(si.foreignRate||0))}%;height:100%;background:linear-gradient(90deg,#C9A96E,#4ECCA3);border-radius:3px"></div></div><div style="font-size:9px;color:#444;margin-top:6px">공매도 잔고 시계열 연동 중</div></div></div>`;
-  }
-
-  return "";
-}
-
 
 function svgOBV(data){
   if(data.length<10)return`<div class="mono" style="text-align:center;padding:16px;color:#555;font-size:10px">OBV: 10봉 이상 필요</div>`;
